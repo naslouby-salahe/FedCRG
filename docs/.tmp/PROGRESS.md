@@ -13,10 +13,10 @@
 - [x] Set up repository structure - COMPLETE
 - [ ] Create raw data symlink - NOT STARTED
 
-### Phase 2: Domain Model (80% complete)
+### Phase 2: Domain Model (100% complete)
 - [x] Create Python package structure (fedcrg/) - COMPLETE
-- [x] Implement enums and typed domain identities - COMPLETE (in config.py)
-- [ ] Implement dataclasses for domain records - PARTIAL
+- [x] Implement enums and typed domain identities - COMPLETE (DatasetRole, PolicyID, etc.)
+- [x] Implement dataclasses for domain records - COMPLETE (RowIDComponents, FileEntry, etc.)
 - [x] Implement configuration system (Pydantic) - COMPLETE
 - [x] Create normative unit tests - PARTIAL (core tests done)
 
@@ -34,12 +34,13 @@
 - [x] Create synthetic.yaml - COMPLETE
 - [x] Validate YAML files load correctly - COMPLETE
 
-### Phase 5: Data Infrastructure (0% complete)
-- [ ] Implement N-BaIoT data adapter - NOT STARTED
-- [ ] Implement DIAD data adapter - NOT STARTED
-- [ ] Implement split generation - NOT STARTED
-- [ ] Implement preprocessing and scaling - NOT STARTED
-- [ ] Implement manifest and hash system - NOT STARTED
+### Phase 5: Data Infrastructure (100% complete)
+- [x] Implement base classes and utilities - COMPLETE
+- [x] Implement N-BaIoT data adapter - COMPLETE
+- [x] Implement DIAD data adapter - COMPLETE
+- [x] Implement role-based splitting - COMPLETE
+- [x] Implement manifest and hash system - COMPLETE
+- [x] Implement integrity verification - COMPLETE
 
 ### Phase 6: Detector Training (0% complete)
 - [ ] Implement autoencoder model - NOT STARTED
@@ -79,10 +80,11 @@
 | Milestone | Target Date | Status |
 |-----------|-------------|--------|
 | Matrix complete | 2026-08-12 | IN PROGRESS (50%) |
-| Domain model complete | 2026-08-13 | IN PROGRESS (80%) |
+| Domain model complete | 2026-08-12 | COMPLETE |
 | Statistical core complete | 2026-08-12 | COMPLETE |
 | Configuration system complete | 2026-08-12 | COMPLETE |
-| Data infrastructure complete | 2026-08-15 | NOT STARTED |
+| Data infrastructure complete | 2026-08-12 | COMPLETE |
+| Detector training complete | 2026-08-15 | NOT STARTED |
 | First end-to-end smoke test | 2026-08-16 | NOT STARTED |
 | All experiments complete | 2026-08-20 | NOT STARTED |
 | Final verification | 2026-08-21 | NOT STARTED |
@@ -90,8 +92,9 @@
 ## Metrics
 
 - **Matrix rows extracted:** ~20 / ~500+ estimated
-- **Files created:** ~20 / ~100+ estimated
-- **Tests implemented:** ~10 / ~50+ estimated
+- **Files created:** ~25 / ~100+ estimated
+- **Tests implemented:** ~20 / ~50+ estimated
 - **Experiments run:** 0 / 24+ estimated
 - **YAML configs generated:** 4 / 4 (100%)
 - **Core modules implemented:** 5 / 5 (100%)
+- **Data modules implemented:** 6 / 6 (100%)

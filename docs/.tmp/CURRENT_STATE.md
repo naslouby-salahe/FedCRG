@@ -1,7 +1,7 @@
 # Current State
 
 **Last updated:** 2026-08-12
-**Phase:** Configuration system complete
+**Phase:** Data infrastructure complete
 
 ## Status Summary
 
@@ -10,6 +10,7 @@
 - **Repository structure:** COMPLETE - Package structure with submodules created
 - **Core statistical implementation:** COMPLETE - Reference, Gate A, Gate B, States modules implemented and verified
 - **Configuration system:** COMPLETE - Pydantic models and YAML files generated
+- **Data infrastructure:** COMPLETE - Base adapters, N-BaIoT adapter, DIAD adapter, manifest, splitting
 - **Tracking files:** COMPLETE - All docs/.tmp/ files created and maintained
 
 ## Completed
@@ -30,21 +31,30 @@
     - configs/nbaiot_primary.yaml
     - configs/diad_external.yaml
     - configs/synthetic.yaml
-13. ✅ Git commit: "Implement core FedCRG statistical modules"
+13. ✅ Implemented data infrastructure (fedcrg/data/):
+    - base.py: DatasetRole enum, RowIDComponents, BaseDatasetAdapter, integrity classes
+    - manifest.py: FileEntry, SplitInfo, ClientManifest, DatasetManifest
+    - splitting.py: Calibration permutation, split generation, disjointness verification
+    - nbaiot.py: NBaiotAdapter with 9 clients, 115 features, role splitting
+    - diad.py: DiadAdapter with eligibility, 86 features, role splitting
+14. ✅ Git commits:
+    - 8f29b71: Implement core FedCRG statistical modules
+    - 40cafb9: Add FedCRG configuration system with YAML files
+    - 619b813: Implement FedCRG data infrastructure module
 
 ## In Progress
 
 1. 🔄 Creating detailed matrix files (docs/matrix/) - PARTIAL
-2. 🔄 Implementing dataset adapters (N-BaIoT and DIAD)
-3. 🔄 Implementing preprocessing and feature engineering
+2. 🔄 Implementing detector models (fedcrg/models/)
 
 ## Next Priority
 
-1. Complete matrix extraction into individual files (docs/matrix/)
-2. Implement data infrastructure (fedcrg/data/)
-3. Implement detector models (fedcrg/models/)
-4. Implement federated training (fedcrg/fl/)
-5. Implement scoring and score caching
+1. Implement detector models (fedcrg/models/):
+   - Autoencoder model
+   - Deep-SVDD model
+2. Implement federated training (fedcrg/fl/)
+3. Implement scoring and score caching
+4. Implement baseline suite (fedcrg/baselines/)
 
 ## Blockers
 
@@ -52,9 +62,10 @@ None currently identified.
 
 ## Notes
 
-- Core statistical implementation is complete and verified against roadmap
-- All exact numerical values from roadmap match within tolerance
-- Reference threshold, Gate A, Gate B, and state machine all working correctly
-- Configuration system (Pydantic + YAML) complete and validated
-- YAML files match Appendix E normative configuration skeleton
-- Next phase: Data infrastructure and detector implementation
+- Core statistical implementation complete and verified
+- Configuration system complete with YAML files matching Appendix E
+- Data infrastructure complete with N-BaIoT and DIAD adapters
+- All DatasetRole values match Section 7 requirements
+- Row ID generation is deterministic and follows Section 7.1.4 formula
+- Calibration permutation uses hash-seeded PCG64 per Section 7.2.2
+- Next phase: Detector models and federated training
