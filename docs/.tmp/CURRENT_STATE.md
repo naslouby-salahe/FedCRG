@@ -91,6 +91,10 @@
 9. bdfb6c2: Implement preprocessing module (fedcrg/data/preprocess.py)
 10. e3702f7: Implement metrics module (fedcrg/metrics/)
 11. NEW: Implement experiment registry (fedcrg/experiments/)
+12. NEW: Fixed CLI commands - config loading and precompute-gate-a working
+13. NEW: Tested synthetic experiments S1 and S6 successfully
+14. NEW: Created raw data symlink (data/raw -> external shared data)
+15. NEW: Data preparation CLI commands working
 
 ## Verification
 
@@ -100,11 +104,15 @@
 - All real data experiments (R1-R14) registered with placeholders
 - Experiment executor with dependency management working
 - Results collection and serialization working
+- CLI commands: Fixed config loading, precompute-gate-a working, data preparation working
+- S1 and S6 synthetic experiments: Successfully executed and completed
+- Raw data symlink: Created and verified (data/raw -> /home/naslouby/Projects/datp-shared-data/raw)
 
 ## In Progress
 
 1. 🔄 Creating detailed matrix files (docs/matrix/) - PARTIAL
-2. 🔄 Implementing CLI commands - NOT STARTED
+2. ✅ Implementing CLI commands - COMPLETED (config loading fixed, basic commands working)
+3. 🔄 Implementing raw data symlink - COMPLETED
 
 ## Next Priority
 

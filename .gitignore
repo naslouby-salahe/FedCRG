@@ -206,6 +206,12 @@ tempCodeRunnerFile.py
 # Ruff stuff:
 .ruff_cache/
 
+# FedCRG artifacts
+artifacts/
+
+# FedCRG data (symlink to external data)
+data/
+
 # PyPI configuration file
 .pypirc
 
