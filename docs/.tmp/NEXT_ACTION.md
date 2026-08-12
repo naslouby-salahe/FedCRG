@@ -6,23 +6,24 @@
 ## Immediate Next Action
 
 **Priority:** HIGH   
-**Task:** Implement detector models (fedcrg/models/)  
-**File:** `fedcrg/models/` module  
+**Task:** Implement federated training (fedcrg/fl/)  
+**File:** `fedcrg/fl/` module  
 **Status:** NOT STARTED
 
 ### Specific Steps
 
-1. **Create fedcrg/models/__init__.py** - Package initialization
-2. **Implement Autoencoder model** - Per Section 8.2 (AE architecture)
-   - Architecture: 115-86-57-38-29-38-57-86-115 (per Section 8.2.1)
-   - Activation: tanh (per FedDetect paper)
-   - Loss: MSE reconstruction
-   - Input: 115 features for N-BaIoT, 86 for DIAD
-3. **Implement Deep-SVDD model** - Per Section 8.4
-   - Encoder: [115, 64, 32] for N-BaIoT
-   - Center computation: equal_mean_of_client_initial_embeddings
-   - Loss: SVDD objective
-4. **Create model base class** - Common interface for all models
+1. **Create fedcrg/fl/__init__.py** - Package initialization
+2. **Implement FL trainer** - Per Section 8.2
+   - Training state machine with 30 rounds
+   - Adam optimizer with betas=(0.9, 0.999), eps=1e-8, weight_decay=0
+   - Cosine LR schedule: eta_t = 1e-5 + 0.5*(1e-3-1e-5)*(1+cos(pi*t/29))
+   - Deterministic shuffling per (model_seed, client_id, round, local_epoch)
+   - Batch size 64, drop_last=false
+   - Equal arithmetic mean aggregation
+   - Fresh optimizer at each round (moments reset)
+   - Score storage as float64 after float32 forward pass
+3. **Implement server** - Model aggregation and broadcast
+4. **Implement client trainer** - Local training loop
 
 ### Why This is Next
 
@@ -31,38 +32,33 @@ According to prompt.md Section 8 (Implementation strategy):
 - Phase 2: Configuration (DONE)
 - Phase 3: Dataset discovery, integrity and deterministic preparation (DONE)
 - Phase 4: Role assignment and leakage prevention (DONE in data module)
-- Phase 5: Preprocessing (NEXT after models, or parallel)
-- Phase 6: Detector training (REQUIRES models)
+- Phase 5: Preprocessing (NEXT after fl, or parallel)
+- Phase 6: Detector training (REQUIRES fl module)
 
 The CLI commands in Section 14.10 require:
 - `fedcrg train --config configs/nbaiot_primary.yaml`
 
-This command needs the model implementations to exist.
+This command needs the FL training implementation.
 
 ### Blocking Dependencies
 
-None. This task can proceed immediately.
+None. Detector models are complete. This task can proceed immediately.
 
-## After Detector Models
+## After Federated Training
 
-1. Implement federated training (fedcrg/fl/)
-2. Implement preprocessing and feature engineering (fedcrg/data/preprocess.py)
-3. Implement scoring and score caching
-
-## Alternative Paths
-
-Could also implement preprocessing first, but detector models are needed for
-training, which is a prerequisite for most other phases.
+1. Implement scoring and score caching (fedcrg/scoring/)
+2. Implement baseline suite (fedcrg/baselines/)
+3. Implement preprocessing and feature engineering (fedcrg/data/preprocess.py)
 
 ## Time Estimate
 
-- Autoencoder model: 2-3 hours
-- Deep-SVDD model: 2-3 hours
-- Total: ~4-6 hours
+- FL state machine and trainer: 4-6 hours
+- Server/client implementation: 3-4 hours
+- Total: ~7-10 hours
 
 ## Resources Needed
 
-- Roadmap Section 8 (Frozen Detector and Federated Training)
-- Roadmap Section 8.2 (AE architecture)
-- Roadmap Section 8.4 (Deep-SVDD)
-- FedDetect paper for AE hyperparameters (batch_size=64, 120 epochs, 30 rounds)
+- Roadmap Section 8.2 (Federated training state machine)
+- Roadmap Section 8.2.1 (Exact local batch semantics)
+- Roadmap Section 8.1 (AE training parameters)
+- Roadmap Section 8.1.1 (Learning-rate schedule)
