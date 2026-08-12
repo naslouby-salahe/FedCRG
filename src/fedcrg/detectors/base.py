@@ -1,4 +1,4 @@
-"""Detector model contract."""
+"""Detector model contract and deterministic state accounting."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import torch
 class DetectorModel(torch.nn.Module, ABC):
     @abstractmethod
     def anomaly_score(self, batch: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError
+        ...
 
     def clone(self) -> "DetectorModel":
         return copy.deepcopy(self)
@@ -23,3 +23,13 @@ class DetectorModel(torch.nn.Module, ABC):
             digest.update(name.encode("utf-8"))
             digest.update(tensor.detach().cpu().contiguous().numpy().tobytes())
         return digest.hexdigest()
+
+    def trainable_parameter_count(self) -> int:
+        return sum(parameter.numel() for parameter in self.parameters() if parameter.requires_grad)
+
+    def trainable_tensor_bytes(self) -> int:
+        return sum(
+            parameter.numel() * parameter.element_size()
+            for parameter in self.parameters()
+            if parameter.requires_grad
+        )

@@ -9,7 +9,9 @@ import pandas as pd
 
 from fedcrg.core.enums import DataRole, DatasetId
 from fedcrg.core.exceptions import DataIntegrityError
+from fedcrg.core.ids import ClientId, Sha256
 from fedcrg.data.models import ClientSplits
+from fedcrg.data.manifests import hash_row_ids
 
 _METADATA = {
     "row_id",
@@ -20,6 +22,9 @@ _METADATA = {
     "_source_row_index",
     "_capture_time",
     "_verified_chronology",
+    "source_file",
+    "source_row_index",
+    "capture_time",
 }
 
 
@@ -39,7 +44,8 @@ class ClientImputer:
 class PreprocessingModel:
     dataset: DatasetId
     feature_columns: tuple[str, ...]
-    client_imputers: dict[str, ClientImputer]
+    client_imputers: dict[ClientId, ClientImputer]
+    training_row_hashes: dict[ClientId, Sha256]
     global_minima: tuple[float, ...]
     global_maxima: tuple[float, ...]
 
@@ -47,7 +53,7 @@ class PreprocessingModel:
     def constant_features(self) -> tuple[bool, ...]:
         return tuple(low == high for low, high in zip(self.global_minima, self.global_maxima, strict=True))
 
-    def transform(self, frame: pd.DataFrame, client_id: str) -> pd.DataFrame:
+    def transform(self, frame: pd.DataFrame, client_id: ClientId) -> pd.DataFrame:
         values = frame.loc[:, list(self.feature_columns)].to_numpy(dtype=np.float64, copy=True)
         imputer = self.client_imputers[client_id]
         if imputer.medians is not None:
@@ -72,8 +78,9 @@ class PreprocessingModel:
         return {
             "dataset": self.dataset.value,
             "feature_columns": list(self.feature_columns),
+            "training_row_hashes": {client.value: hash_value.value for client, hash_value in sorted(self.training_row_hashes.items())},
             "client_medians": {
-                client_id: None if item.medians is None else list(item.medians)
+                client_id.value: None if item.medians is None else list(item.medians)
                 for client_id, item in self.client_imputers.items()
             },
             "global_minima": list(self.global_minima),
@@ -85,7 +92,12 @@ class PreprocessingModel:
 class FederatedPreprocessor:
     """Fit imputers locally and aggregate only train-set feature extrema."""
 
-    def validate_training_rows(self, splits: ClientSplits, dataset: DatasetId, expected_features: int) -> tuple[str, ...]:
+    def validate_training_rows(
+        self,
+        splits: ClientSplits,
+        dataset: DatasetId,
+        expected_features: int,
+    ) -> tuple[str, ...]:
         train = splits.get(DataRole.TRAIN)
         columns = model_feature_columns(train, expected_features)
         values = train.loc[:, list(columns)].to_numpy(dtype=np.float64)
@@ -96,14 +108,22 @@ class FederatedPreprocessor:
             finite_rate = np.isfinite(values).mean(axis=0)
             failing = [columns[index] for index, rate in enumerate(finite_rate) if rate < 0.99]
             if failing:
-                raise DataIntegrityError("DIAD_FEATURE_FINITE_RATE_FAIL: " + ", ".join(failing[:5]))
+                raise DataIntegrityError(
+                    "DIAD_FEATURE_FINITE_RATE_FAIL: " + ", ".join(failing[:5])
+                )
         return columns
 
-    def fit(self, splits_by_client: dict[str, ClientSplits], dataset: DatasetId, expected_features: int) -> PreprocessingModel:
+    def fit(
+        self,
+        splits_by_client: dict[ClientId, ClientSplits],
+        dataset: DatasetId,
+        expected_features: int,
+    ) -> PreprocessingModel:
         if not splits_by_client:
             raise DataIntegrityError("Cannot fit preprocessing without clients")
         feature_columns: tuple[str, ...] | None = None
-        imputers: dict[str, ClientImputer] = {}
+        imputers: dict[ClientId, ClientImputer] = {}
+        training_row_hashes: dict[ClientId, Sha256] = {}
         local_minima: list[np.ndarray] = []
         local_maxima: list[np.ndarray] = []
         for client_id in sorted(splits_by_client):
@@ -113,7 +133,13 @@ class FederatedPreprocessor:
                 feature_columns = columns
             elif columns != feature_columns:
                 raise DataIntegrityError("Model feature order differs across clients")
-            train_values = splits.get(DataRole.TRAIN).loc[:, list(columns)].to_numpy(dtype=np.float64, copy=True)
+            train_frame = splits.get(DataRole.TRAIN)
+            training_row_hashes[client_id] = Sha256(hash_row_ids(
+                train_frame["row_id"].astype(str).tolist()
+            ))
+            train_values = train_frame.loc[:, list(columns)].to_numpy(
+                dtype=np.float64, copy=True
+            )
             if dataset is DatasetId.DIAD:
                 medians = np.nanmedian(np.where(np.isfinite(train_values), train_values, np.nan), axis=0)
                 if not np.isfinite(medians).all():
@@ -130,4 +156,11 @@ class FederatedPreprocessor:
         assert feature_columns is not None
         global_minima = np.min(np.stack(local_minima), axis=0)
         global_maxima = np.max(np.stack(local_maxima), axis=0)
-        return PreprocessingModel(dataset=dataset, feature_columns=feature_columns, client_imputers=imputers, global_minima=tuple(float(value) for value in global_minima), global_maxima=tuple(float(value) for value in global_maxima))
+        return PreprocessingModel(
+            dataset=dataset,
+            feature_columns=feature_columns,
+            client_imputers=imputers,
+            training_row_hashes=training_row_hashes,
+            global_minima=tuple(float(value) for value in global_minima),
+            global_maxima=tuple(float(value) for value in global_maxima),
+        )
