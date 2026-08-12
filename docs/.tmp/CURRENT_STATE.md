@@ -95,6 +95,12 @@
 13. NEW: Tested synthetic experiments S1 and S6 successfully
 14. NEW: Created raw data symlink (data/raw -> external shared data)
 15. NEW: Data preparation CLI commands working
+16. NEW: CLI commands installed and working (fedcrg doctor, tables, synthetic, verify)
+17. NEW: Created first detailed matrix file (01_core_requirements.md)
+
+## Git Commits
+
+12. a30c10d: Implement CLI commands and raw data symlink setup
 
 ## Verification
 
@@ -104,9 +110,10 @@
 - All real data experiments (R1-R14) registered with placeholders
 - Experiment executor with dependency management working
 - Results collection and serialization working
-- CLI commands: Fixed config loading, precompute-gate-a working, data preparation working
+- CLI commands: Fixed config loading, precompute-gate-a working, data preparation working, benchmark working
 - S1 and S6 synthetic experiments: Successfully executed and completed
 - Raw data symlink: Created and verified (data/raw -> /home/naslouby/Projects/datp-shared-data/raw)
+- fedcrg CLI: Installed and working as both python -m fedcrg and fedcrg commands
 
 ## In Progress
 
