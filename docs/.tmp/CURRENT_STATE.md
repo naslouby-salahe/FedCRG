@@ -1,7 +1,7 @@
 # Current State
 
 **Last updated:** 2026-08-12
-**Phase:** Federated training complete
+**Phase:** Scoring complete
 
 ## Status Summary
 
@@ -49,12 +49,17 @@
     - client.py: FederatedClient with local training
     - server.py: FederatedServer with broadcast and aggregation
     - trainer.py: FederatedTrainer with complete training loop
+16. ✅ Implemented scoring and score caching (fedcrg/scoring/):
+    - schemas.py: RoleScores, ClientScores, ScoreManifest
+    - computer.py: ScoreComputer with float64 computation
+    - cache.py: ScoreCache with immutable caching and hash verification
 15. ✅ Git commits:
     - 8f29b71: Implement core FedCRG statistical modules
     - 40cafb9: Add FedCRG configuration system with YAML files
     - 619b813: Implement FedCRG data infrastructure module
     - 5fdb8db: Implement detector models (fedcrg/models/)
     - edf3521: Implement federated training (fedcrg/fl/)
+    - 816d63d: Implement scoring and score caching (fedcrg/scoring/)
 
 ## In Progress
 
@@ -93,3 +98,5 @@ None currently identified.
 - Calibration permutation uses hash-seeded PCG64 per Section 7.2.2
 - Detector models match Section 8.1 (AE) and Section 8.4 (Deep-SVDD) exactly
 - Parameter counts verified: AE N-BaIoT=36,626; AE DIAD=20,473; Deep-SVDD=9,440
+- Score caching implements float64 storage per Section 8.2
+- Score cache hashing and immutability implemented
