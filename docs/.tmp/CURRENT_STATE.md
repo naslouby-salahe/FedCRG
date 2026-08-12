@@ -1,7 +1,7 @@
 # Current State
 
 **Last updated:** 2026-08-12
-**Phase:** Scoring complete
+**Phase:** Preprocessing complete
 
 ## Status Summary
 
@@ -12,6 +12,11 @@
 - **Configuration system:** COMPLETE - Pydantic models and YAML files generated
 - **Data infrastructure:** COMPLETE - Base adapters, N-BaIoT adapter, DIAD adapter, manifest, splitting
 - **Detector models:** COMPLETE - Autoencoder and Deep-SVDD with exact parameter counts
+- **Federated training:** COMPLETE - FL trainer, server, client, aggregation, sampling, LR schedule
+- **Scoring and score caching:** COMPLETE - Score computation, caching, hashing, immutability
+- **Baseline suite:** COMPLETE - All 11 baselines (B0-B10) implemented
+- **FedCRG core algorithm:** COMPLETE - Complete FedCRG decision algorithm per Section 5
+- **Preprocessing:** COMPLETE - N-BaIoT and DIAD preprocessing per Section 7.4
 - **Tracking files:** COMPLETE - All docs/.tmp/ files created and maintained
 
 ## Completed
@@ -53,13 +58,28 @@
     - schemas.py: RoleScores, ClientScores, ScoreManifest
     - computer.py: ScoreComputer with float64 computation
     - cache.py: ScoreCache with immutable caching and hash verification
-15. ✅ Git commits:
-    - 8f29b71: Implement core FedCRG statistical modules
-    - 40cafb9: Add FedCRG configuration system with YAML files
-    - 619b813: Implement FedCRG data infrastructure module
-    - 5fdb8db: Implement detector models (fedcrg/models/)
-    - edf3521: Implement federated training (fedcrg/fl/)
-    - 816d63d: Implement scoring and score caching (fedcrg/scoring/)
+17. ✅ Implemented baseline suite (fedcrg/baselines/):
+    - quantile.py: B0, B1, B2, B4 quantile baselines with deterministic rank ledger
+    - gate_only.py: B3 GATE-A-ONLY baseline
+    - shrinkage.py: B5 SHRINKAGE with n0 grid selection
+    - feddetect_3sigma.py: B6 FEDDETECT-3SIGMA baseline
+    - attack_aware.py: B7, B8, B9 attack-aware baselines
+    - oracle.py: B10 ORACLE-TEST baseline
+    - registry.py: Baseline registry with metadata and factory functions
+18. ✅ Implemented `fedcrg.fedcrg` module - Complete FedCRG algorithm per Section 5
+19. ✅ Implemented `fedcrg.data.preprocess` module - Preprocessing per Section 7.4
+
+## Git Commits
+
+1. 8f29b71: Implement core FedCRG statistical modules
+2. 40cafb9: Add FedCRG configuration system with YAML files
+3. 619b813: Implement FedCRG data infrastructure module
+4. 5fdb8db: Implement detector models (fedcrg/models/)
+5. edf3521: Implement federated training (fedcrg/fl/)
+6. 816d63d: Implement scoring and score caching (fedcrg/scoring/)
+7. 4894e23: Implement baseline suite (fedcrg/baselines/)
+8. 97e2447: Implement FedCRG core algorithm (fedcrg/fedcrg.py)
+9. bdfb6c2: Implement preprocessing module (fedcrg/data/preprocess.py)
 
 ## In Progress
 
@@ -67,22 +87,13 @@
 
 ## Next Priority
 
-1. Implement scoring and score caching (fedcrg/scoring/):
-   - Score computation for all roles
-   - Score cache serialization (float64)
-   - Score cache hashing and immutability
-2. Implement baseline suite (fedcrg/baselines/):
-   - B0 REF-Q99-R
-   - B1 GLOBAL-Q99-FULL
-   - B2 LOCAL-Q99-FULL
-   - B3 GATE-A-ONLY
-   - B4 GATE-B-ONLY
-   - B5 SHRINKAGE
-   - B6 FEDDETECT-3SIGMA
-   - B7 DEV-F1-LG-SELECT
-   - B8 LARIDI-STYLE-SS
-   - B9 SUP-F1-1000
-   - B10 ORACLE-TEST
+1. Implement metrics module (fedcrg/metrics/) per Section 8.2
+2. Implement experiment registry and execution pipeline
+3. Implement CLI commands
+4. Create and populate detailed matrix files
+5. Perform four matrix audits
+6. Implement raw data symlink (data/raw)
+7. End-to-end integration testing
 
 ## Blockers
 
@@ -100,3 +111,12 @@ None currently identified.
 - Parameter counts verified: AE N-BaIoT=36,626; AE DIAD=20,473; Deep-SVDD=9,440
 - Score caching implements float64 storage per Section 8.2
 - Score cache hashing and immutability implemented
+- All 11 baselines implemented (B0-B10) per Section 9
+- Baseline registry with benign-only/attack-aware classification
+- FedCRG core algorithm implements Section 5 pseudocode exactly
+- Preprocessing implements Section 7.4 for both N-BaIoT and DIAD
+- No clipping to [0,1] as required by Section 7.4.1
+- Constant feature handling per Section 7.4.1
+- DIAD imputation is client-local median on T_k only
+- Global min/max scaling computed federatively
+- All verification tests passing
