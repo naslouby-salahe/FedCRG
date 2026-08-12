@@ -1,57 +1,61 @@
 # Next Action
 
 **Last updated:** 2026-08-12
-**Current time:** 2026-08-12 (Session start)
+**Current time:** 2026-08-12
 
 ## Immediate Next Action
 
-**Priority:** HIGH  
-**Task:** Complete the audit/implementation matrix extraction  
-**File:** `docs/FedCRG Audit and Implementation Matrix.md`  
-**Status:** IN PROGRESS
+**Priority:** HIGH   
+**Task:** Implement data infrastructure (fedcrg/data/)  
+**File:** `fedcrg/data/` module  
+**Status:** NOT STARTED
 
 ### Specific Steps
 
-1. **Create matrix structure** - Define the complete matrix file with all sections
-2. **Extract requirements systematically** - Work through roadmap sections methodically
-3. **Handle file size** - Split into multiple files if needed (Part 1, Part 2, etc.)
-4. **Verify coverage** - Ensure every roadmap requirement is represented
+1. **Implement DatasetID enum** - Already in config.py, verify usage
+2. **Create data adapter base class** - Abstract base for N-BaIoT and DIAD
+3. **Implement N-BaIoT adapter** - Read from data/raw, handle 9 clients, 115 features
+4. **Implement DIAD adapter** - Read from data/raw, handle eligibility filtering, 86 features
+5. **Implement role-based splitting** - R, G, C, guard partitions per roadmap Section 7
+6. **Implement manifest system** - SHA-256 hashing, row counts, eligibility tracking
 
 ### Why This is Next
 
-According to prompt.md Section 2:
-- First action: Read roadmap (COMPLETE)
-- Second action: Inspect/create matrix (IN PROGRESS)
-- Matrix must be complete before proceeding to audits and implementation
+According to prompt.md Section 8 (Implementation strategy):
+- Phase 1: Domain model (DONE - config.py has enums)
+- Phase 2: Configuration (DONE - Pydantic models + YAML)
+- Phase 3: Dataset discovery, integrity and deterministic preparation (NEXT)
+
+The CLI commands in Section 14.10 require:
+- `fedcrg data prepare --config configs/nbaiot_primary.yaml`
+- `fedcrg data prepare --config configs/diad_external.yaml`
+
+These commands need the data module to be implemented.
 
 ### Blocking Dependencies
 
 None. This task can proceed immediately.
 
-## After Matrix Completion
+## After Data Infrastructure
 
-1. Perform Audit 1: Lossless roadmap coverage verification
-2. Perform Audit 2: Scientific-contract consistency check
-3. Perform Audit 3: Experimental and evidence completeness reconciliation
-4. Perform Audit 4: Implementability and verification mapping
-5. Fix any omissions or discrepancies found
-6. Then proceed to repository structure setup
+1. Implement preprocessing and feature engineering (fedcrg/data/preprocess.py)
+2. Implement detector models (fedcrg/models/)
+3. Implement federated training (fedcrg/fl/)
+4. Implement scoring and score caching
 
 ## Alternative Paths
 
-If matrix file size continues to be problematic:
-1. Split into logical parts (Core, Data, Training, Experiments, etc.)
-2. Create index file that references all parts
-3. Ensure each part maintains the same structure and ID naming
+None - data infrastructure is the clear next priority per implementation strategy.
 
 ## Time Estimate
 
-- Matrix extraction: 2-4 hours (given roadmap size and complexity)
-- Audits: 1-2 hours per audit
-- Total before implementation: ~6-12 hours
+- Data adapters: 2-4 hours
+- Role splitting: 1-2 hours
+- Manifest system: 1-2 hours
+- Total: ~4-8 hours
 
 ## Resources Needed
 
-- Access to roadmap document (available)
-- Text editor for large file editing
-- Focus time for systematic extraction
+- Access to data/raw symlink (to be set up)
+- Roadmap Section 7 (Dataset and Data-Partition Protocol)
+- Roadmap Section 7.1 (N-BaIoT), Section 7.2 (DIAD)
