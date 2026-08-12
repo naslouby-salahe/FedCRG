@@ -1,7 +1,7 @@
 # Current State
 
 **Last updated:** 2026-08-12
-**Phase:** Preprocessing complete
+**Phase:** Experiment Registry Implementation Complete
 
 ## Status Summary
 
@@ -18,6 +18,7 @@
 - **FedCRG core algorithm:** COMPLETE - Complete FedCRG decision algorithm per Section 5
 - **Preprocessing:** COMPLETE - N-BaIoT and DIAD preprocessing per Section 7.4
 - **Metrics:** COMPLETE - All metrics per Section 10 implemented and verified
+- **Experiment registry:** COMPLETE - All S1-S6 and R1-R14 experiments registered
 - **Tracking files:** COMPLETE - All docs/.tmp/ files created and maintained
 
 ## Completed
@@ -70,6 +71,12 @@
 18. ✅ Implemented `fedcrg.fedcrg` module - Complete FedCRG algorithm per Section 5
 19. ✅ Implemented `fedcrg.data.preprocess` module - Preprocessing per Section 7.4
 20. ✅ Implemented `fedcrg.metrics` module - All metrics per Section 10
+21. ✅ Implemented experiment registry (fedcrg/experiments/):
+    - registry.py: ExperimentID enum, ExperimentConfig, ExperimentRegistry with all S1-S6, R1-R14
+    - synthetic.py: S1-S6 synthetic experiments with exact parameters from Section 11
+    - real_data.py: R1-R14 real data experiments with placeholders for full implementation
+    - executor.py: ExperimentExecutor with dependency resolution and result management
+    - results.py: ResultCollector, aggregation, reporting, verification utilities
 
 ## Git Commits
 
@@ -83,19 +90,30 @@
 8. 97e2447: Implement FedCRG core algorithm (fedcrg/fedcrg.py)
 9. bdfb6c2: Implement preprocessing module (fedcrg/data/preprocess.py)
 10. e3702f7: Implement metrics module (fedcrg/metrics/)
+11. NEW: Implement experiment registry (fedcrg/experiments/)
+
+## Verification
+
+- Registry validation: PASSED
+- S6 Gate-B power experiment: COMPLETED and VERIFIED
+- All synthetic experiments (S1-S6) implemented with exact parameters
+- All real data experiments (R1-R14) registered with placeholders
+- Experiment executor with dependency management working
+- Results collection and serialization working
 
 ## In Progress
 
 1. 🔄 Creating detailed matrix files (docs/matrix/) - PARTIAL
+2. 🔄 Implementing CLI commands - NOT STARTED
 
 ## Next Priority
 
-1. Implement experiment registry and execution pipeline
-2. Implement CLI commands
-3. Create and populate detailed matrix files
-4. Perform four matrix audits
-5. Implement raw data symlink (data/raw)
-6. End-to-end integration testing
+1. Implement CLI commands per Section 14.10
+2. Create and populate detailed matrix files
+3. Perform four matrix audits
+4. Implement raw data symlink (data/raw)
+5. Complete end-to-end integration testing
+6. Run synthetic experiments S1-S6
 
 ## Blockers
 
@@ -126,4 +144,10 @@ None currently identified.
   - FPR, TPR, Precision, Recall, F1 (classification)
   - AUROC, AUPRC with invariance per H5
   - ABMacroTPR with utility anchor per H3
+- Experiment registry complete with all S1-S6 and R1-R14 per Section 11
+- Synthetic experiments S1-S6 implemented with exact parameters from roadmap
+- Real data experiments R1-R14 registered with dependency management
+- Real data experiments use placeholders that can be filled in with actual data processing
+- Experiment executor handles dependency resolution and result persistence
+- S6 (Gate-B exact power) runs successfully and produces correct results
 - All verification tests passing
