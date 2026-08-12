@@ -40,6 +40,19 @@
   to ensure YAML files are human-readable and don't contain Python-specific tags
 - **Git commit:** 40cafb9 - "Add FedCRG configuration system with YAML files"
 
+### Session 5: 2026-08-12 - Data Infrastructure
+- **Action:** Implemented fedcrg.data package with N-BaIoT and DIAD adapters
+- **Result:** Complete data infrastructure with role-based splitting and manifest system
+- **Findings:** All DatasetRole values match Section 7 requirements
+- **Validation:** Row ID generation is deterministic, unique, and 64-char hex
+- **Validation:** Hash-seeded PCG64 random generation works correctly
+- **Validation:** Calibration permutation generation produces unique indices
+- **Decision 2026-08-12-005:** Use hash-seeded PCG64 for all random operations
+  per Section 7.2.2 requirement for deterministic per-client seeds
+- **Decision 2026-08-12-006:** Row ID format follows Section 7.1.4 exactly:
+  SHA256(dataset_id || client_id || source_file_relative_path || source_row_index)
+- **Git commit:** 619b813 - "Implement FedCRG data infrastructure module"
+
 ## Roadmap Coverage Audit
 
 ### Sections Covered
@@ -69,17 +82,17 @@
 - **GLOBAL:** 0% extracted (need matrix files)
 - **PROTOCOL:** 100% extracted (in config.py)
 - **FORMULA:** 100% extracted (in reference.py, gate_a.py, gate_b.py)
-- **DATASET:** 0% extracted (need matrix files)
-- **SPLIT:** 0% extracted (need matrix files)
-- **PREPROCESS:** 0% extracted (need matrix files)
+- **DATASET:** 100% extracted (in nbaiot.py, diad.py)
+- **SPLIT:** 100% extracted (in splitting.py)
+- **PREPROCESS:** 0% extracted (need implementation)
 - **TRAIN:** 100% extracted (in config.py)
-- **SCORE:** 0% extracted (need matrix files)
+- **SCORE:** 0% extracted (need implementation)
 - **GATE-A:** 100% extracted (in gate_a.py)
 - **GATE-B:** 100% extracted (in gate_b.py)
 - **STATE:** 100% extracted (in states.py)
 - **POLICY:** 100% extracted (in config.py)
-- **BASELINE:** 0% extracted (need matrix files)
-- **METRIC:** 0% extracted (need matrix files)
+- **BASELINE:** 0% extracted (need implementation)
+- **METRIC:** 0% extracted (need implementation)
 - **EXPERIMENT:** 0% extracted (need matrix files)
 - **CONFIG:** 100% extracted (in config.py)
 - **CLI:** 0% extracted (need implementation)
@@ -111,6 +124,18 @@
 - **Rationale:** Matches Appendix E structure and allows type-safe access
 - **Impact:** fedcrg/config.py design
 
+### Interpretation 2026-08-12-005
+- **Context:** Random number generation for splitting
+- **Decision:** Use hash-seeded PCG64 generator per Section 7.2.2
+- **Rationale:** Prevents dependence on Python's process-randomized hash() function
+- **Impact:** fedcrg/data/splitting.py
+
+### Interpretation 2026-08-12-006
+- **Context:** Row ID generation
+- **Decision:** Implement Section 7.1.4 formula exactly: SHA256(dataset_id || client_id || source_file_relative_path || source_row_index)
+- **Rationale:** Ensures stable, reproducible row IDs across implementations
+- **Impact:** fedcrg/data/base.py, nbaiot.py, diad.py
+
 ## Pending Audits
 
 1. **Audit 1 - Lossless Roadmap Coverage:** PARTIAL (matrix index exists, need detailed extraction)
@@ -128,4 +153,4 @@ None identified so far.
 2. Perform Audit 1 to verify lossless coverage
 3. Perform remaining audits
 4. Update matrix based on audit findings
-5. Implement data infrastructure (fedcrg/data/)
+5. Implement detector models (fedcrg/models/)

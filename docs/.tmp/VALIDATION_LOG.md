@@ -208,3 +208,87 @@
 3. Implement and validate federated training (fedcrg/fl/)
 4. Implement and validate scoring and caching
 5. Run full pytest suite after implementation
+
+## Session 3: 2026-08-12 - Data Infrastructure Validation
+
+### DatasetRole Enum Verification
+- **Module:** fedcrg/data/base.py
+- **Test:** All DatasetRole values match Section 7
+- **Results:**
+  - DatasetRole.R = "R" - PASSED
+  - DatasetRole.G = "G" - PASSED
+  - DatasetRole.C = "C" - PASSED
+  - DatasetRole.GUARD = "GUARD" - PASSED
+  - DatasetRole.TRAIN = "TRAIN" - PASSED
+  - DatasetRole.TEST_BENIGN = "TEST_BENIGN" - PASSED
+  - DatasetRole.TEST_ATTACK = "TEST_ATTACK" - PASSED
+  - DatasetRole.DEV_ATTACK = "DEV_ATTACK" - PASSED
+- **Total:** 8 roles - PASSED
+- **Status:** ✅ PASSED
+
+### Row ID Generation Verification
+- **Module:** fedcrg/data/base.py
+- **Test:** Row ID generation per Section 7.1.4
+- **Results:**
+  - Deterministic: same inputs produce same output - PASSED
+  - Unique: different inputs produce different output - PASSED
+  - Format: 64-character hex string - PASSED
+  - Components: dataset_id, client_id, source_file, source_row_index - PASSED
+- **Status:** ✅ PASSED
+
+### Hash-Seeded Generator Verification
+- **Module:** fedcrg/data/splitting.py
+- **Test:** PCG64 generator with hash seeding per Section 7.2.2
+- **Results:**
+  - Generator created from seed string - PASSED
+  - Permutation produces unique indices - PASSED
+  - Same seed produces same permutation - PASSED
+- **Status:** ✅ PASSED
+
+### Calibration Permutation Verification
+- **Module:** fedcrg/data/splitting.py
+- **Test:** Calibration permutation generation
+- **Results:**
+  - N-BaIoT: permutation of 6000 indices - PASSED
+  - DIAD: permutation of 3800 indices - PASSED
+  - All indices unique - PASSED
+  - Same seed produces same permutation - PASSED
+- **Status:** ✅ PASSED
+
+### Adapter Constants Verification
+- **Module:** fedcrg/data/nbaiot.py, fedcrg/data/diad.py
+- **Test:** Adapter constants match roadmap values
+- **Results:**
+  - NBaiotAdapter: dataset_id="nbaiot" - PASSED
+  - NBaiotAdapter: expected_features=115 - PASSED
+  - NBaiotAdapter: expected_clients=9 - PASSED
+  - DiadAdapter: dataset_id="diad" - PASSED
+  - DiadAdapter: expected_features=86 - PASSED
+  - DiadAdapter: min_benign_rows=7800 - PASSED
+  - DiadAdapter: min_malicious_rows=1000 - PASSED
+- **Status:** ✅ PASSED
+
+### Attack Subtype Discovery Verification
+- **Module:** fedcrg/data/nbaiot.py
+- **Test:** Attack subtype discovery from filenames
+- **Results:**
+  - BASHLITE_SUBTYPES = ["combo", "junk", "scan", "tcp", "udp"] - PASSED
+  - MIRAI_SUBTYPES = ["ack", "scan", "syn", "udp", "udpplain"] - PASSED
+  - 5 subtypes for all devices, 10 for Mirai devices - PASSED
+- **Status:** ✅ PASSED
+
+## Updated Validation Summary
+
+| Category | Total Tests | Passed | Failed |
+|----------|-------------|--------|--------|
+| Statistical Core | 20+ | 20+ | 0 |
+| Configuration | 50+ | 50+ | 0 |
+| Data Infrastructure | 30+ | 30+ | 0 |
+| **Total** | **100+** | **100+** | **0** |
+
+## Next Validation Steps
+
+1. Implement and validate detector models (fedcrg/models/)
+2. Implement and validate federated training (fedcrg/fl/)
+3. Implement and validate scoring and caching
+4. Run full pytest suite after implementation
