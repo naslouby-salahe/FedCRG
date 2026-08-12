@@ -1,7 +1,7 @@
 # Current State
 
 **Last updated:** 2026-08-12
-**Phase:** Detector models complete
+**Phase:** Federated training complete
 
 ## Status Summary
 
@@ -42,10 +42,19 @@
     - base.py: BaseDetectorModel, ModelConfig
     - autoencoder.py: Autoencoder with N-BaIoT (115-86-57-38-29-38-57-86-115, 36,626 params) and DIAD (86-64-43-28-21-28-43-64-86, 20,473 params)
     - deep_svdd.py: DeepSVDD with 115-64-32 encoder, 9,440 params (encoder + center)
+15. ✅ Implemented federated training (fedcrg/fl/):
+    - lr_schedule.py: Cosine LR schedule per Section 8.1.1
+    - sampling.py: Deterministic sampler with hash-seeded PCG64
+    - aggregation.py: Equal arithmetic mean aggregation
+    - client.py: FederatedClient with local training
+    - server.py: FederatedServer with broadcast and aggregation
+    - trainer.py: FederatedTrainer with complete training loop
 15. ✅ Git commits:
     - 8f29b71: Implement core FedCRG statistical modules
     - 40cafb9: Add FedCRG configuration system with YAML files
     - 619b813: Implement FedCRG data infrastructure module
+    - 5fdb8db: Implement detector models (fedcrg/models/)
+    - edf3521: Implement federated training (fedcrg/fl/)
 
 ## In Progress
 
@@ -53,14 +62,22 @@
 
 ## Next Priority
 
-1. Implement federated training (fedcrg/fl/):
-   - FL state machine per Section 8.2
-   - Optimizer setup (Adam, cosine LR schedule)
-   - Deterministic shuffling per Section 8.2.1
-   - Model aggregation (equal arithmetic mean)
-   - Training loop (30 rounds, 120 local epochs for N-BaIoT, 20 for DIAD)
-2. Implement scoring and score caching (fedcrg/scoring/)
-3. Implement baseline suite (fedcrg/baselines/)
+1. Implement scoring and score caching (fedcrg/scoring/):
+   - Score computation for all roles
+   - Score cache serialization (float64)
+   - Score cache hashing and immutability
+2. Implement baseline suite (fedcrg/baselines/):
+   - B0 REF-Q99-R
+   - B1 GLOBAL-Q99-FULL
+   - B2 LOCAL-Q99-FULL
+   - B3 GATE-A-ONLY
+   - B4 GATE-B-ONLY
+   - B5 SHRINKAGE
+   - B6 FEDDETECT-3SIGMA
+   - B7 DEV-F1-LG-SELECT
+   - B8 LARIDI-STYLE-SS
+   - B9 SUP-F1-1000
+   - B10 ORACLE-TEST
 
 ## Blockers
 
