@@ -1,4 +1,4 @@
-"""Structured output paths for one immutable run."""
+"""Canonical immutable output layout for one policy/run cell."""
 
 from __future__ import annotations
 
@@ -17,69 +17,48 @@ class RunLayout:
         return cls(outputs_root / "runs" / str(run_id))
 
     @property
-    def manifest(self) -> Path:
-        return self.root / "manifest.json"
-
+    def manifest(self) -> Path: return self.root / "manifest.json"
     @property
-    def resolved_config(self) -> Path:
-        return self.root / "resolved_config.yaml"
-
+    def run_config(self) -> Path: return self.root / "run_config.json"
     @property
-    def environment(self) -> Path:
-        return self.root / "environment.json"
-
+    def resolved_config(self) -> Path: return self.root / "resolved_config.yaml"
     @property
-    def data(self) -> Path:
-        return self.root / "data"
-
+    def environment(self) -> Path: return self.root / "environment.json"
     @property
-    def training(self) -> Path:
-        return self.root / "training"
-
+    def data(self) -> Path: return self.root / "data"
     @property
-    def scores(self) -> Path:
-        return self.root / "scores"
-
+    def training(self) -> Path: return self.root / "training"
     @property
-    def decisions(self) -> Path:
-        return self.root / "decisions"
-
+    def model_reference(self) -> Path: return self.training / "model_reference.json"
     @property
-    def metrics(self) -> Path:
-        return self.root / "metrics"
-
+    def scores(self) -> Path: return self.root / "scores"
     @property
-    def tables(self) -> Path:
-        return self.root / "tables"
-
+    def score_reference(self) -> Path: return self.scores / "cache_reference.json"
     @property
-    def figures(self) -> Path:
-        return self.root / "figures"
-
+    def decisions(self) -> Path: return self.root / "decisions"
     @property
-    def reports(self) -> Path:
-        return self.root / "reports"
-
+    def threshold_records(self) -> Path: return self.decisions / "threshold_record.jsonl"
     @property
-    def logs(self) -> Path:
-        return self.root / "logs"
-
+    def metrics(self) -> Path: return self.root / "metrics"
     @property
-    def verification(self) -> Path:
-        return self.root / "verification"
+    def metric_records(self) -> Path: return self.metrics / "metric_record.jsonl"
+    @property
+    def federation_metrics(self) -> Path: return self.metrics / "federation.json"
+    @property
+    def tables(self) -> Path: return self.root / "tables"
+    @property
+    def figures(self) -> Path: return self.root / "figures"
+    @property
+    def reports(self) -> Path: return self.root / "reports"
+    @property
+    def logs(self) -> Path: return self.root / "logs"
+    @property
+    def verification(self) -> Path: return self.root / "verification"
 
     def create(self) -> None:
         self.root.mkdir(parents=True, exist_ok=False)
         for directory in (
-            self.data,
-            self.training,
-            self.scores,
-            self.decisions,
-            self.metrics,
-            self.tables,
-            self.figures,
-            self.reports,
-            self.logs,
-            self.verification,
+            self.data, self.training, self.scores, self.decisions, self.metrics,
+            self.tables, self.figures, self.reports, self.logs, self.verification,
         ):
             directory.mkdir()
