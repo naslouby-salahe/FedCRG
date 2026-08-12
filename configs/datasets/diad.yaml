@@ -1,7 +1,13 @@
 id: diad
+source_version: "CIC-IoT-DIAD-2024"
+parser_version: "1"
 feature_count: 86
 expected_clients: null
+expected_source_clients: 105
 minimum_clients: 10
+minimum_benign_rows: 7800
+minimum_malicious_rows: 1000
+expected_benign_counts: {}
 split:
   train_benign: 2000
   reference_benign: 300

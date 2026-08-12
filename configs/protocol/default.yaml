@@ -1,4 +1,5 @@
-version: '2.0'
+id: fedcrg
+version: "2.0"
 alpha: 0.01
 rho: 0.50
 readiness_assurance: 0.95

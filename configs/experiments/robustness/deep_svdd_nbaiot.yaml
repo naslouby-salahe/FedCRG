@@ -15,6 +15,9 @@ training:
   client_fraction: 1.0
   aggregation: equal_client_mean
   mixed_precision: false
+  early_stopping: false
+  deterministic_algorithms: true
+  record_round20_score_correlation: false
   device: cpu
 randomness:
   model_seeds: [11, 22, 33]
@@ -22,9 +25,9 @@ randomness:
   synthetic_seed: 123456
   bootstrap_seed: 424242
 policies:
-  - global_quantile
-  - local_quantile
-  - shrinkage
-  - readiness_only
-  - fedcrg
+  - GLOBAL-Q99-FULL
+  - LOCAL-Q99-FULL
+  - SHRINKAGE
+  - READINESS-ONLY
+  - FEDCRG
 outputs_root: outputs

@@ -15,6 +15,9 @@ training:
   client_fraction: 1.0
   aggregation: equal_client_mean
   mixed_precision: false
+  early_stopping: false
+  deterministic_algorithms: true
+  record_round20_score_correlation: false
   device: cpu
 randomness:
   model_seeds: [11, 22, 33, 44, 55]
@@ -22,16 +25,16 @@ randomness:
   synthetic_seed: 123456
   bootstrap_seed: 424242
 policies:
-  - reference_quantile
-  - global_quantile
-  - local_quantile
-  - readiness_only
-  - mismatch_only
-  - shrinkage
-  - three_sigma
-  - dev_f1_select
-  - summary_statistic_select
-  - supervised_f1
-  - oracle_test
-  - fedcrg
+  - REF-Q99-R
+  - GLOBAL-Q99-FULL
+  - LOCAL-Q99-FULL
+  - READINESS-ONLY
+  - MISMATCH-ONLY
+  - SHRINKAGE
+  - FEDDETECT-3SIGMA
+  - DEV-F1-LG-SELECT
+  - LARIDI-STYLE-SS
+  - SUP-F1-1000
+  - ORACLE-TEST
+  - FEDCRG
 outputs_root: outputs

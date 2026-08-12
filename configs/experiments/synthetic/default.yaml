@@ -2,6 +2,8 @@ id: readiness_theorem
 protocol: ../../protocol/default.yaml
 dataset:
   id: synthetic
+  source_version: "generated-v2"
+  parser_version: "1"
   feature_count: 1
   expected_clients: 1
   minimum_clients: 1
@@ -26,5 +28,5 @@ training:
   local_epochs: 1
   batch_size: 1
   device: cpu
-policies: [fedcrg]
+policies: [FEDCRG]
 outputs_root: outputs
