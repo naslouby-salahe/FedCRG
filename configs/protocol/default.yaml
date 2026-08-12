@@ -1,0 +1,7 @@
+version: '2.0'
+alpha: 0.01
+rho: 0.50
+readiness_assurance: 0.95
+mismatch_confidence: 0.95
+strict_exceedance: true
+reject_calibration_ties: true

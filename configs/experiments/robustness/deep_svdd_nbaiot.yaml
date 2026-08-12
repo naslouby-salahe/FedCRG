@@ -1,0 +1,30 @@
+id: second_detector
+protocol: ../../protocol/default.yaml
+dataset: ../../datasets/nbaiot.yaml
+detector: ../../detectors/deep_svdd.yaml
+training:
+  rounds: 30
+  local_epochs: 20
+  batch_size: 64
+  optimizer: adam
+  learning_rate_initial: 0.001
+  learning_rate_final: 0.00001
+  adam_betas: [0.9, 0.999]
+  adam_epsilon: 0.00000001
+  weight_decay: 0.0
+  client_fraction: 1.0
+  aggregation: equal_client_mean
+  mixed_precision: false
+  device: cpu
+randomness:
+  model_seeds: [11, 22, 33]
+  attack_split_seed: 9001
+  synthetic_seed: 123456
+  bootstrap_seed: 424242
+policies:
+  - global_quantile
+  - local_quantile
+  - shrinkage
+  - readiness_only
+  - fedcrg
+outputs_root: outputs
