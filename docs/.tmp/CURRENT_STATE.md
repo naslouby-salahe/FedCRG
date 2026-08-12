@@ -17,6 +17,7 @@
 - **Baseline suite:** COMPLETE - All 11 baselines (B0-B10) implemented
 - **FedCRG core algorithm:** COMPLETE - Complete FedCRG decision algorithm per Section 5
 - **Preprocessing:** COMPLETE - N-BaIoT and DIAD preprocessing per Section 7.4
+- **Metrics:** COMPLETE - All metrics per Section 10 implemented and verified
 - **Tracking files:** COMPLETE - All docs/.tmp/ files created and maintained
 
 ## Completed
@@ -68,6 +69,7 @@
     - registry.py: Baseline registry with metadata and factory functions
 18. ✅ Implemented `fedcrg.fedcrg` module - Complete FedCRG algorithm per Section 5
 19. ✅ Implemented `fedcrg.data.preprocess` module - Preprocessing per Section 7.4
+20. ✅ Implemented `fedcrg.metrics` module - All metrics per Section 10
 
 ## Git Commits
 
@@ -80,6 +82,7 @@
 7. 4894e23: Implement baseline suite (fedcrg/baselines/)
 8. 97e2447: Implement FedCRG core algorithm (fedcrg/fedcrg.py)
 9. bdfb6c2: Implement preprocessing module (fedcrg/data/preprocess.py)
+10. e3702f7: Implement metrics module (fedcrg/metrics/)
 
 ## In Progress
 
@@ -87,13 +90,12 @@
 
 ## Next Priority
 
-1. Implement metrics module (fedcrg/metrics/) per Section 8.2
-2. Implement experiment registry and execution pipeline
-3. Implement CLI commands
-4. Create and populate detailed matrix files
-5. Perform four matrix audits
-6. Implement raw data symlink (data/raw)
-7. End-to-end integration testing
+1. Implement experiment registry and execution pipeline
+2. Implement CLI commands
+3. Create and populate detailed matrix files
+4. Perform four matrix audits
+5. Implement raw data symlink (data/raw)
+6. End-to-end integration testing
 
 ## Blockers
 
@@ -119,4 +121,9 @@ None currently identified.
 - Constant feature handling per Section 7.4.1
 - DIAD imputation is client-local median on T_k only
 - Global min/max scaling computed federatively
+- All metrics implemented per Section 10:
+  - MEBE, HighExcess, BandViolationRate, MAFE (band metrics)
+  - FPR, TPR, Precision, Recall, F1 (classification)
+  - AUROC, AUPRC with invariance per H5
+  - ABMacroTPR with utility anchor per H3
 - All verification tests passing

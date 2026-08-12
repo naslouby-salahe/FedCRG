@@ -6,68 +6,75 @@
 ## Immediate Next Action
 
 **Priority:** HIGH   
-**Task:** Implement metrics module (fedcrg/metrics/)  
-**File:** `fedcrg/metrics/` module  
+**Task:** Implement experiment registry and execution pipeline  
+**Module:** `fedcrg/experiments/`  
 **Status:** NOT STARTED
 
 ### Specific Steps
 
-Implement the metrics module per Section 8.2 and hypotheses in Section 3:
+Implement the experiment registry per Section 11 of the roadmap:
 
-1. **Core metrics from roadmap:**
-   - Mean Excess Band Error (MEBE)
-   - Band Violation Rate
-   - Attack-Balanced Macro-TPR
-   - AUROC and AUPRC (must be identical across threshold policies)
-   - F1 scores for various thresholds
+1. **Synthetic experiments (S1-S6):**
+   - S1: IID Gate-A theorem validation
+   - S2: Global threshold scaling
+   - S3: Band width sensitivity
+   - S4: Gate-B sensitivity
+   - S5: Gate-A assurance sensitivity
+   - S6: tied-scores assumption violation
 
-2. **Required metric properties:**
-   - Deterministic computation
-   - float64 precision
-   - Proper handling of edge cases and NA values
+2. **Real data experiments (R1-R14):**
+   - R1: N-BaIoT primary FedCRG
+   - R2: N-BaIoT GATE-A-ONLY
+   - R3: N-BaIoT FEDDETECT-3SIGMA
+   - R4-R6: N-BaIoT Q99 baselines
+   - R7-R8: N-BaIoT attack-aware baselines
+   - R9: N-BaIoT shrinkage
+   - R10: N-BaIoT oracle
+   - R11-R14: DIAD and external validation
 
-3. **Key requirements from roadmap:**
-   - H3: Any claimed FedCRG reliability gain must incur no more than 3.0 percentage-point absolute loss in Attack-Balanced Macro-TPR
-   - H5: AUROC and AUPRC must be numerically identical across threshold policies using the same cached test scores, up to serialization/rounding tolerance of 1e-12
-   - MEBE and BandViolationRate reduction compared to baselines
+3. **Files to create:**
+   - `fedcrg/experiments/__init__.py`
+   - `fedcrg/experiments/registry.py` - Experiment registry
+   - `fedcrg/experiments/synthetic.py` - S1-S6 synthetic experiments
+   - `fedcrg/experiments/real_data.py` - R1-R14 real data experiments
+   - `fedcrg/experiments/executor.py` - Experiment execution engine
+   - `fedcrg/experiments/results.py` - Result collection and serialization
 
-4. **Files to create:**
-   - `fedcrg/metrics/__init__.py`
-   - `fedcrg/metrics/base.py` - Base metric classes and interfaces
-   - `fedcrg/metrics/classification.py` - FPR, TPR, F1, precision, recall
-   - `fedcrg/metrics/band_metrics.py` - MEBE, BandViolationRate
-   - `fedcrg/metrics/auc_metrics.py` - AUROC, AUPRC
-   - `fedcrg/metrics/attack_balanced.py` - Attack-Balanced Macro-TPR
-   - `fedcrg/metrics/verification.py` - Metric parity tests
+4. **Key requirements:**
+   - Deterministic execution
+   - Score cache reuse across experiments
+   - Artifact hashing and provenance
+   - Results serialization in JSON/CSV
 
 ### Why This is Next
 
-Metrics are needed to:
-- Evaluate FedCRG performance
-- Compare against baselines
-- Compute MEBE and BandViolationRate for hypothesis testing
-- Verify H5 (AUROC/AUPRC invariance across threshold policies)
+Experiments are needed to:
+- Validate FedCRG on synthetic data (theorem verification)
+- Run primary N-BaIoT experiments
+- Run external DIAD validation
+- Generate results for tables and figures
+- Support reproducibility and auditing
 
 ### Blocking Dependencies
 
-None. All dependencies complete (scoring, preprocessing, baselines, FedCRG core).
+None. All core modules complete (FedCRG algorithm, metrics, preprocessing, baselines, scoring).
 
-### After Metrics
+### After Experiments
 
-1. Implement experiment registry and execution pipeline
-2. Implement CLI commands
-3. Create and populate detailed matrix files
-4. Perform four matrix audits
-5. Implement raw data symlink (data/raw)
-6. End-to-end integration testing
+1. Implement CLI commands
+2. Create and populate detailed matrix files
+3. Perform four matrix audits
+4. Implement raw data symlink (data/raw)
+5. End-to-end integration testing
+6. Run all experiments
 
 ### Time Estimate
 
-4-8 hours
+8-12 hours
 
 ### Resources Needed
 
-- Roadmap Section 8.2 (Metrics)
-- Roadmap Section 3 (Hypotheses)
-- Existing scoring module for score access
-- numpy and sklearn.metrics for implementation
+- Roadmap Section 11 (Experiment Registry)
+- Roadmap Section 14 (Expected Values)
+- Existing FedCRG, metrics, preprocessing, baselines modules
+- numpy, pandas for data handling
