@@ -97,10 +97,14 @@
 15. NEW: Data preparation CLI commands working
 16. NEW: CLI commands installed and working (fedcrg doctor, tables, synthetic, verify)
 17. NEW: Created first detailed matrix file (01_core_requirements.md)
+18. NEW: Created second detailed matrix file (02_statistical_core.md)
+19. NEW: Created third detailed matrix file (03_dataset_requirements.md)
 
 ## Git Commits
 
 12. a30c10d: Implement CLI commands and raw data symlink setup
+13. edb9181: Create detailed matrix files for core and statistical requirements
+14. 5aa56e9: Create dataset specifications matrix file
 
 ## Verification
 
@@ -110,16 +114,18 @@
 - All real data experiments (R1-R14) registered with placeholders
 - Experiment executor with dependency management working
 - Results collection and serialization working
-- CLI commands: Fixed config loading, precompute-gate-a working, data preparation working, benchmark working
+- CLI commands: Fixed config loading, precompute-gate-a working, data preparation working, benchmark working, verify working
 - S1 and S6 synthetic experiments: Successfully executed and completed
 - Raw data symlink: Created and verified (data/raw -> /home/naslouby/Projects/datp-shared-data/raw)
 - fedcrg CLI: Installed and working as both python -m fedcrg and fedcrg commands
+- Matrix files: 3/10 created (01_core, 02_statistical, 03_dataset) with 252 requirements extracted
+- Audit matrix: Updated with 252 implemented, 169 verified, 83 pending
 
 ## In Progress
 
-1. 🔄 Creating detailed matrix files (docs/matrix/) - PARTIAL
-2. ✅ Implementing CLI commands - COMPLETED (config loading fixed, basic commands working)
-3. 🔄 Implementing raw data symlink - COMPLETED
+1. 🔄 Creating detailed matrix files (docs/matrix/) - IN PROGRESS (3/10 files created, 252/~420 requirements extracted)
+2. ✅ Implementing CLI commands - COMPLETED (config loading fixed, all basic commands working)
+3. ✅ Implementing raw data symlink - COMPLETED
 
 ## Next Priority
 

@@ -8,7 +8,19 @@
 **Priority:** HIGH   
 **Task:** Create and populate detailed matrix files per Section 3  
 **Module:** docs/matrix/ and docs/FedCRG Audit and Implementation Matrix.md  
-**Status:** PARTIAL
+**Status:** IN PROGRESS (2/10 matrix files created)
+
+### Specific Steps
+
+Continue creating matrix files for:
+1. Dataset specifications (03_dataset_requirements.md)
+2. Training specifications (04_training_requirements.md)
+3. Baseline suite (05_baseline_requirements.md)
+4. Metrics and evaluation (06_metrics_requirements.md)
+5. Experiments (07_experiment_requirements.md)
+6. Implementation and artifacts (08_implementation_requirements.md)
+7. Testing and validation (09_testing_requirements.md)
+8. Failure states and claims (10_failure_claims.md)
 
 ### Specific Steps
 

@@ -73,7 +73,7 @@ This matrix is organized by **functional domain** and split across multiple file
 |----------|-------------------|----------------|
 | Core | ~50 | 66 IMPLEMENTED & VERIFIED |
 | Statistical Core | ~40 | 48 IMPLEMENTED & VERIFIED |
-| Dataset | ~80 | PENDING |
+| Dataset | ~80 | 138 IMPLEMENTED, 55 VERIFIED, 83 PENDING |
 | Training | ~60 | PENDING |
 | Baselines | ~30 | PENDING |
 | Metrics | ~40 | PENDING |
@@ -81,7 +81,7 @@ This matrix is organized by **functional domain** and split across multiple file
 | Implementation | ~40 | PENDING |
 | Testing | ~30 | PENDING |
 | Failure/Claims | ~60 | PENDING |
-| **Total** | **~420** | **114 IMPLEMENTED & VERIFIED** |
+| **Total** | **~420** | **252 IMPLEMENTED, 169 VERIFIED, 83 PENDING** |
 
 ---
 
