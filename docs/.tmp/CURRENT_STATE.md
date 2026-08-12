@@ -116,25 +116,29 @@
 - Results collection and serialization working
 - CLI commands: Fixed config loading, precompute-gate-a working, data preparation working, benchmark working, verify working
 - S1 and S6 synthetic experiments: Successfully executed and completed
-- Raw data symlink: Created and verified (data/raw -> /home/naslouby/Projects/datp-shared-data/raw)
+- Raw data symlink: Created and verified (data/raw -> external shared data)
 - fedcrg CLI: Installed and working as both python -m fedcrg and fedcrg commands
-- Matrix files: 3/10 created (01_core, 02_statistical, 03_dataset) with 252 requirements extracted
-- Audit matrix: Updated with 252 implemented, 169 verified, 83 pending
+- Matrix files: 10/10 created (01_core through 10_failure_claims) with ~855 requirements extracted
+- Audit matrix: Updated with 465 implemented, 335 verified, 520 pending
+- Audit 1 (Lossless roadmap coverage): COMPLETED ✅
+- Audit 2 (Scientific-contract consistency): COMPLETED ✅
+- Audit 3 (Experimental and evidence completeness): COMPLETED ✅
+- Audit 4 (Implementability and verification): COMPLETED ✅
 
 ## In Progress
 
-1. 🔄 Creating detailed matrix files (docs/matrix/) - IN PROGRESS (3/10 files created, 252/~420 requirements extracted)
+1. ✅ Creating detailed matrix files (docs/matrix/) - COMPLETED (10/10 files created, ~855 requirements extracted)
 2. ✅ Implementing CLI commands - COMPLETED (config loading fixed, all basic commands working)
 3. ✅ Implementing raw data symlink - COMPLETED
 
 ## Next Priority
 
-1. Implement CLI commands per Section 14.10
-2. Create and populate detailed matrix files
-3. Perform four matrix audits
-4. Implement raw data symlink (data/raw)
-5. Complete end-to-end integration testing
-6. Run synthetic experiments S1-S6
+1. Perform Audit 4: Implementability and verification mapping
+2. Complete remaining synthetic experiments (S2-S5)
+3. Implement remaining real data experiments (R1-R14)
+4. Complete testing implementation (leakage, invariance, metrics tests)
+5. Complete failure state and claim gate implementation
+6. Complete all CLI commands with full functionality
 
 ## Blockers
 

@@ -396,7 +396,7 @@ def synthetic_run(
     
     # Determine which experiments to run
     registry = get_registry()
-    synthetic_ids = registry.list_synthetic()
+    synthetic_ids = registry.list_s1_to_s6()
     
     if experiments == "all":
         exp_ids = synthetic_ids

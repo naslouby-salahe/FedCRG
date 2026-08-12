@@ -712,6 +712,26 @@ class ExperimentRegistry:
             if config.experiment_type == ExperimentType.SYNTHETIC
         ])
     
+    def list_s1_to_s6(self) -> List[str]:
+        """List all S1-S6 experiment IDs (synthetic theorem validation and sensitivity).
+        
+        This includes SYNTHETIC, SENSITIVITY, and ROBUSTNESS types for S1-S6.
+        """
+        return sorted([
+            exp_id for exp_id in self._experiments.keys()
+            if exp_id.startswith("S") and exp_id[1:].isdigit() and 1 <= int(exp_id[1:]) <= 6
+        ])
+    
+    def list_r1_to_r14(self) -> List[str]:
+        """List all R1-R14 experiment IDs (real data experiments).
+        
+        This includes REAL_DATA, SENSITIVITY, ROBUSTNESS, and BENCHMARK types for R1-R14.
+        """
+        return sorted([
+            exp_id for exp_id in self._experiments.keys()
+            if exp_id.startswith("R") and exp_id[1:].isdigit() and 1 <= int(exp_id[1:]) <= 14
+        ])
+    
     def list_real_data(self) -> List[str]:
         """List all real data experiment IDs."""
         return sorted([

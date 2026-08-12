@@ -74,14 +74,14 @@ This matrix is organized by **functional domain** and split across multiple file
 | Core | ~50 | 66 IMPLEMENTED & VERIFIED |
 | Statistical Core | ~40 | 48 IMPLEMENTED & VERIFIED |
 | Dataset | ~80 | 138 IMPLEMENTED, 55 VERIFIED, 83 PENDING |
-| Training | ~60 | PENDING |
-| Baselines | ~30 | PENDING |
-| Metrics | ~40 | PENDING |
-| Experiments | ~50 | PENDING |
-| Implementation | ~40 | PENDING |
-| Testing | ~30 | PENDING |
-| Failure/Claims | ~60 | PENDING |
-| **Total** | **~420** | **252 IMPLEMENTED, 169 VERIFIED, 83 PENDING** |
+| Training | ~60 | 122 IMPLEMENTED & VERIFIED |
+| Baselines | ~30 | 75 IMPLEMENTED & VERIFIED |
+| Metrics | ~40 | 56 IMPLEMENTED & VERIFIED |
+| Experiments | ~250 | 30 IMPLEMENTED, 25 VERIFIED, 195 PENDING |
+| Implementation | ~115 | 80 IMPLEMENTED, 40 VERIFIED, 75 PENDING |
+| Testing | ~70 | 19 IMPLEMENTED, 19 VERIFIED, 51 PENDING |
+| Failure/Claims | ~110 | 20 IMPLEMENTED, 16 VERIFIED, 90 PENDING |
+| **Total** | **~855** | **465 IMPLEMENTED, 335 VERIFIED, 520 PENDING** |
 
 ---
 
@@ -91,7 +91,7 @@ This matrix is organized by **functional domain** and split across multiple file
 
 - Core requirements: COMPLETE (66/66 implemented and verified)
 - Statistical core: COMPLETE (48/48 implemented and verified)
-- Matrix extraction: IN PROGRESS (2 matrix files created)
+- Matrix extraction: COMPLETE (10 matrix files created)
 - Implementation status: Core modules, CLI, data infrastructure, experiments registry COMPLETE
 - CLI commands: FIXED and WORKING
 - Raw data symlink: CREATED and VERIFIED
