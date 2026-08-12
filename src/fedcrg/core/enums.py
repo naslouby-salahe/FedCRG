@@ -1,6 +1,10 @@
-"""Closed domain identities used across FedCRG."""
+"""Closed domain identities used across the FedCRG implementation."""
 
 from enum import StrEnum
+
+
+class ProtocolId(StrEnum):
+    FEDCRG = "fedcrg"
 
 
 class DatasetId(StrEnum):
@@ -16,6 +20,7 @@ class DetectorId(StrEnum):
 
 class DataRole(StrEnum):
     TRAIN = "train"
+    RESERVOIR = "reservoir"
     REFERENCE = "reference"
     MISMATCH = "mismatch"
     CALIBRATION = "calibration"
@@ -23,6 +28,11 @@ class DataRole(StrEnum):
     BENIGN_TEST = "benign_test"
     ATTACK_DEV = "attack_dev"
     ATTACK_TEST = "attack_test"
+
+
+class CalibrationAssignmentMode(StrEnum):
+    SEEDED_PERMUTATION = "seeded_permutation"
+    SOURCE_ORDER = "source_order"
 
 
 class CalibrationReadinessState(StrEnum):
@@ -58,6 +68,40 @@ class DecisionReason(StrEnum):
     CALIBRATION_TIE = "calibration_tie"
 
 
+class FailureCode(StrEnum):
+    DATASET_COUNT_MISMATCH = "DATASET_COUNT_MISMATCH"
+    NBAIOT_ATTACK_BUDGET_FAIL = "NBAIOT_ATTACK_BUDGET_FAIL"
+    DIAD_DEVICE_COUNT_SOURCE_MISMATCH = "DIAD_DEVICE_COUNT_SOURCE_MISMATCH"
+    ID_INVALID = "ID_INVALID"
+    FEATURE_MISSING = "FEATURE_MISSING"
+    FINITE_RATE_FAIL = "FINITE_RATE_FAIL"
+    BENIGN_COUNT_LT_7800 = "BENIGN_COUNT_LT_7800"
+    MALICIOUS_COUNT_LT_1000 = "MALICIOUS_COUNT_LT_1000"
+    ATTACK_DEV_CAPACITY_LT_500 = "ATTACK_DEV_CAPACITY_LT_500"
+    EXTERNAL_DATASET_INSUFFICIENT_CLIENTS = "EXTERNAL_DATASET_INSUFFICIENT_CLIENTS"
+    FEATURE_SCHEMA_MISMATCH = "FEATURE_SCHEMA_MISMATCH"
+    DIAD_FEATURE_FINITE_RATE_FAIL = "DIAD_FEATURE_FINITE_RATE_FAIL"
+    ROLE_OVERLAP = "ROLE_OVERLAP"
+    LABEL_LEAKAGE = "LABEL_LEAKAGE"
+    SCORE_CACHE_HASH_MISMATCH = "SCORE_CACHE_HASH_MISMATCH"
+    CALIBRATION_DEFICIT = "CALIBRATION_DEFICIT"
+    MISMATCH_EVIDENCE_INSUFFICIENT = "MISMATCH_EVIDENCE_INSUFFICIENT"
+    DIRECTION_CONTRADICTION = "DIRECTION_CONTRADICTION"
+    CALIBRATION_ASSUMPTION_VIOLATION = "CALIBRATION_ASSUMPTION_VIOLATION"
+    SUMMARY_STATISTIC_COMPARATOR_UNDEFINED = "SUMMARY_STATISTIC_COMPARATOR_UNDEFINED"
+    METRIC_UNDEFINED = "METRIC_UNDEFINED"
+    NONFINITE_SCORE = "NONFINITE_SCORE"
+    TRAINING_NUMERICAL_FAILURE = "TRAINING_NUMERICAL_FAILURE"
+    ONE_SIDED_BAND_BY_DESIGN = "ONE_SIDED_BAND_BY_DESIGN"
+    DATA_DRIFT_STRESS = "DATA_DRIFT_STRESS"
+    NONDETERMINISTIC_PARITY_FAIL = "NONDETERMINISTIC_PARITY_FAIL"
+
+
+class EligibilityStatus(StrEnum):
+    ELIGIBLE = "eligible"
+    EXCLUDED = "excluded"
+
+
 class ActivationId(StrEnum):
     TANH = "tanh"
     RELU = "relu"
@@ -72,6 +116,15 @@ class ScoreDtype(StrEnum):
     FLOAT64 = "float64"
 
 
+class DeepSvddCenterMode(StrEnum):
+    EQUAL_MEAN_OF_CLIENT_INITIAL_EMBEDDINGS = "equal_mean_of_client_initial_embeddings"
+
+
+class ChronologyStatus(StrEnum):
+    VERIFIED = "verified"
+    SOURCE_ORDER_ONLY = "source_order_only"
+
+
 class AggregationId(StrEnum):
     EQUAL_CLIENT_MEAN = "equal_client_mean"
 
@@ -81,18 +134,18 @@ class OptimizerId(StrEnum):
 
 
 class PolicyId(StrEnum):
-    REFERENCE_QUANTILE = "reference_quantile"
-    GLOBAL_QUANTILE = "global_quantile"
-    LOCAL_QUANTILE = "local_quantile"
-    READINESS_ONLY = "readiness_only"
-    MISMATCH_ONLY = "mismatch_only"
-    SHRINKAGE = "shrinkage"
-    THREE_SIGMA = "three_sigma"
-    DEV_F1_SELECT = "dev_f1_select"
-    SUMMARY_STATISTIC_SELECT = "summary_statistic_select"
-    SUPERVISED_F1 = "supervised_f1"
-    ORACLE_TEST = "oracle_test"
-    FEDCRG = "fedcrg"
+    REFERENCE_QUANTILE = "REF-Q99-R"
+    GLOBAL_QUANTILE = "GLOBAL-Q99-FULL"
+    LOCAL_QUANTILE = "LOCAL-Q99-FULL"
+    READINESS_ONLY = "READINESS-ONLY"
+    MISMATCH_ONLY = "MISMATCH-ONLY"
+    SHRINKAGE = "SHRINKAGE"
+    THREE_SIGMA = "FEDDETECT-3SIGMA"
+    DEV_F1_SELECT = "DEV-F1-LG-SELECT"
+    SUMMARY_STATISTIC_SELECT = "LARIDI-STYLE-SS"
+    SUPERVISED_F1 = "SUP-F1-1000"
+    ORACLE_TEST = "ORACLE-TEST"
+    FEDCRG = "FEDCRG"
 
 
 class PolicyEvaluationStatus(StrEnum):
@@ -106,13 +159,19 @@ class MetricId(StrEnum):
     PRECISION = "precision"
     RECALL = "recall"
     F1 = "f1"
+    BALANCED_ACCURACY = "balanced_accuracy"
     AUROC = "auroc"
     AUPRC = "auprc"
     BAND_ERROR = "band_error"
+    MEBE = "mebe"
     HIGH_EXCESS = "high_excess"
-    BAND_VIOLATION = "band_violation"
-    ABSOLUTE_FPR_ERROR = "absolute_fpr_error"
+    BAND_VIOLATION_RATE = "band_violation_rate"
+    MAFE = "mafe"
     ATTACK_BALANCED_TPR = "attack_balanced_tpr"
+    ATTACK_BALANCED_MACRO_TPR = "attack_balanced_macro_tpr"
+    MACRO_TPR = "macro_tpr"
+    WORST_CLIENT_TPR = "worst_client_tpr"
+    WORST_CLIENT_ATTACK_BALANCED_TPR = "worst_client_attack_balanced_tpr"
 
 
 class ExperimentId(StrEnum):
@@ -162,13 +221,22 @@ class ExperimentStatus(StrEnum):
 class ArtifactType(StrEnum):
     RESOLVED_CONFIG = "resolved_config"
     DATASET_MANIFEST = "dataset_manifest"
+    ELIGIBILITY_MANIFEST = "eligibility_manifest"
     SPLIT_MANIFEST = "split_manifest"
+    PREPROCESSING_MANIFEST = "preprocessing_manifest"
     TRAINING_MANIFEST = "training_manifest"
     MODEL = "model"
     SCORE_MANIFEST = "score_manifest"
-    DECISIONS = "decisions"
+    THRESHOLD_RECORDS = "threshold_records"
     METRICS = "metrics"
     TABLE = "table"
     FIGURE = "figure"
     REPORT = "report"
     VERIFICATION = "verification"
+
+
+class ClaimLevel(StrEnum):
+    METHOD_BENEFIT = "method_benefit"
+    DATASET_LIMITED_BENEFIT = "dataset_limited_benefit"
+    CHARACTERIZATION = "characterization"
+    INVALID = "invalid"

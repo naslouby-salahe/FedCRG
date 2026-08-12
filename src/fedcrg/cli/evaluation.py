@@ -1,4 +1,4 @@
-"""Evaluation and reporting CLI commands."""
+"""Evaluation and report CLI commands."""
 
 from __future__ import annotations
 
@@ -20,12 +20,17 @@ from fedcrg.scoring.cache import ScoreCache
 def evaluate_command(config_path: Path, score_root: Path, output: Path) -> None:
     config = load_config(config_path)
     service = EvaluatePolicies()
-    evaluations = service.evaluate(config, ScoreCache().load(score_root))
-    atomic_write_json(output, service.to_serializable(evaluations))
+    bundle = service.evaluate(config, ScoreCache().load(score_root))
+    atomic_write_json(output, service.to_serializable(bundle))
     click.echo(str(output))
 
 
-@click.command(name="report")
+@click.group(name="report")
+def report_group() -> None:
+    """Build reports exclusively from immutable run evidence."""
+
+
+@report_group.command(name="build")
 @click.option("--run", "run_dir", type=click.Path(path_type=Path, exists=True), required=True)
-def report_command(run_dir: Path) -> None:
+def report_build(run_dir: Path) -> None:
     click.echo(str(ReportBuilder().build(run_dir)))

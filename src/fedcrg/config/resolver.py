@@ -1,10 +1,9 @@
-"""Resolve composable experiment configuration into one immutable model."""
+"""Resolve composable YAML documents into one immutable typed experiment config."""
 
 from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
-from typing import Any
 
 from pydantic import ValidationError
 
@@ -24,17 +23,24 @@ from fedcrg.core.exceptions import ConfigurationError
 _SECTION_KEYS = ("protocol", "dataset", "detector")
 
 
-def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+def _mapping(value: object, context: str) -> dict[str, object]:
+    if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
+        raise ConfigurationError(f"{context} must be a string-keyed mapping")
+    return {str(key): item for key, item in value.items()}
+
+
+def _deep_merge(base: dict[str, object], override: dict[str, object]) -> dict[str, object]:
     result = deepcopy(base)
     for key, value in override.items():
-        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-            result[key] = _deep_merge(result[key], value)
+        current = result.get(key)
+        if isinstance(current, dict) and isinstance(value, dict):
+            result[key] = _deep_merge(_mapping(current, key), _mapping(value, key))
         else:
             result[key] = deepcopy(value)
     return result
 
 
-def _load_experiment_document(path: Path, stack: tuple[Path, ...] = ()) -> dict[str, Any]:
+def _load_experiment_document(path: Path, stack: tuple[Path, ...] = ()) -> dict[str, object]:
     resolved = path.resolve()
     if resolved in stack:
         cycle = " -> ".join(str(item) for item in (*stack, resolved))
@@ -53,36 +59,42 @@ def _load_experiment_document(path: Path, stack: tuple[Path, ...] = ()) -> dict[
     return _deep_merge(parent_document, root)
 
 
-def _resolve_section(value: Any) -> dict[str, Any]:
+def _resolve_section(value: object, context: str) -> dict[str, object]:
     if isinstance(value, str):
         return load_yaml(Path(value))
-    if isinstance(value, dict):
-        return value
-    raise ConfigurationError("Configuration section must be a mapping or YAML path")
+    return _mapping(value, context)
 
 
 class ExperimentConfigResolver:
     def resolve(self, path: Path | str) -> ExperimentConfig:
         root = _load_experiment_document(Path(path))
         try:
-            protocol = ProtocolConfig.model_validate(_resolve_section(root["protocol"]))
-            dataset = DatasetConfig.model_validate(_resolve_section(root["dataset"]))
-            detector_raw = _resolve_section(root["detector"])
-            detector_id = DetectorId(detector_raw["id"])
+            protocol = ProtocolConfig.model_validate(_resolve_section(root["protocol"], "protocol"))
+            dataset = DatasetConfig.model_validate(_resolve_section(root["dataset"], "dataset"))
+            detector_raw = _resolve_section(root["detector"], "detector")
+            detector_id = DetectorId(str(detector_raw["id"]))
             detector = (
                 AutoencoderConfig.model_validate(detector_raw)
                 if detector_id is DetectorId.AUTOENCODER
                 else DeepSvddConfig.model_validate(detector_raw)
             )
+            policies_raw = root["policies"]
+            if not isinstance(policies_raw, list):
+                raise ConfigurationError("policies must be a YAML list")
+            outputs_raw = root.get("outputs_root", "outputs")
+            if not isinstance(outputs_raw, str):
+                raise ConfigurationError("outputs_root must be a path string")
             return ExperimentConfig(
                 id=root["id"],
                 protocol=protocol,
                 dataset=dataset,
                 detector=detector,
-                training=TrainingConfig.model_validate(root["training"]),
-                randomness=RandomnessConfig.model_validate(root.get("randomness", {})),
-                policies=tuple(root["policies"]),
-                outputs_root=Path(root.get("outputs_root", "outputs")),
+                training=TrainingConfig.model_validate(_mapping(root["training"], "training")),
+                randomness=RandomnessConfig.model_validate(_mapping(root.get("randomness", {}), "randomness")),
+                policies=tuple(policies_raw),
+                outputs_root=Path(outputs_raw),
             )
-        except (KeyError, ValueError, ValidationError) as exc:
+        except (KeyError, ValueError, ValidationError, ConfigurationError) as exc:
+            if isinstance(exc, ConfigurationError):
+                raise
             raise ConfigurationError(f"Invalid experiment configuration {path}: {exc}") from exc

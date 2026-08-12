@@ -1,17 +1,17 @@
-"""Strong identifiers and deterministic run identity."""
+"""Strong identifiers and the pre-registered run-identity convention."""
 
 from __future__ import annotations
 
-import hashlib
 import re
 from dataclasses import dataclass
 
-from fedcrg.core.enums import ExperimentId
+from fedcrg.config.models import ExperimentConfig
+from fedcrg.core.enums import PolicyId
 
 _ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, order=True)
 class ClientId:
     value: str
 
@@ -23,7 +23,7 @@ class ClientId:
         return self.value
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, order=True)
 class Sha256:
     value: str
 
@@ -40,16 +40,28 @@ class RunId:
     value: str
 
     @classmethod
-    def derive(
+    def for_policy_cell(
         cls,
-        experiment_id: ExperimentId,
-        config_hash: str,
+        config: ExperimentConfig,
         model_seed: int,
         calibration_seed: int,
+        policy: PolicyId,
     ) -> "RunId":
-        payload = f"{experiment_id.value}|{config_hash}|{model_seed}|{calibration_seed}"
-        digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
-        return cls(f"{experiment_id.value}__m{model_seed}__c{calibration_seed}__{digest}")
+        alpha_ppm = round(config.protocol.alpha * 1_000_000)
+        rho_bp = round(config.protocol.rho * 10_000)
+        assurance_bp = round(config.protocol.readiness_assurance * 10_000)
+        confidence_bp = round(config.protocol.mismatch_confidence * 10_000)
+        detector = "ae" if config.detector.id.value == "autoencoder" else config.detector.id.value
+        value = (
+            f"{config.dataset.id.value}__{detector}__ms{model_seed}__cs{calibration_seed}__"
+            f"a{alpha_ppm}__r{rho_bp}__ga{assurance_bp}__gb{confidence_bp}__"
+            f"{policy.value.lower()}"
+        )
+        return cls(value)
+
+    def __post_init__(self) -> None:
+        if " " in self.value or not self.value:
+            raise ValueError("Run IDs must be non-empty and contain no spaces")
 
     def __str__(self) -> str:
         return self.value
