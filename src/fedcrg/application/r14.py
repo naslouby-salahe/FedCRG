@@ -37,6 +37,17 @@ class R14Specification:
     manifest_path: Path
 
 
+@dataclass(frozen=True, slots=True)
+class R14FeatureManifest:
+    experiment_id: ExperimentId
+    derivation_scope: str
+    config_hash: str
+    data_spec_hash: str
+    training_spec_hash: str
+    feature_contract_id: DatasetFeatureContractId
+    feature_contract: NumericSafeFeatureContract
+
+
 class R14FeatureSensitivityBuilder:
     """Freeze R14 from eligible-client training schema before outcome evidence opens."""
 
@@ -65,16 +76,14 @@ class R14FeatureSensitivityBuilder:
         payload["detector"] = detector.model_dump(mode="python")
         payload["policies"] = _R14_POLICIES
         config = ExperimentConfig.model_validate(payload)
-        atomic_write_json(
-            manifest_path,
-            {
-                "experiment_id": ExperimentId.DIAD_FEATURE_SENSITIVITY,
-                "derivation_scope": "eligible_client_training_schema_only",
-                "config_hash": config.config_hash,
-                "data_spec_hash": config.data_spec_hash,
-                "training_spec_hash": config.training_spec_hash,
-                "feature_contract": DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE,
-                **contract.to_dict(),
-            },
+        manifest = R14FeatureManifest(
+            experiment_id=ExperimentId.DIAD_FEATURE_SENSITIVITY,
+            derivation_scope="eligible_client_training_schema_only",
+            config_hash=config.config_hash,
+            data_spec_hash=config.data_spec_hash,
+            training_spec_hash=config.training_spec_hash,
+            feature_contract_id=DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE,
+            feature_contract=contract,
         )
+        atomic_write_json(manifest_path, manifest)
         return R14Specification(config, contract, manifest_path)
