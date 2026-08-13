@@ -14,7 +14,7 @@ from fedcrg.core.enums import (
     EligibilityStatus,
     FailureCode,
 )
-from fedcrg.core.ids import ClientId, Sha256
+from fedcrg.core.ids import CalibrationSeed, ClientId, Sha256
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,7 +42,7 @@ class CalibrationRoleAssignment:
     """Positions within the frozen benign reservoir assigned to each policy role."""
 
     client_id: ClientId
-    calibration_seed: int
+    calibration_seed: CalibrationSeed
     mode: CalibrationAssignmentMode
     positions: dict[DataRole, tuple[int, ...]]
     row_id_hashes: dict[DataRole, Sha256]
