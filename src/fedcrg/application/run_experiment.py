@@ -8,6 +8,7 @@ from pathlib import Path
 import yaml
 
 from fedcrg.artifacts.environment import capture_environment
+from fedcrg.artifacts.identity import RunIdentityFactory
 from fedcrg.artifacts.layout import RunLayout
 from fedcrg.artifacts.manifest import RunManifest, RunManifestStore
 from fedcrg.artifacts.serialization import atomic_write_json, atomic_write_text
@@ -15,6 +16,7 @@ from fedcrg.artifacts.verification import ArtifactVerifier
 from fedcrg.config.models import ExperimentConfig
 from fedcrg.core.enums import ExperimentId, ExperimentStatus, PolicyId
 from fedcrg.core.ids import RunId
+from fedcrg.experiments.lifecycle import assert_transition
 from fedcrg.experiments.models import ExperimentPlan
 from fedcrg.experiments.planner import ExperimentPlanner
 
@@ -44,6 +46,17 @@ class RunExperiment:
             status=status,
         )
 
+    def _transition(
+        self,
+        layout: RunLayout,
+        plan: ExperimentPlan,
+        policy: PolicyId,
+        target: ExperimentStatus,
+    ) -> None:
+        current = self.manifests.load(layout.manifest).status
+        assert_transition(current, target)
+        self.manifests.save(layout.manifest, self._manifest(layout, plan, policy, target))
+
     def prepare(
         self,
         experiment_id: ExperimentId,
@@ -56,13 +69,15 @@ class RunExperiment:
         if policy not in config.policies:
             raise ValueError(f"Policy {policy.value} is not configured for this experiment")
         plan = self.planner.create(experiment_id, config, model_seed, calibration_seed)
-        run_id = RunId.for_policy_cell(config, model_seed, calibration_seed, policy)
+        run_id = RunIdentityFactory.for_policy_cell(config, model_seed, calibration_seed, policy)
         layout = RunLayout.for_run(config.outputs_root, run_id)
         layout.create()
         self.manifests.save(
             layout.manifest,
-            self._manifest(layout, plan, policy, ExperimentStatus.READY),
+            self._manifest(layout, plan, policy, ExperimentStatus.PENDING),
         )
+        self._transition(layout, plan, policy, ExperimentStatus.VALIDATING)
+        self._transition(layout, plan, policy, ExperimentStatus.READY)
         atomic_write_text(
             layout.resolved_config,
             yaml.safe_dump(config.model_dump(mode="json"), sort_keys=False),
@@ -72,9 +87,9 @@ class RunExperiment:
         atomic_write_json(
             layout.run_config,
             {
-                "run_id": str(run_id),
-                "experiment_id": experiment_id.value,
-                "policy_id": policy.value,
+                "run_id": run_id,
+                "experiment_id": experiment_id,
+                "policy_id": policy,
                 "parameters": config.model_dump(mode="json"),
                 "model_seed": model_seed,
                 "calibration_seed": calibration_seed,
@@ -108,16 +123,10 @@ class RunExperiment:
             policy,
             repository_root,
         )
-        self.manifests.save(
-            layout.manifest,
-            self._manifest(layout, plan, policy, ExperimentStatus.RUNNING),
-        )
+        self._transition(layout, plan, policy, ExperimentStatus.RUNNING)
         try:
             result = runner(plan, layout)
-            self.manifests.save(
-                layout.manifest,
-                self._manifest(layout, plan, policy, ExperimentStatus.VERIFYING),
-            )
+            self._transition(layout, plan, policy, ExperimentStatus.VERIFYING)
             verification = self.verifier.record(layout, plan.definition)
             if not verification.valid:
                 raise RuntimeError(
@@ -125,13 +134,7 @@ class RunExperiment:
                     + ", ".join(verification.missing + verification.mismatched)
                 )
         except Exception:
-            self.manifests.save(
-                layout.manifest,
-                self._manifest(layout, plan, policy, ExperimentStatus.FAILED),
-            )
+            self._transition(layout, plan, policy, ExperimentStatus.FAILED)
             raise
-        self.manifests.save(
-            layout.manifest,
-            self._manifest(layout, plan, policy, ExperimentStatus.COMPLETE),
-        )
+        self._transition(layout, plan, policy, ExperimentStatus.COMPLETE)
         return result, layout
