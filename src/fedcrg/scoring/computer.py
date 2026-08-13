@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from fedcrg.core.enums import DataRole, DatasetId
-from fedcrg.core.ids import ClientId, Sha256
+from fedcrg.core.enums import ComputeDeviceId, DataRole, DatasetId
+from fedcrg.core.ids import ClientId, ModelSeed, Sha256
 from fedcrg.detectors.base import DetectorModel
 from fedcrg.scoring.models import ClientScoreInput, ClientScoreSet, RoleScores, ScoreManifest
 
@@ -18,17 +18,20 @@ class ScoreComputer:
         self,
         model: DetectorModel,
         values: np.ndarray,
-        device: str = "cpu",
+        device: ComputeDeviceId = ComputeDeviceId.CPU,
         batch_size: int = 65_536,
     ) -> np.ndarray:
-        model = model.to(device).eval()
+        if batch_size <= 0:
+            raise ValueError("Scoring batch_size must be positive")
+        torch_device = torch.device(device.value)
+        model = model.to(torch_device).eval()
         result: list[np.ndarray] = []
         with torch.no_grad():
             for start in range(0, len(values), batch_size):
                 batch = torch.as_tensor(
                     values[start : start + batch_size],
                     dtype=torch.float32,
-                    device=torch.device(device),
+                    device=torch_device,
                 )
                 scores = model.anomaly_score(batch).detach().cpu().numpy()
                 result.append(scores.astype(np.float64, copy=False))
@@ -38,13 +41,13 @@ class ScoreComputer:
         self,
         model: DetectorModel,
         dataset: DatasetId,
-        model_seed: int,
+        model_seed: ModelSeed,
         data_spec_hash: Sha256,
         training_spec_hash: Sha256,
         dataset_manifest_hash: Sha256,
         preprocessing_hash: Sha256,
         clients: tuple[ClientScoreInput, ...],
-        device: str = "cpu",
+        device: ComputeDeviceId = ComputeDeviceId.CPU,
     ) -> ScoreManifest:
         scored_clients: dict[ClientId, ClientScoreSet] = {}
         for client in clients:
