@@ -77,11 +77,13 @@ matrix IDs (`docs/FedCRG Audit Matrix.md`).
 - E1. `dict[str, object]` / `object` at non-boundary locations: `artifacts/records.py`
   (cells, metadata, to_dict), `artifacts/environment.py:46` return type, integrity
   helpers. json_io boundary itself is acceptable; type the rest. Matrix: T02, D09.
-- E2. CI uses mypy; prompt requires Pyright/Pylance-compatible typing. Pyright passes
-  locally; wire into pyproject + CI. Matrix: T03, T07.
+- E2. ~~CI uses mypy~~ RESOLVED 2026-08-13: switched to pyright (prompt §29);
+  `[tool.pyright]` standard mode in pyproject; CI + nox run pyright. Matrix: T03.
 - E3. Missing contract tests: preprocessed root, no pipeline package, no constants.py,
   results build/verify, config YAML ownership, no scientific defaults. Matrix: T06.
-- E4. No `Makefile`, no `noxfile.py`. Matrix: R10, R11.
+- E4. ~~No `Makefile`, no `noxfile.py`~~ RESOLVED 2026-08-13: Makefile (22 targets),
+  noxfile (9 sessions), `tools/audit_repository.py`; CI runs pyright + audit +
+  pytest -n auto. Matrix: R10, R11, T07.
 
 ## F. Dead code / redundancy to audit during hostile audit
 
