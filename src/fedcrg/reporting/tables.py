@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
 from pathlib import Path
 
 import pandas as pd
 
 from fedcrg.analysis.policy_contrasts import confirmatory_contrasts, load_federation_results
+from fedcrg.artifacts.json_io import as_json_dict, to_json_value
 from fedcrg.artifacts.paths import RunLayout
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import ExperimentId, PolicyId
@@ -40,7 +40,8 @@ class PublicationTableBuilder:
 
     def primary_policy_results(self, run_dirs: tuple[Path, ...], output: Path) -> Path:
         records = load_federation_results(run_dirs)
-        return self._write(pd.DataFrame.from_records([asdict(row) for row in records]), output)
+        rows = [as_json_dict(to_json_value(row)) for row in records]
+        return self._write(pd.DataFrame.from_records(rows), output)
 
     def external_replication(self, run_dirs: tuple[Path, ...], output: Path) -> Path:
         return self.primary_policy_results(run_dirs, output)

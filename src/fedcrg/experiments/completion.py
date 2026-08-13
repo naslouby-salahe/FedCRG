@@ -1,4 +1,4 @@
-"""Roadmap workload reconciliation for generated experiment evidence."""
+"""Pre-registered workload reconciliation for generated experiment evidence."""
 
 from __future__ import annotations
 
