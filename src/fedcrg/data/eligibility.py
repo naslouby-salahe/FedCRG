@@ -5,7 +5,12 @@ from __future__ import annotations
 import numpy as np
 
 from fedcrg.config.models import DatasetConfig
-from fedcrg.core.enums import DatasetId, EligibilityStatus, FailureCode
+from fedcrg.core.enums import (
+    DatasetFeatureContractId,
+    DatasetId,
+    EligibilityStatus,
+    FailureCode,
+)
 from fedcrg.data.datasets.diad import DIAD_FEATURES
 from fedcrg.data.models import ClientData, EligibilityRecord
 
@@ -21,7 +26,19 @@ _DIAD_PRECEDENCE = (
 
 
 class ClientEligibilityEvaluator:
-    """Evaluate locked rules before any detector or threshold outcome exists."""
+    """Evaluate dataset-contract rules before detector or threshold outcomes exist."""
+
+    @staticmethod
+    def model_features(config: DatasetConfig) -> tuple[str, ...]:
+        if config.id is not DatasetId.DIAD:
+            return ()
+        if config.feature_contract is DatasetFeatureContractId.DIAD_LOCKED_86:
+            return DIAD_FEATURES
+        if config.feature_contract is DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE:
+            if not config.feature_names:
+                raise ValueError("R14 DIAD feature contract is not frozen")
+            return config.feature_names
+        raise ValueError(f"Unsupported DIAD feature contract: {config.feature_contract.value}")
 
     def evaluate(self, data: ClientData, config: DatasetConfig) -> EligibilityRecord:
         benign_count = len(data.benign)
@@ -38,14 +55,15 @@ class ClientEligibilityEvaluator:
                 chronology=data.chronology,
             )
 
+        model_features = self.model_features(config)
         violations: list[FailureCode] = []
-        missing = [column for column in DIAD_FEATURES if column not in data.benign.columns]
+        missing = [column for column in model_features if column not in data.benign.columns]
         if missing:
             violations.append(FailureCode.FEATURE_MISSING)
 
         train = data.benign.iloc[: config.split.train_benign]
         if len(train) >= config.split.train_benign and not missing:
-            values = train.loc[:, DIAD_FEATURES].to_numpy(dtype=np.float64)
+            values = train.loc[:, list(model_features)].to_numpy(dtype=np.float64)
             finite_rates = np.isfinite(values).mean(axis=0)
             if np.any(finite_rates < 0.99):
                 violations.append(FailureCode.FINITE_RATE_FAIL)
@@ -80,4 +98,9 @@ class ClientEligibilityEvaluator:
         if data.attack.empty or "attack_group" not in data.attack.columns:
             return 0
         counts = data.attack["attack_group"].astype(str).value_counts()
-        return int(sum(max(0, int(count) - min(reserve_per_group, int(count))) for count in counts))
+        return int(
+            sum(
+                max(0, int(count) - min(reserve_per_group, int(count)))
+                for count in counts
+            )
+        )
