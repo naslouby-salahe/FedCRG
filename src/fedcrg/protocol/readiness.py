@@ -1,20 +1,20 @@
-"""Finite-sample calibration-readiness planning and continuity diagnostics.
+"""Finite-sample local-readiness planning, lookup, and continuity diagnostics.
 
-Rank optimization is deliberately separated from observed score evaluation. A
-ReadinessPlanCache is populated from sample counts and protocol parameters only;
-client scores are never passed to the optimizer.
+Observed score values never participate in rank optimization. The persistent table
+is keyed only by the pre-data statistical contract `(n, a, b, assurance)`.
 """
 
 from __future__ import annotations
 
 import json
 import math
+import os
+from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
 from scipy import special
 
-from fedcrg.artifacts.serialization import atomic_write_json
 from fedcrg.core.enums import CalibrationReadinessState
 from fedcrg.core.types import OperatingBand
 from fedcrg.protocol.results import (
@@ -24,7 +24,11 @@ from fedcrg.protocol.results import (
 )
 
 
-def coverage_probability(rank: int, sample_count: int, band: OperatingBand) -> float:
+def coverage_probability(
+    rank: int,
+    sample_count: int,
+    band: OperatingBand,
+) -> float:
     if not 1 <= rank <= sample_count:
         raise ValueError("rank must be inside [1, sample_count]")
     upper_shape = sample_count + 1 - rank
@@ -34,37 +38,34 @@ def coverage_probability(rank: int, sample_count: int, band: OperatingBand) -> f
     return float(probability)
 
 
-def induced_fpr_mean(rank: int, sample_count: int) -> float:
-    return (sample_count + 1 - rank) / (sample_count + 1)
-
-
-def induced_fpr_variance(rank: int, sample_count: int) -> float:
-    numerator = (sample_count + 1 - rank) * rank
-    denominator = (sample_count + 1) ** 2 * (sample_count + 2)
-    return numerator / denominator
-
-
 class ReadinessPlanBuilder:
-    def build(self, sample_count: int, band: OperatingBand, assurance: float) -> ReadinessPlan:
+    """Choose the order-statistic rank using protocol constants only."""
+
+    def build(
+        self,
+        sample_count: int,
+        band: OperatingBand,
+        assurance: float,
+    ) -> ReadinessPlan:
         if sample_count <= 0:
             raise ValueError("sample_count must be positive")
         if not 0.0 < assurance < 1.0:
-            raise ValueError("assurance must be in (0, 1)")
-
+            raise ValueError("assurance must be in (0,1)")
         best_rank = 1
         best_probability = -1.0
         for rank in range(1, sample_count + 1):
             probability = coverage_probability(rank, sample_count, band)
-            is_tie = math.isclose(
-                probability,
-                best_probability,
-                rel_tol=0.0,
-                abs_tol=1e-15,
-            )
-            if probability > best_probability or (is_tie and rank > best_rank):
+            if probability > best_probability or (
+                math.isclose(
+                    probability,
+                    best_probability,
+                    rel_tol=0.0,
+                    abs_tol=1e-15,
+                )
+                and rank > best_rank
+            ):
                 best_rank = rank
                 best_probability = probability
-
         state = (
             CalibrationReadinessState.READY
             if best_probability >= assurance
@@ -81,133 +82,205 @@ class ReadinessPlanBuilder:
 
 
 class ReadinessPlanCache:
-    def __init__(self, path: Path | None = None) -> None:
+    """Persistent pre-data plan table consumed by real-data policy evaluation.
+
+    Persistence is intentionally tiny and dependency-free. Application code decides
+    when the table is generated; runtime evaluation may only call :meth:`require`.
+    """
+
+    def __init__(
+        self,
+        path: Path | None = None,
+        builder: ReadinessPlanBuilder | None = None,
+    ) -> None:
         self.path = path
+        self.builder = builder or ReadinessPlanBuilder()
         self._plans: dict[str, ReadinessPlan] = {}
-        if path is not None and path.exists():
+        if path is not None and path.is_file():
             self._load(path)
 
     @staticmethod
-    def _key(sample_count: int, band: OperatingBand, assurance: float) -> str:
+    def key(
+        sample_count: int,
+        band: OperatingBand,
+        assurance: float,
+    ) -> str:
         return (
             f"n={sample_count}|a={band.lower:.17g}|b={band.upper:.17g}|"
             f"assurance={assurance:.17g}"
         )
-
-    def get(self, sample_count: int, band: OperatingBand, assurance: float) -> ReadinessPlan | None:
-        return self._plans.get(self._key(sample_count, band, assurance))
 
     def precompute(
         self,
         sample_count: int,
         band: OperatingBand,
         assurance: float,
-        builder: ReadinessPlanBuilder | None = None,
     ) -> ReadinessPlan:
-        key = self._key(sample_count, band, assurance)
+        key = self.key(sample_count, band, assurance)
+        candidate = self.builder.build(sample_count, band, assurance)
         existing = self._plans.get(key)
-        if existing is not None:
-            return existing
-        plan = (builder or ReadinessPlanBuilder()).build(sample_count, band, assurance)
-        self._plans[key] = plan
+        if existing is not None and existing != candidate:
+            raise RuntimeError("Frozen readiness-plan table is internally inconsistent")
+        self._plans[key] = candidate
         if self.path is not None:
-            self.save()
-        return plan
+            self._save(self.path)
+        return candidate
 
-    def require(self, sample_count: int, band: OperatingBand, assurance: float) -> ReadinessPlan:
-        plan = self.get(sample_count, band, assurance)
-        if plan is None:
-            raise KeyError(
-                "Readiness plan was not precomputed for the requested protocol cell"
-            )
-        return plan
+    def require(
+        self,
+        sample_count: int,
+        band: OperatingBand,
+        assurance: float,
+    ) -> ReadinessPlan:
+        key = self.key(sample_count, band, assurance)
+        try:
+            return self._plans[key]
+        except KeyError as exc:
+            raise FileNotFoundError(
+                "Required pre-data readiness plan is absent. Run the protocol "
+                "precomputation command before evaluating real scores: "
+                + key
+            ) from exc
 
-    def save(self) -> None:
-        if self.path is None:
-            raise ValueError("Cannot persist a readiness cache without a path")
-        rows = []
-        for key in sorted(self._plans):
-            plan = self._plans[key]
-            rows.append(
-                {
-                    "key": key,
-                    "n": plan.sample_count,
-                    "rank_r": plan.rank,
-                    "coverage_probability": plan.coverage_probability,
-                    "ready": plan.state is CalibrationReadinessState.READY,
-                    "a": plan.band.lower,
-                    "b": plan.band.upper,
-                    "assurance": plan.assurance,
-                    "induced_fpr_mean": induced_fpr_mean(plan.rank, plan.sample_count),
-                    "induced_fpr_variance": induced_fpr_variance(plan.rank, plan.sample_count),
-                }
-            )
-        atomic_write_json(self.path, {"entries": rows})
+    def _save(self, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            key: {
+                "sample_count": plan.sample_count,
+                "rank": plan.rank,
+                "coverage_probability": plan.coverage_probability,
+                "state": plan.state.value,
+                "band": {
+                    "lower": plan.band.lower,
+                    "upper": plan.band.upper,
+                },
+                "assurance": plan.assurance,
+            }
+            for key, plan in sorted(self._plans.items())
+        }
+        temp = path.with_name(f".{path.name}.tmp")
+        with temp.open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle, sort_keys=True, separators=(",", ":"))
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp, path)
 
     def _load(self, path: Path) -> None:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        for row in payload.get("entries", []):
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise ValueError("Readiness-plan table must be a JSON object")
+        plans: dict[str, ReadinessPlan] = {}
+        for key, item in raw.items():
+            if not isinstance(item, dict):
+                raise ValueError("Malformed readiness-plan entry")
+            band_raw = item["band"]
+            if not isinstance(band_raw, dict):
+                raise ValueError("Malformed readiness-plan operating band")
             plan = ReadinessPlan(
-                sample_count=int(row["n"]),
-                rank=int(row["rank_r"]),
-                coverage_probability=float(row["coverage_probability"]),
-                state=(
-                    CalibrationReadinessState.READY
-                    if bool(row["ready"])
-                    else CalibrationReadinessState.NOT_READY
+                sample_count=int(item["sample_count"]),
+                rank=int(item["rank"]),
+                coverage_probability=float(item["coverage_probability"]),
+                state=CalibrationReadinessState(str(item["state"])),
+                band=OperatingBand(
+                    float(band_raw["lower"]),
+                    float(band_raw["upper"]),
                 ),
-                band=OperatingBand(float(row["a"]), float(row["b"])),
-                assurance=float(row["assurance"]),
+                assurance=float(item["assurance"]),
             )
-            self._plans[str(row["key"])] = plan
+            expected_key = self.key(
+                plan.sample_count,
+                plan.band,
+                plan.assurance,
+            )
+            if str(key) != expected_key:
+                raise ValueError("Readiness-plan key does not match its payload")
+            regenerated = self.builder.build(
+                plan.sample_count,
+                plan.band,
+                plan.assurance,
+            )
+            if (
+                regenerated.rank != plan.rank
+                or regenerated.state is not plan.state
+                or abs(
+                    regenerated.coverage_probability
+                    - plan.coverage_probability
+                )
+                > 1e-12
+            ):
+                raise ValueError("Readiness-plan table failed formula regeneration")
+            plans[expected_key] = plan
+        self._plans = plans
 
 
 class CalibrationReadinessEvaluator:
-    def evaluate(self, scores: np.ndarray, plan: ReadinessPlan) -> CalibrationReadiness:
+    """Select the precomputed order statistic and audit continuity at that point."""
+
+    def evaluate(
+        self,
+        scores: np.ndarray,
+        plan: ReadinessPlan,
+    ) -> CalibrationReadiness:
         values = np.asarray(scores, dtype=np.float64)
-        if values.ndim != 1:
-            raise ValueError("Calibration scores must be one-dimensional")
-        if len(values) != plan.sample_count:
-            raise ValueError("Observed calibration size does not match the precomputed plan")
-        if not np.isfinite(values).all():
-            raise ValueError("Calibration scores must all be finite")
-
-        ordered = np.sort(values, kind="stable")
-        unique = np.unique(ordered)
-        duplicate_count = len(ordered) - len(unique)
-        positive_differences = np.diff(unique)
-        positive_differences = positive_differences[positive_differences > 0]
-        minimum_spacing = (
-            float(np.min(positive_differences)) if len(positive_differences) else None
-        )
-
-        if plan.state is CalibrationReadinessState.NOT_READY:
-            diagnostics = ContinuityDiagnostics(
-                unique_score_fraction=float(len(unique) / len(ordered)),
-                duplicate_count=duplicate_count,
-                selected_threshold_multiplicity=0,
-                minimum_positive_spacing=minimum_spacing,
+        if values.ndim != 1 or len(values) != plan.sample_count:
+            raise ValueError(
+                "Observed calibration size does not match the frozen readiness plan"
             )
-            return CalibrationReadiness(plan=plan, threshold=None, diagnostics=diagnostics)
-
+        if not np.isfinite(values).all():
+            raise ValueError("Calibration scores must be finite")
+        diagnostics = continuity_diagnostics(values, plan.rank)
+        if plan.state is CalibrationReadinessState.NOT_READY:
+            return CalibrationReadiness(
+                plan=plan,
+                threshold=None,
+                tie_count=0,
+                diagnostics=diagnostics,
+            )
+        ordered = np.sort(values, kind="stable")
         threshold = float(ordered[plan.rank - 1])
-        multiplicity = int(np.count_nonzero(ordered == threshold))
-        diagnostics = ContinuityDiagnostics(
-            unique_score_fraction=float(len(unique) / len(ordered)),
-            duplicate_count=duplicate_count,
-            selected_threshold_multiplicity=multiplicity,
-            minimum_positive_spacing=minimum_spacing,
-        )
+        tie_count = int(np.count_nonzero(ordered == threshold))
         return CalibrationReadiness(
             plan=plan,
             threshold=threshold,
+            tie_count=tie_count,
             diagnostics=diagnostics,
         )
 
 
-def familywise_readiness_assurance(client_count: int, family_error: float = 0.05) -> float:
+def continuity_diagnostics(
+    scores: np.ndarray,
+    selected_rank: int,
+) -> ContinuityDiagnostics:
+    values = np.asarray(scores, dtype=np.float64)
+    if values.ndim != 1 or len(values) == 0:
+        raise ValueError("Continuity diagnostics require a non-empty score vector")
+    ordered = np.sort(values, kind="stable")
+    if not 1 <= selected_rank <= len(ordered):
+        raise ValueError("selected_rank must lie inside the score vector")
+    selected = float(ordered[selected_rank - 1])
+    unique = np.unique(ordered)
+    duplicate_count = int(len(ordered) - len(unique))
+    positive_spacing = np.diff(unique)
+    minimum_spacing = (
+        None
+        if len(positive_spacing) == 0
+        else float(np.min(positive_spacing))
+    )
+    return ContinuityDiagnostics(
+        unique_score_fraction=float(len(unique) / len(ordered)),
+        duplicate_count=duplicate_count,
+        selected_threshold_multiplicity=int(np.count_nonzero(ordered == selected)),
+        minimum_positive_spacing=minimum_spacing,
+    )
+
+
+def familywise_readiness_assurance(
+    client_count: int,
+    familywise_alpha: float = 0.05,
+) -> float:
     if client_count <= 0:
         raise ValueError("client_count must be positive")
-    if not 0.0 < family_error < 1.0:
-        raise ValueError("family_error must be in (0,1)")
-    return 1.0 - family_error / client_count
+    if not 0.0 < familywise_alpha < 1.0:
+        raise ValueError("familywise_alpha must be in (0,1)")
+    return 1.0 - familywise_alpha / client_count
