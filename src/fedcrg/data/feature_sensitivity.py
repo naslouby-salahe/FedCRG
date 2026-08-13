@@ -11,30 +11,39 @@ import pandas as pd
 from fedcrg.core.ids import ClientId, Sha256
 from fedcrg.data.manifests import hash_row_ids
 
-_EXCLUDED_TOKENS = (
-    "label",
+# R14 excludes direct identity/label/port fields, not behavioral statistics whose names
+# happen to contain terms such as "stream" or "mac" (for example
+# ``src_ip_mac_5_count``). Broad substring filtering would incorrectly delete much of
+# the intended numeric behavior representation.
+_EXCLUDED_EXACT = {
+    "stream",
     "device_mac",
-    "mac",
     "src_ip",
     "dst_ip",
-    "ip_address",
-    "port",
-    "uri",
+    "src_port",
+    "dst_port",
+    "port_class_dst",
+    "label",
+    "Label",
+    "anomaly",
+    "is_anomaly",
+    "attack",
+    "row_id",
+    "source_file",
+    "source_row_index",
+    "capture_time",
+    "verified_chronology",
+    "attack_group",
+    "role",
+}
+_EXCLUDED_NAME_MARKERS = (
     "user_agent",
     "hostname",
-    "domain",
-    "oui",
-    "tls",
-    "http",
-    "dns",
-    "stream",
+    "domain_name",
+    "uri",
+    "mac_address",
+    "ip_address",
 )
-_METADATA_COLUMNS = {
-    "_source_file",
-    "_source_row_index",
-    "_row_id",
-    "_capture_time",
-}
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,19 +69,26 @@ class NumericSafeFeatureContract:
         }
 
 
+def _is_forbidden_name(column: str) -> bool:
+    lowered = column.lower()
+    if column in _EXCLUDED_EXACT or lowered in {
+        value.lower() for value in _EXCLUDED_EXACT
+    }:
+        return True
+    return any(marker in lowered for marker in _EXCLUDED_NAME_MARKERS)
+
+
 def derive_numeric_safe_features(
     training_frames: dict[ClientId, pd.DataFrame],
 ) -> NumericSafeFeatureContract:
-    """Derive R14 features using training rows only and no outcome association."""
+    """Freeze the R14 feature list using eligible clients' training rows only."""
+
     if not training_frames:
-        raise ValueError("R14 requires training frames")
+        raise ValueError("R14 requires eligible-client training frames")
     common = set.intersection(*(set(frame.columns) for frame in training_frames.values()))
     selected: list[str] = []
     for column in sorted(common):
-        if column in _METADATA_COLUMNS or column.startswith("_"):
-            continue
-        lowered = column.lower()
-        if any(token in lowered for token in _EXCLUDED_TOKENS):
+        if column.startswith("_") or _is_forbidden_name(column):
             continue
         if not all(
             pd.api.types.is_numeric_dtype(frame[column])
@@ -81,8 +97,9 @@ def derive_numeric_safe_features(
             continue
         finite_for_all = True
         for frame in training_frames.values():
-            values = pd.to_numeric(frame[column], errors="coerce").to_numpy(dtype=np.float64)
-            values[~np.isfinite(values)] = np.nan
+            values = pd.to_numeric(frame[column], errors="coerce").to_numpy(
+                dtype=np.float64
+            )
             if float(np.isfinite(values).mean()) < 0.99:
                 finite_for_all = False
                 break
@@ -103,10 +120,13 @@ def derive_numeric_safe_features(
         max(1, floor(0.75 * dimension)),
         dimension,
     )
-    training_hashes = {
-        client: Sha256(hash_row_ids(frame["_row_id"].astype(str).tolist()))
-        for client, frame in training_frames.items()
-    }
+    training_hashes: dict[ClientId, Sha256] = {}
+    for client, frame in training_frames.items():
+        if "row_id" not in frame.columns:
+            raise ValueError(f"R14 training frame is missing row_id for {client.value}")
+        training_hashes[client] = Sha256(
+            hash_row_ids(frame["row_id"].astype(str).tolist())
+        )
     return NumericSafeFeatureContract(
         features=tuple(selected),
         dimension=dimension,
