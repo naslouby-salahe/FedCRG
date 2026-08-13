@@ -9,6 +9,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from fedcrg.core.constants import DIAD_EXPECTED_SOURCE_CLIENTS
 from fedcrg.core.enums import (
     ActivationId,
     AggregationId,
@@ -121,8 +122,10 @@ class DatasetConfig(FrozenModel):
                 DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE,
             }:
                 raise ValueError("DIAD uses either the locked or training-derived feature contract")
-            if self.expected_source_clients != 105:
-                raise ValueError("DIAD contract requires 105 source identities")
+            if self.expected_source_clients != DIAD_EXPECTED_SOURCE_CLIENTS:
+                raise ValueError(
+                    f"DIAD contract requires {DIAD_EXPECTED_SOURCE_CLIENTS} source identities"
+                )
             if self.minimum_benign_rows != 7800 or self.minimum_malicious_rows != 1000:
                 raise ValueError("DIAD eligibility counts must remain 7800 benign / 1000 malicious")
             if self.minimum_clients != 10:

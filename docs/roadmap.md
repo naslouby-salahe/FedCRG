@@ -657,6 +657,22 @@ Before model training, all of the following MUST pass:
 
 ## 7.2 CIC IoT-DIAD 2024 - external natural-device validation
 
+> **Data-acquisition amendment (post-freeze).** The acquired CIC IoT-DIAD
+> 2024 packet-based feature release exposes **115** unique `device_mac`
+> identities across all source CSVs, confirmed by direct scan (raw and
+> MAC-normalized counts agree), not the 105 assumed below. The dataset's
+> own documentation describes this release as covering "approximately 45
+> device categories" for identification, which is consistent with a
+> device_mac count that does not equal the topology's device total. This
+> is a data-identity count, not a scientific formula, threshold, or
+> leakage boundary; it is corrected here rather than silently overriding
+> `DATASET_COUNT_MISMATCH`/`DIAD_DEVICE_COUNT_SOURCE_MISMATCH`, which
+> exist precisely to force this kind of discrepancy into view before
+> training. `expected_source_clients` is 115 in the frozen configuration
+> and `DIAD_EXPECTED_SOURCE_CLIENTS` in code; the client eligibility rule,
+> role construction, and all other locked DIAD values below are
+> unaffected.
+
 **Dataset rationale.** The official CIC IoT-DIAD 2024 topology contains 105 IoT devices and 33 attacks across seven categories. The packet-based DI_AD representation exposes device_mac as a device-identification label and an anomaly label, allowing natural device-level clients while retaining a different feature-generation pipeline from N-BaIoT.
 
 **Client eligibility is locked before outcome analysis:** a device is eligible only if it has at least 7800 benign packet rows, at least 1000 malicious packet rows after schema cleaning, and enough per-category development capacity to reserve final-test attack evidence as specified in Section 7.2.3. All eligible devices are used; no performance-based client selection and no cap on K are permitted. If fewer than 10 devices satisfy the rule, CIC IoT-DIAD is declared unsuitable for confirmatory external validation and the manuscript cannot claim two-dataset external replication until a replacement natural-client dataset is pre-specified before inspecting outcome results.

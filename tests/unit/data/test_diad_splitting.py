@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 
 from fedcrg.config.models import DatasetConfig, SplitConfig
+from fedcrg.core.constants import DIAD_EXPECTED_SOURCE_CLIENTS
 from fedcrg.core.enums import DataRole, DatasetFeatureContractId, DatasetId
 from fedcrg.core.ids import ClientId
 from fedcrg.data.models import ClientData
@@ -14,7 +15,7 @@ def test_diad_waterfill_preserves_small_categories_in_final_test() -> None:
         feature_contract=DatasetFeatureContractId.DIAD_LOCKED_86,
         source_version="1",
         feature_count=86,
-        expected_source_clients=105,
+        expected_source_clients=DIAD_EXPECTED_SOURCE_CLIENTS,
         minimum_clients=10,
         minimum_benign_rows=7800,
         minimum_malicious_rows=1000,

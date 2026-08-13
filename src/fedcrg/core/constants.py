@@ -8,7 +8,10 @@ NBAIOT_AUTOENCODER_BYTES = 146_504
 NBAIOT_MODEL_COMMUNICATION_BYTES = 79_112_160
 
 DIAD_EXPECTED_FEATURES = 86
-DIAD_EXPECTED_SOURCE_CLIENTS = 105
+DIAD_EXPECTED_SOURCE_CLIENTS = 115
+"""Amended from the roadmap's assumed 105: the acquired CIC IoT-DIAD 2024
+packet-feature release exposes 115 unique device_mac identities (confirmed
+by direct scan of all source CSVs, independent of MAC normalization)."""
 DIAD_MINIMUM_ELIGIBLE_CLIENTS = 10
 DIAD_AUTOENCODER_PARAMETERS = 20_473
 DIAD_AUTOENCODER_BYTES = 81_892

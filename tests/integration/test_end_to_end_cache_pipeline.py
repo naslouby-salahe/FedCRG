@@ -22,6 +22,7 @@ from fedcrg.config.models import (
     SplitConfig,
     TrainingConfig,
 )
+from fedcrg.core.constants import DIAD_EXPECTED_SOURCE_CLIENTS
 from fedcrg.core.enums import (
     ComputeDeviceId,
     DataRole,
@@ -54,7 +55,7 @@ def _config(root: Path) -> ExperimentConfig:
             source_version="1",
             feature_count=4,
             feature_names=_FEATURES,
-            expected_source_clients=105,
+            expected_source_clients=DIAD_EXPECTED_SOURCE_CLIENTS,
             minimum_clients=10,
             minimum_benign_rows=7800,
             minimum_malicious_rows=1000,

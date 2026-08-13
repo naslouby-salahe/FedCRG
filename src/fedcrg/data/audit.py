@@ -8,6 +8,7 @@ from pathlib import Path
 
 from fedcrg.artifacts.serialization import as_json_int
 from fedcrg.config.models import ExperimentConfig
+from fedcrg.core.constants import DIAD_EXPECTED_SOURCE_CLIENTS
 from fedcrg.core.enums import CalibrationAssignmentMode, DataRole, DatasetId
 from fedcrg.core.ids import ClientId
 
@@ -46,8 +47,10 @@ class PreparedDatasetAuditor:
                 problems.append("N-BaIoT prepared cache does not contain exactly nb01-nb09")
         elif config.dataset.id is DatasetId.DIAD:
             discovered = eligibility.get("discovered_clients") if eligibility else None
-            if not isinstance(discovered, list) or len(discovered) != 105:
-                problems.append("DIAD source identity ledger does not contain 105 devices")
+            if not isinstance(discovered, list) or len(discovered) != DIAD_EXPECTED_SOURCE_CLIENTS:
+                problems.append(
+                    f"DIAD source identity ledger does not contain {DIAD_EXPECTED_SOURCE_CLIENTS} devices"
+                )
 
         if preprocessing:
             if preprocessing.get("dataset") != config.dataset.id.value:
