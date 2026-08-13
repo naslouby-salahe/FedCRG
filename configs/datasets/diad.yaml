@@ -1,4 +1,5 @@
 id: diad
+feature_contract: diad_locked_86
 source_version: "CIC-IoT-DIAD-2024"
 parser_version: "1"
 feature_count: 86
