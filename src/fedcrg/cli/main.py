@@ -12,6 +12,7 @@ import pandas
 import scipy
 import torch
 
+from fedcrg.cli.claims import claims_group
 from fedcrg.cli.data import data_group
 from fedcrg.cli.environment import environment_group
 from fedcrg.cli.evaluation import evaluate_command, report_group
@@ -67,6 +68,7 @@ def validate_config(config_path: Path) -> None:
     click.echo(json.dumps({"valid": True, "config_hash": config.config_hash}, indent=2))
 
 
+cli.add_command(claims_group)
 cli.add_command(data_group)
 cli.add_command(environment_group)
 cli.add_command(tables_group)
