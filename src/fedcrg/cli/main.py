@@ -12,22 +12,22 @@ import pandas
 import scipy
 import torch
 
+from fedcrg.cli.benchmark import benchmark_command
 from fedcrg.cli.claims import claims_group
 from fedcrg.cli.data import data_group
 from fedcrg.cli.environment import environment_group
-from fedcrg.cli.evaluation import evaluate_command, report_group
-from fedcrg.cli.experiments import experiment_group
-from fedcrg.cli.research import (
-    benchmark_command,
+from fedcrg.cli.evaluation import evaluate_command
+from fedcrg.cli.experiments import (
+    experiment_group,
     robustness_group,
     sensitivity_group,
     synthetic_group,
-    tables_group,
 )
-from fedcrg.cli.shared import load_config
-from fedcrg.cli.training import score_command, train_command
+from fedcrg.cli.reporting import report_group
+from fedcrg.cli.scoring import score_command, tables_group
+from fedcrg.cli.training import train_command
 from fedcrg.cli.verification import verify_command
-from fedcrg.runtime import configure_logging
+from fedcrg.runtime import configure_logging, load_config
 
 
 @click.group()

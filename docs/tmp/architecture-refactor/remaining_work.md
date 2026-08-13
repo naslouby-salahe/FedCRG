@@ -9,7 +9,7 @@ Update this file as phases complete. Status values: TODO / IN_PROGRESS / DONE.
 - [x] Phase 5: evaluation + analysis/reporting split   STATUS: DONE
 - [x] Phase 6: application/ removed -> pipeline/ + experiments/definitions/   STATUS: DONE
 - [x] Phase 7: artifacts consolidation   STATUS: DONE
-- [ ] Phase 8: reporting + cli           STATUS: TODO
+- [x] Phase 8: reporting + cli           STATUS: DONE
 - [ ] Phase 9: final hostile audit + full validation suite   STATUS: TODO
 
 Each phase, when started, must:
@@ -358,6 +358,35 @@ Consolidated 14 files down to the 6 prompt.md names:
   of the deleted artifacts/serialization.py and artifacts/experiment_results.py.
 - Validation: ruff check/format clean; mypy (py312 override) shows the same 10 pre-existing
   errors, none new; full pytest -n auto suite passes (125 tests, unchanged).
+
+## Phase 8 completion notes (reporting + cli boundaries)
+- cli/shared.py (forbidden vague name) dissolved: its one function, `load_config`, moved to
+  the top-level runtime.py (process/runtime bootstrapping concern, already home to
+  configure_logging/get_logger/log_stage). This avoids a circular-import trap: putting
+  load_config in cli/main.py would make every other cli/*.py module that needs it import
+  main.py, while main.py itself imports all those modules to register their commands.
+- cli/research.py (forbidden vague name; also on prompt.md's explicit forbidden-name list)
+  split by actual responsibility to match the target cli/ file list:
+  - new cli/scoring.py: precompute_readiness (tables_group, pairs with score-cache
+    preparation) + score_command (moved out of training.py, since prompt.md's target tree
+    lists scoring.py and training.py as separate files).
+  - new cli/benchmark.py: benchmark_command.
+  - synthetic_group/synthetic_run, robustness_group/train_deep_svdd, and
+    sensitivity_group/sensitivity_run folded into cli/experiments.py (all three are
+    experiment-execution commands, same responsibility as the existing plan/run-policy-cell/
+    materialize-federation-cell/execute-grid commands already there).
+- cli/training.py trimmed to just train_command (score_command moved out, see above).
+- cli/evaluation.py trimmed to just evaluate_command; its report_group/report_build/
+  report_build_repository/report_build_publication commands moved to new cli/reporting.py
+  (matches prompt.md's target tree, which lists reporting.py as a distinct cli file from
+  evaluation.py).
+- cli/main.py rewired to import from the new module layout; command registration and CLI
+  surface (group/command names, options) are byte-for-byte unchanged -- verified via
+  `python -m fedcrg --help` showing the identical command tree and the existing
+  tests/integration/test_cli.py smoke test still passing.
+- Validation: ruff check/format clean; mypy (py312 override) shows the same 10 pre-existing
+  errors (2 of them simply relocated from cli/research.py to cli/experiments.py, same
+  underlying issue, not new); full pytest -n auto suite passes (125 tests, unchanged).
 
 ## Notes / open decisions to resolve during implementation
 - config/validate.py must not import thresholds/ (downward dependency violation in old

@@ -1,4 +1,4 @@
-"""Process-wide progress logging so long research runs are never silent."""
+"""Process-wide progress logging and validated experiment-config loading."""
 
 from __future__ import annotations
 
@@ -8,8 +8,19 @@ import sys
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
+from pathlib import Path
+
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.config.resolve import ExperimentConfigResolver
+from fedcrg.config.validate import validate_experiment_config
 
 _CONFIGURED = False
+
+
+def load_config(path: Path) -> ExperimentConfig:
+    config = ExperimentConfigResolver().resolve(path)
+    validate_experiment_config(config)
+    return config
 
 
 def configure_logging() -> None:

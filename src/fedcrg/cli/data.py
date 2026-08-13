@@ -7,7 +7,7 @@ from pathlib import Path
 import click
 
 from fedcrg.pipeline.prepare_dataset import PrepareData
-from fedcrg.cli.shared import load_config
+from fedcrg.runtime import load_config
 
 
 @click.group(name="data")
