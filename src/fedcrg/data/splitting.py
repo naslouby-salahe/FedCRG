@@ -11,7 +11,7 @@ from fedcrg.config.models import DatasetConfig
 from fedcrg.core.constants import ATTACK_DEVELOPMENT_SEED
 from fedcrg.core.enums import CalibrationAssignmentMode, DataRole, DatasetId, FailureCode
 from fedcrg.core.exceptions import DataIntegrityError
-from fedcrg.core.ids import ClientId, Sha256
+from fedcrg.core.ids import AttackGroupId, CalibrationSeed, ClientId, RowId, Sha256
 from fedcrg.data.integrity import validate_split_disjointness
 from fedcrg.data.manifests import hash_row_ids
 from fedcrg.data.models import CalibrationRoleAssignment, ClientData, ClientSplits
@@ -29,19 +29,23 @@ def hash_seed(text: str) -> int:
     return int.from_bytes(digest, byteorder="big", signed=False) & 0xFFFFFFFFFFFFFFFF
 
 
-def calibration_rng(dataset: DatasetId, client_id: ClientId, seed: int) -> np.random.Generator:
-    text = f"fedcrg|{dataset.value}|calibration|{seed}|{client_id.value}"
+def calibration_rng(
+    dataset: DatasetId,
+    client_id: ClientId,
+    seed: CalibrationSeed | int,
+) -> np.random.Generator:
+    text = f"fedcrg|{dataset.value}|calibration|{int(seed)}|{client_id.value}"
     return np.random.Generator(np.random.PCG64(hash_seed(text)))
 
 
 def attack_rng(
     dataset: DatasetId,
     client_id: ClientId,
-    group: str,
+    group: AttackGroupId,
     seed: int,
 ) -> np.random.Generator:
     if dataset is DatasetId.DIAD:
-        text = f"fedcrg|diad|attackdev|{seed}|{client_id.value}|{group}"
+        text = f"fedcrg|diad|attackdev|{seed}|{client_id.value}|{group.value}"
         return np.random.Generator(np.random.PCG64(hash_seed(text)))
     return np.random.Generator(np.random.PCG64(seed))
 
@@ -51,9 +55,9 @@ def stable_row_id(
     client_id: ClientId,
     source: str,
     source_index: int,
-) -> str:
+) -> RowId:
     payload = f"{dataset.value}{client_id.value}{source}{source_index}"
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return RowId(hashlib.sha256(payload.encode("utf-8")).hexdigest())
 
 
 def _ensure_row_ids(
@@ -65,29 +69,32 @@ def _ensure_row_ids(
     result = frame.copy()
     if "row_id" not in result.columns:
         result["row_id"] = [
-            stable_row_id(dataset, client_id, source, int(index))
+            stable_row_id(dataset, client_id, source, int(index)).value
             for index in range(len(result))
         ]
     return result
 
 
-def attack_group_counts(attack: pd.DataFrame) -> dict[str, int]:
+def attack_group_counts(attack: pd.DataFrame) -> dict[AttackGroupId, int]:
     if "attack_group" not in attack.columns:
         raise DataIntegrityError("Attack data requires an attack_group column")
     labels = attack["attack_group"].astype(str)
-    return {group: int((labels == group).sum()) for group in sorted(labels.unique())}
+    return {
+        AttackGroupId(group): int((labels == group).sum())
+        for group in sorted(labels.unique())
+    }
 
 
 def allocate_nbaiot_attack_development(
-    counts: dict[str, int],
+    counts: dict[AttackGroupId, int],
     development_count: int,
     minimum_test_per_group: int,
-) -> dict[str, int]:
+) -> dict[AttackGroupId, int]:
     if not counts:
         raise DataIntegrityError(
             f"{FailureCode.NBAIOT_ATTACK_BUDGET_FAIL.value}: no attack subtype is present"
         )
-    groups = tuple(sorted(counts))
+    groups = tuple(sorted(counts, key=lambda item: item.value))
     quotient, remainder = divmod(development_count, len(groups))
     allocation = {
         group: quotient + (1 if index < remainder else 0)
@@ -96,7 +103,7 @@ def allocate_nbaiot_attack_development(
     for group, allocated in allocation.items():
         if counts[group] - allocated < minimum_test_per_group:
             raise DataIntegrityError(
-                f"{FailureCode.NBAIOT_ATTACK_BUDGET_FAIL.value}: {group} cannot retain "
+                f"{FailureCode.NBAIOT_ATTACK_BUDGET_FAIL.value}: {group.value} cannot retain "
                 f"{minimum_test_per_group} final-test rows"
             )
     if sum(allocation.values()) != development_count:
@@ -105,10 +112,10 @@ def allocate_nbaiot_attack_development(
 
 
 def allocate_diad_attack_development(
-    counts: dict[str, int],
+    counts: dict[AttackGroupId, int],
     development_count: int,
     reserve_per_group: int,
-) -> dict[str, int]:
+) -> dict[AttackGroupId, int]:
     capacities = {
         group: count - min(reserve_per_group, count)
         for group, count in counts.items()
@@ -116,7 +123,9 @@ def allocate_diad_attack_development(
     if sum(capacities.values()) < development_count:
         raise DataIntegrityError(FailureCode.ATTACK_DEV_CAPACITY_LT_500.value)
 
-    allocation = {group: 0 for group in sorted(counts)}
+    allocation = {
+        group: 0 for group in sorted(counts, key=lambda item: item.value)
+    }
     for _ in range(development_count):
         eligible = [
             group
@@ -126,7 +135,10 @@ def allocate_diad_attack_development(
         if not eligible:
             raise DataIntegrityError(FailureCode.ATTACK_DEV_CAPACITY_LT_500.value)
         minimum = min(allocation[group] for group in eligible)
-        chosen = min(group for group in eligible if allocation[group] == minimum)
+        chosen = min(
+            (group for group in eligible if allocation[group] == minimum),
+            key=lambda item: item.value,
+        )
         allocation[chosen] += 1
 
     if sum(allocation.values()) != development_count:
@@ -140,16 +152,16 @@ def _sample_attack_development(
     attack: pd.DataFrame,
     dataset: DatasetId,
     client_id: ClientId,
-    allocation: dict[str, int],
+    allocation: dict[AttackGroupId, int],
     seed: int,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     labels = attack["attack_group"].astype(str)
     selected: list[int] = []
-    for group in sorted(allocation):
+    for group in sorted(allocation, key=lambda item: item.value):
         count = allocation[group]
         if count == 0:
             continue
-        indices = attack.index[labels == group].to_numpy()
+        indices = attack.index[labels == group.value].to_numpy()
         chosen = attack_rng(dataset, client_id, group, seed).choice(
             indices,
             size=count,
@@ -170,18 +182,19 @@ class CalibrationAssignmentBuilder:
         dataset: DatasetId,
         client_id: ClientId,
         config: DatasetConfig,
-        calibration_seed: int,
+        calibration_seed: CalibrationSeed | int,
         mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
     ) -> CalibrationRoleAssignment:
+        seed = CalibrationSeed(int(calibration_seed))
         expected = config.split.reservoir_size
         if len(reservoir) != expected:
             raise DataIntegrityError(
                 f"Reservoir has {len(reservoir)} rows; expected {expected}"
             )
-        if calibration_seed not in config.calibration_seeds:
-            raise ValueError(f"Calibration seed {calibration_seed} is not configured")
+        if int(seed) not in config.calibration_seeds:
+            raise ValueError(f"Calibration seed {int(seed)} is not configured")
         if mode is CalibrationAssignmentMode.SEEDED_PERMUTATION:
-            order = calibration_rng(dataset, client_id, calibration_seed).permutation(expected)
+            order = calibration_rng(dataset, client_id, seed).permutation(expected)
         else:
             order = np.arange(expected, dtype=np.int64)
 
@@ -195,19 +208,25 @@ class CalibrationAssignmentBuilder:
         positions: dict[DataRole, tuple[int, ...]] = {}
         row_hashes: dict[DataRole, Sha256] = {}
         for role, count in counts:
-            role_positions = tuple(int(value) for value in order[cursor : cursor + count])
+            role_positions = tuple(
+                int(value) for value in order[cursor : cursor + count]
+            )
             positions[role] = role_positions
-            row_ids = reservoir.iloc[list(role_positions)]["row_id"].astype(str).tolist()
-            row_hashes[role] = Sha256(hash_row_ids(row_ids))
+            row_ids = (
+                reservoir.iloc[list(role_positions)]["row_id"].astype(str).tolist()
+            )
+            row_hashes[role] = hash_row_ids(row_ids)
             cursor += count
         if cursor != expected:
             raise RuntimeError("Calibration roles do not exactly cover the reservoir")
-        flattened = [value for role in _CALIBRATION_ROLES for value in positions[role]]
+        flattened = [
+            value for role in _CALIBRATION_ROLES for value in positions[role]
+        ]
         if len(flattened) != len(set(flattened)) or set(flattened) != set(range(expected)):
             raise RuntimeError("Calibration assignment is not a partition of the reservoir")
         return CalibrationRoleAssignment(
             client_id=client_id,
-            calibration_seed=calibration_seed,
+            calibration_seed=seed,
             mode=mode,
             positions=positions,
             row_id_hashes=row_hashes,
@@ -263,7 +282,7 @@ class DataSplitter:
         base_splits: ClientSplits,
         dataset: DatasetId,
         config: DatasetConfig,
-        calibration_seed: int,
+        calibration_seed: CalibrationSeed | int,
         mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
     ) -> CalibrationRoleAssignment:
         return self.assignments.build(
@@ -280,7 +299,7 @@ class DataSplitter:
         base_splits: ClientSplits,
         dataset: DatasetId,
         config: DatasetConfig,
-        calibration_seed: int,
+        calibration_seed: CalibrationSeed | int,
         mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
     ) -> dict[DataRole, pd.DataFrame]:
         assignment = self.calibration_assignment(
@@ -334,7 +353,7 @@ class DataSplitter:
             reserve = min(split.min_attack_test_per_group, count)
             if final_counts.get(group, 0) < reserve:
                 raise DataIntegrityError(
-                    f"Final attack test lost required evidence for {group}"
+                    f"Final attack test lost required evidence for {group.value}"
                 )
         return development, test
 
