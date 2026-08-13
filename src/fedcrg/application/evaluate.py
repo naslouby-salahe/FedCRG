@@ -191,20 +191,14 @@ class EvaluatePolicies:
         config: ExperimentConfig,
     ) -> float:
         client_id = final.benign.client_id
-        candidates = (
-            thresholds.for_client(PolicyId.GLOBAL_QUANTILE, client_id),
-            thresholds.for_client(PolicyId.LOCAL_QUANTILE, client_id),
-            thresholds.for_client(PolicyId.FEDCRG, client_id),
-        )
-        if any(value is None for value in candidates):
+        global_quantile = thresholds.for_client(PolicyId.GLOBAL_QUANTILE, client_id)
+        local_quantile = thresholds.for_client(PolicyId.LOCAL_QUANTILE, client_id)
+        fedcrg = thresholds.for_client(PolicyId.FEDCRG, client_id)
+        if global_quantile is None or local_quantile is None or fedcrg is None:
             raise RuntimeError("Oracle candidates must all be defined")
         return oracle_choice(
             final,
-            (
-                float(candidates[0]),
-                float(candidates[1]),
-                float(candidates[2]),
-            ),
+            (global_quantile, local_quantile, fedcrg),
             config.protocol.band,
         )
 

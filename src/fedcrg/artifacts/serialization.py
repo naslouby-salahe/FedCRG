@@ -66,3 +66,31 @@ def atomic_write_json(path: PurePath, payload: object) -> None:
         path,
         json.dumps(to_json_value(payload), indent=2, sort_keys=True) + "\n",
     )
+
+
+def as_json_list(value: object) -> list[object]:
+    """Narrow a parsed-JSON value known to be an array."""
+    if not isinstance(value, list):
+        raise ValueError("Expected a JSON array")
+    return value
+
+
+def as_json_dict(value: object) -> dict[str, object]:
+    """Narrow a parsed-JSON value known to be an object."""
+    if not isinstance(value, dict):
+        raise ValueError("Expected a JSON object")
+    return value
+
+
+def as_json_int(value: object) -> int:
+    """Narrow a parsed-JSON value known to be int-convertible."""
+    if not isinstance(value, (int, float, str)):
+        raise ValueError("Expected an int-convertible JSON value")
+    return int(value)
+
+
+def as_json_float(value: object) -> float:
+    """Narrow a parsed-JSON value known to be float-convertible."""
+    if not isinstance(value, (int, float, str)):
+        raise ValueError("Expected a float-convertible JSON value")
+    return float(value)

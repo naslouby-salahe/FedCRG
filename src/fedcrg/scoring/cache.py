@@ -14,17 +14,27 @@ import uuid
 from dataclasses import dataclass, replace
 from pathlib import Path
 from collections.abc import Iterable
+from typing import Literal, cast
 
 import numpy as np
 import pandas as pd
 
 from fedcrg.artifacts.hashing import sha256_file
-from fedcrg.artifacts.serialization import atomic_write_json
+from fedcrg.artifacts.serialization import (
+    as_json_dict,
+    as_json_int,
+    as_json_list,
+    atomic_write_json,
+)
 from fedcrg.core.enums import DataRole, DatasetId
 from fedcrg.core.exceptions import ImmutableRunError
 from fedcrg.core.ids import AttackGroupId, ClientId, ModelSeed, RowId, Sha256
 from fedcrg.scoring.integrity import validate_score_manifest
 from fedcrg.scoring.models import ClientScoreSet, RoleScores, ScoreManifest
+
+# pandas-stubs' read_parquet overloads omit "pyarrow" from the engine Literal even
+# though pandas itself supports it; this cast documents that stub gap.
+_PYARROW_ENGINE = cast(Literal["auto", "fastparquet"], "pyarrow")
 
 
 @dataclass(frozen=True, slots=True)
@@ -276,7 +286,7 @@ class ScoreCache:
         metadata = self._read_verified_metadata(root)
         identity = ScoreCacheIdentity(
             dataset=DatasetId(str(metadata["dataset"])),
-            model_seed=ModelSeed(int(metadata["model_seed"])),
+            model_seed=ModelSeed(as_json_int(metadata["model_seed"])),
             model_hash=Sha256(str(metadata["model_hash"])),
             data_spec_hash=Sha256(str(metadata["data_spec_hash"])),
             training_spec_hash=Sha256(str(metadata["training_spec_hash"])),
@@ -286,23 +296,23 @@ class ScoreCache:
         return ScoreCacheDescriptor(
             identity=identity,
             cache_sha256=Sha256(str(metadata["score_cache_sha256"])),
-            client_ids=tuple(ClientId(str(value)) for value in metadata["client_ids"]),
+            client_ids=tuple(
+                ClientId(str(value)) for value in as_json_list(metadata["client_ids"])
+            ),
             records=self._records_from_metadata(metadata),
         )
 
     @staticmethod
     def _records_from_metadata(metadata: dict[str, object]) -> tuple[ScoreRoleCacheRecord, ...]:
-        raw = metadata["records"]
-        assert isinstance(raw, list)
         records: list[ScoreRoleCacheRecord] = []
-        for entry in raw:
-            assert isinstance(entry, dict)
+        for raw_entry in as_json_list(metadata["records"]):
+            entry = as_json_dict(raw_entry)
             records.append(
                 ScoreRoleCacheRecord(
                     client_id=ClientId(str(entry["client_id"])),
                     role=DataRole(str(entry["role"])),
                     score_array_sha256=Sha256(str(entry["score_array_sha256"])),
-                    row_count=int(entry["row_count"]),
+                    row_count=as_json_int(entry["row_count"]),
                 )
             )
         return tuple(records)
@@ -324,7 +334,7 @@ class ScoreCache:
         metadata = self._read_verified_metadata(root)
         records = self._records_from_metadata(metadata)
         parquet_path = root / str(metadata["score_cache_file"])
-        frame = pd.read_parquet(parquet_path, engine="pyarrow")
+        frame = pd.read_parquet(parquet_path, engine=_PYARROW_ENGINE)
         clients: list[ClientScoreSet] = []
         for client_id, client_frame in frame.groupby("client_id", sort=True):
             score_list: list[RoleScores] = []
@@ -342,7 +352,7 @@ class ScoreCache:
 
         manifest = ScoreManifest(
             dataset=DatasetId(str(metadata["dataset"])),
-            model_seed=ModelSeed(int(metadata["model_seed"])),
+            model_seed=ModelSeed(as_json_int(metadata["model_seed"])),
             model_hash=Sha256(str(metadata["model_hash"])),
             data_spec_hash=Sha256(str(metadata["data_spec_hash"])),
             training_spec_hash=Sha256(str(metadata["training_spec_hash"])),
@@ -361,7 +371,7 @@ class ScoreCache:
         parquet_path = root / str(metadata["score_cache_file"])
         frame = pd.read_parquet(
             parquet_path,
-            engine="pyarrow",
+            engine=_PYARROW_ENGINE,
             filters=[("client_id", "==", client_id.value), ("phase", "==", role.value)],
         )
         if frame.empty:

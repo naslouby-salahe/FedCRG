@@ -30,8 +30,8 @@ def test_nbaiot_preprocessing_uses_global_train_extrema_without_clipping() -> No
     model = preprocessor.aggregate(statistics, DatasetId.NBAIOT)
     test = pd.DataFrame({"f1": [4.0], "f2": [5.0], "row_id": ["z"]})
     transformed = model.transform(test, C1)
-    assert float(transformed.loc[0, "f1"]) > 1.0
-    assert float(transformed.loc[0, "f2"]) == 0.0
+    assert float(transformed["f1"].iloc[0]) > 1.0
+    assert float(transformed["f2"].iloc[0]) == 0.0
     assert model.constant_features == (False, True)
 
 

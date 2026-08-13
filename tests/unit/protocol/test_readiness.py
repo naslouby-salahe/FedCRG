@@ -28,4 +28,6 @@ def test_readiness_plan_is_score_value_independent() -> None:
     low = evaluator.evaluate(np.arange(1500, dtype=float), plan)
     high = evaluator.evaluate(np.arange(1500, dtype=float) + 10000.0, plan)
     assert low.plan == high.plan
+    assert low.threshold is not None
+    assert high.threshold is not None
     assert high.threshold - low.threshold == 10000.0

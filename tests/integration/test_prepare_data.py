@@ -52,7 +52,8 @@ class FakeAdapter(DatasetAdapter):
 
 
 class FakePrepare(PrepareData):
-    def adapter(self, dataset: DatasetId, root: Path) -> DatasetAdapter:
+    @staticmethod
+    def adapter(dataset: DatasetId, root: Path) -> DatasetAdapter:
         return FakeAdapter(root)
 
 

@@ -1,4 +1,5 @@
 from fedcrg.core.enums import ExperimentId, ExperimentStatus
+from fedcrg.core.ids import CalibrationSeed, ModelSeed, Sha256
 from fedcrg.experiments.dependencies import DependencyResolver
 from fedcrg.experiments.executor import ExperimentExecutor
 from fedcrg.experiments.models import ExperimentPlan
@@ -7,7 +8,9 @@ from fedcrg.experiments.registry import ExperimentRegistry
 
 def _plan(experiment_id: ExperimentId) -> ExperimentPlan:
     registry = ExperimentRegistry()
-    return ExperimentPlan(registry.get(experiment_id), "hash", 11, 1000)
+    return ExperimentPlan(
+        registry.get(experiment_id), Sha256("a" * 64), ModelSeed(11), CalibrationSeed(1000)
+    )
 
 
 def test_primary_execution_completes() -> None:
@@ -20,11 +23,12 @@ def test_primary_execution_completes() -> None:
 def test_runner_failure_is_recorded() -> None:
     executor = ExperimentExecutor()
 
-    def fail(plan):
+    def fail(plan: ExperimentPlan) -> None:
         raise RuntimeError("boom")
 
     execution = executor.execute(_plan(ExperimentId.PRIMARY_NBAIOT), fail)
     assert execution.status is ExperimentStatus.FAILED
+    assert execution.error is not None
     assert "boom" in execution.error
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from fedcrg.core.enums import DataRole
+from fedcrg.core.ids import RowId
 from fedcrg.scoring.models import ScoreManifest
 
 _REQUIRED_BASE_ROLES = frozenset(
@@ -42,7 +43,7 @@ def validate_score_manifest(manifest: ScoreManifest) -> None:
             raise ValueError(
                 f"Score cache must not materialize calibration-assignment roles: {names}"
             )
-        row_ids: set[str] = set()
+        row_ids: set[RowId] = set()
         for role_scores in client.scores:
             role = role_scores.role
             if role_scores.values.dtype != np.float64:

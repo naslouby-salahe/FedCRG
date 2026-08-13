@@ -93,7 +93,7 @@ def _row_id(client: str, role: DataRole, index: int) -> RowId:
 
 def _role_frame(client: str, role: DataRole, rows: int, offset: float) -> pd.DataFrame:
     x = np.linspace(0.0 + offset, 1.0 + offset, rows)
-    data = {name: x + index for index, name in enumerate(_FEATURES)}
+    data: dict[str, object] = {name: x + index for index, name in enumerate(_FEATURES)}
     data["row_id"] = [str(_row_id(client, role, i)) for i in range(rows)]
     if role in {DataRole.ATTACK_DEV, DataRole.ATTACK_TEST}:
         data["attack_group"] = ["atk"] * rows
@@ -161,6 +161,6 @@ def test_train_score_evaluate_cache_pipeline(tmp_path: Path) -> None:
 
     bundle = EvaluatePolicies().evaluate_from_cache(config, score_root, calibration_seed=1000)
     assert len(bundle.clients) == 2 * len(config.policies)
-    evaluated = [item for item in bundle.clients if item.metrics is not None]
-    assert evaluated
-    assert all(np.isfinite(item.metrics.fpr) for item in evaluated)
+    metrics = [item.metrics for item in bundle.clients if item.metrics is not None]
+    assert metrics
+    assert all(np.isfinite(item.fpr) for item in metrics)

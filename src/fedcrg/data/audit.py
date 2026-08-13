@@ -6,6 +6,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from fedcrg.artifacts.serialization import as_json_int
 from fedcrg.config.models import ExperimentConfig
 from fedcrg.core.enums import CalibrationAssignmentMode, DataRole, DatasetId
 from fedcrg.core.ids import ClientId
@@ -102,7 +103,7 @@ class PreparedDatasetAuditor:
 
     @staticmethod
     def _audit_assignment(payload: dict[str, object], expected_seed: int, expected_mode: CalibrationAssignmentMode, eligible_clients: set[ClientId], config: ExperimentConfig, problems: list[str]) -> None:
-        if int(payload.get("calibration_seed", -1)) != expected_seed:
+        if as_json_int(payload.get("calibration_seed", -1)) != expected_seed:
             problems.append(f"calibration assignment seed mismatch: expected {expected_seed}")
         if payload.get("mode") != expected_mode.value:
             problems.append(f"calibration assignment mode mismatch: expected {expected_mode.value}")

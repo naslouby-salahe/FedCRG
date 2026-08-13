@@ -11,7 +11,7 @@ from fedcrg.artifacts.hashing import sha256_file
 from fedcrg.artifacts.layout import RunLayout
 from fedcrg.artifacts.manifest import RunManifestStore
 from fedcrg.artifacts.references import CacheReferenceStore
-from fedcrg.artifacts.serialization import atomic_write_json
+from fedcrg.artifacts.serialization import as_json_float, as_json_int, atomic_write_json
 from fedcrg.core.enums import ArtifactType
 from fedcrg.experiments.models import ExperimentDefinition
 
@@ -167,7 +167,7 @@ class ArtifactVerifier:
                 mismatches.add("run_config:policy_id")
             if run_config.get("config_hash") != manifest.config_hash.value:
                 mismatches.add("run_config:config_hash")
-            if int(assignment.get("calibration_seed", -1)) != manifest.calibration_seed:
+            if as_json_int(assignment.get("calibration_seed", -1)) != manifest.calibration_seed:
                 mismatches.add("calibration_assignment:seed")
 
             data_spec = dataset.get("data_spec_hash")
@@ -227,7 +227,7 @@ class ArtifactVerifier:
                 "cp_upper",
             ):
                 value = row.get(field)
-                if value is not None and not math.isfinite(float(value)):
+                if value is not None and not math.isfinite(as_json_float(value)):
                     mismatches.add(f"threshold_records:nonfinite:{field}")
         for row in metric_rows:
             if row.get("policy_id") != policy_id:
@@ -235,7 +235,7 @@ class ArtifactVerifier:
             metric_clients.add(str(row.get("client_id")))
             for field in ("fpr", "auroc", "auprc", "band_error"):
                 value = row.get(field)
-                if value is None or not math.isfinite(float(value)):
+                if value is None or not math.isfinite(as_json_float(value)):
                     mismatches.add(f"metric_records:nonfinite:{field}")
         if threshold_clients != metric_clients:
             mismatches.add("records:client_set")

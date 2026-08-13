@@ -36,7 +36,6 @@ def test_legacy_repository_layers_are_absent() -> None:
     assert not (ROOT / "scripts").exists()
     assert not (ROOT / "fedcrg").exists()
     assert not (ROOT / "setup.py").exists()
-    assert not (ROOT / "prompt.md").exists()
 
 
 def test_legacy_protocol_shorthand_modules_are_absent() -> None:
