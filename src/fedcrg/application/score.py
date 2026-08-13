@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 
 import pandas as pd
@@ -12,9 +13,10 @@ from fedcrg.artifacts.hashing import sha256_file
 from fedcrg.config.models import ExperimentConfig
 from fedcrg.core.enums import DataRole
 from fedcrg.core.ids import ClientId, Sha256
-from fedcrg.scoring.cache import ScoreCache
+from fedcrg.detectors.base import DetectorModel
+from fedcrg.scoring.cache import ScoreCache, ScoreCacheIdentity
 from fedcrg.scoring.computer import ScoreComputer
-from fedcrg.scoring.models import ClientScoreInput, RoleScoreInput
+from fedcrg.scoring.models import RoleScores
 
 _BASE_SCORE_ROLES = (
     DataRole.TRAIN,
@@ -26,12 +28,22 @@ _BASE_SCORE_ROLES = (
 
 
 class ComputeScores:
-    """Score only seed-independent base roles; calibration roles are later views."""
+    """Score seed-independent base roles using bounded memory.
 
-    def __init__(self) -> None:
-        self.computer = ScoreComputer()
-        self.trainer = TrainDetector()
-        self.cache = ScoreCache()
+    One prepared role is loaded, scored, hash-accounted, and appended to the Parquet
+    cache before the next role is opened. Calibration assignments are deliberately not
+    materialized here; they are deterministic views over the frozen reservoir scores.
+    """
+
+    def __init__(
+        self,
+        computer: ScoreComputer | None = None,
+        trainer: TrainDetector | None = None,
+        cache: ScoreCache | None = None,
+    ) -> None:
+        self.computer = computer or ScoreComputer()
+        self.trainer = trainer or TrainDetector()
+        self.cache = cache or ScoreCache()
 
     def score_from_cache(
         self,
@@ -52,42 +64,18 @@ class ComputeScores:
             if training.get("training_spec_hash") != config.training_spec_hash:
                 raise ValueError("Frozen model belongs to another training specification")
             if training.get("model_file_sha256") != sha256_file(model_path):
-                raise ValueError("Frozen model hash does not match training manifest")
-
-        clients: list[ClientScoreInput] = []
-        for client_value in sorted(prepared_manifest["clients"]):
-            client_id = ClientId(client_value)
-            role_inputs: dict[DataRole, RoleScoreInput] = {}
-            for role in _BASE_SCORE_ROLES:
-                path = prepared_root / "clients" / client_value / f"{role.value}.csv.gz"
-                if not path.is_file():
-                    raise FileNotFoundError(f"Missing prepared base role: {path}")
-                frame = pd.read_csv(path)
-                columns = feature_columns(frame, config.dataset.feature_count)
-                groups = None
-                if role in {DataRole.ATTACK_DEV, DataRole.ATTACK_TEST}:
-                    if "attack_group" not in frame.columns:
-                        raise ValueError(f"Attack role {role.value} is missing attack_group")
-                    groups = tuple(frame["attack_group"].astype(str))
-                role_inputs[role] = RoleScoreInput(
-                    role=role,
-                    values=frame[columns].to_numpy(dtype="float32"),
-                    row_ids=tuple(frame["row_id"].astype(str)),
-                    attack_groups=groups,
-                )
-            clients.append(ClientScoreInput(client_id, role_inputs))
+                raise ValueError("Frozen model file hash does not match training manifest")
 
         model = self.trainer.load_model(config, model_path)
-        score_manifest = self.computer.compute_manifest(
-            model=model,
+        model_hash = Sha256(model.state_hash())
+        identity = ScoreCacheIdentity(
             dataset=config.dataset.id,
             model_seed=model_seed,
+            model_hash=model_hash,
             data_spec_hash=Sha256(config.data_spec_hash),
             training_spec_hash=Sha256(config.training_spec_hash),
             dataset_manifest_hash=Sha256(sha256_file(manifest_path)),
             preprocessing_hash=Sha256(sha256_file(preprocessing_path)),
-            clients=tuple(clients),
-            device=config.training.device.value,
         )
         score_root = (
             config.outputs_root
@@ -99,30 +87,69 @@ class ComputeScores:
             / config.training_spec_hash[:16]
         )
         if score_root.exists():
-            loaded = self.cache.load(score_root)
-            self._validate_existing(config, model_seed, model_path, loaded)
+            self._validate_existing(config, model_seed, model_hash, score_root)
             return score_root
-        finalized = self.cache.save(score_manifest, score_root)
-        if finalized.cache_sha256 is None:
+
+        descriptor = self.cache.save_stream(
+            identity,
+            self._score_roles(config, prepared_root, prepared_manifest, model),
+            score_root,
+        )
+        if descriptor.cache_sha256 is None:  # defensive; the type is non-optional
             raise RuntimeError("Score cache was not hash-finalized")
         return score_root
 
-    @staticmethod
+    def _score_roles(
+        self,
+        config: ExperimentConfig,
+        prepared_root: Path,
+        prepared_manifest: dict[str, object],
+        model: DetectorModel,
+    ) -> Iterator[RoleScores]:
+        clients = prepared_manifest.get("clients")
+        if not isinstance(clients, dict):
+            raise ValueError("Prepared dataset manifest has no client ledger")
+        for client_value in sorted(clients):
+            client_id = ClientId(client_value)
+            for role in _BASE_SCORE_ROLES:
+                path = prepared_root / "clients" / client_value / f"{role.value}.csv.gz"
+                if not path.is_file():
+                    raise FileNotFoundError(f"Missing prepared base role: {path}")
+                frame = pd.read_csv(path)
+                columns = feature_columns(frame, config.dataset.feature_count)
+                scores = self.computer.compute(
+                    model,
+                    frame[columns].to_numpy(dtype="float32"),
+                    config.training.device.value,
+                )
+                groups = None
+                if role in {DataRole.ATTACK_DEV, DataRole.ATTACK_TEST}:
+                    if "attack_group" not in frame.columns:
+                        raise ValueError(f"Attack role {role.value} is missing attack_group")
+                    groups = tuple(frame["attack_group"].astype(str))
+                yield RoleScores(
+                    role=role,
+                    values=scores,
+                    client_id=client_id,
+                    row_ids=tuple(frame["row_id"].astype(str)),
+                    attack_groups=groups,
+                )
+                del frame, scores
+
     def _validate_existing(
+        self,
         config: ExperimentConfig,
         model_seed: int,
-        model_path: Path,
-        manifest: object,
+        model_hash: Sha256,
+        score_root: Path,
     ) -> None:
-        from fedcrg.scoring.models import ScoreManifest
-
-        if not isinstance(manifest, ScoreManifest):
-            raise TypeError("Unexpected score-cache manifest")
-        if manifest.model_seed != model_seed:
+        descriptor = self.cache.load_descriptor(score_root)
+        identity = descriptor.identity
+        if identity.model_seed != model_seed:
             raise ValueError("Existing score cache has a different model seed")
-        if manifest.data_spec_hash != Sha256(config.data_spec_hash):
+        if identity.data_spec_hash != Sha256(config.data_spec_hash):
             raise ValueError("Existing score cache belongs to another data specification")
-        if manifest.training_spec_hash != Sha256(config.training_spec_hash):
+        if identity.training_spec_hash != Sha256(config.training_spec_hash):
             raise ValueError("Existing score cache belongs to another training specification")
-        if manifest.model_hash != Sha256(TrainDetector().load_model(config, model_path).state_hash()):
+        if identity.model_hash != model_hash:
             raise ValueError("Existing score cache belongs to another frozen model")
