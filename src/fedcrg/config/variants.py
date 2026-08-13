@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fedcrg.config.models import ExperimentConfig, ProtocolConfig
 from fedcrg.config.validation import validate_experiment_config
-from fedcrg.core.enums import PolicyId
+from fedcrg.core.enums import ExperimentId, PolicyId
 
 
 class ExperimentVariantFactory:
@@ -14,6 +14,7 @@ class ExperimentVariantFactory:
         self,
         config: ExperimentConfig,
         *,
+        experiment_id: ExperimentId | None = None,
         alpha: float | None = None,
         rho: float | None = None,
         readiness_assurance: float | None = None,
@@ -38,7 +39,7 @@ class ExperimentVariantFactory:
             reject_calibration_ties=config.protocol.reject_calibration_ties,
         )
         variant = ExperimentConfig(
-            id=config.id,
+            id=config.id if experiment_id is None else experiment_id,
             protocol=protocol,
             dataset=config.dataset,
             detector=config.detector,
@@ -54,9 +55,11 @@ class ExperimentVariantFactory:
         self,
         config: ExperimentConfig,
         policies: tuple[PolicyId, ...],
+        *,
+        experiment_id: ExperimentId | None = None,
     ) -> ExperimentConfig:
         variant = ExperimentConfig(
-            id=config.id,
+            id=config.id if experiment_id is None else experiment_id,
             protocol=config.protocol,
             dataset=config.dataset,
             detector=config.detector,
