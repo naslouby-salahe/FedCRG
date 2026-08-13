@@ -83,6 +83,15 @@ sharing). 146 tests, pyright 0/0, nox quality green.
 
 ## Batch 10 — Full quality gate and hostile audit (matrix X01, X02, F1-F4)
 
-1. Run complete quality gate (format, lint, pyright, full pytest, nox).
-2. Hostile audit per prompt §38; fix every actionable finding; re-audit until clean.
-3. Update matrix to all VERIFIED; commit.
+DONE 2026-08-13: nox quality green (148 tests); hostile audit fixed remaining
+scientific defaults (`familywise_alpha`/`holm` now keyword-required from
+`config.statistics.familywise_alpha`; `empirical_quantile(alpha)` required;
+`assert_ranking_metric_invariance(tolerance)` from new
+`statistics.ranking_invariance_tolerance` YAML field); removed dead
+`ExperimentExecution`/`TResult`/`ExperimentRunner` from execution.py; removed the
+last `# type: ignore` (axis() now types `AxisValue`); added Rich console progress
+(`runtime/console.py` wired into campaign loop) per §17; zero `dict[str, object]`,
+zero bare `object`, zero `Any`, zero TODO/FIXME, zero trailing whitespace; every
+matrix row VERIFIED; `tools/audit_repository.py` clean.
+
+## Final status — all batches complete

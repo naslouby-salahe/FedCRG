@@ -20,6 +20,7 @@ from fedcrg.configuration.resolve import load_config
 from fedcrg.domain.enums import CampaignStatusValue, ExperimentId
 from fedcrg.domain.errors import ConfigurationError
 from fedcrg.reporting.results import ResultsBuilder
+from fedcrg.runtime.console import render_campaign_status
 from fedcrg.runtime.logging import get_logger
 from fedcrg.runtime.monitoring import ResourceMonitor, write_telemetry
 
@@ -172,6 +173,16 @@ class CampaignRunner:
                 self.store.save(current_status)
                 continue
             self._record_telemetry(outputs_root)
+            render_campaign_status(
+                campaign_id,
+                tuple(
+                    (entry.experiment_id.value, entry.status.value)
+                    for entry in current_status.experiments
+                ),
+                current_experiment=item.experiment_id.value,
+                current_stage=f"running {item.experiment_id.value}",
+                elapsed_seconds=time.monotonic() - started,
+            )
             running = self._set_status(
                 current_status,
                 index,

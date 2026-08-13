@@ -90,7 +90,7 @@ class FinalTestEvidence:
         object.__setattr__(self, "attack_test_scores", attack)
 
 
-def empirical_quantile(scores: np.ndarray, alpha: float = 0.01) -> float:
+def empirical_quantile(scores: np.ndarray, alpha: float) -> float:
     values = np.sort(np.asarray(scores, dtype=np.float64), kind="stable")
     if values.ndim != 1 or len(values) == 0:
         raise ValueError("Quantile thresholds require a non-empty one-dimensional array")

@@ -1,17 +1,12 @@
-"""Experiment plans, execution state, and allowed lifecycle transitions."""
+"""Experiment plans and allowed lifecycle transitions."""
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
-from typing import Generic, TypeVar
 
 from fedcrg.domain.enums import ExperimentStatus
 from fedcrg.domain.identifiers import CalibrationSeed, ModelSeed, Sha256
 from fedcrg.experiments.experiment_definition import ExperimentDefinition
-
-TResult = TypeVar("TResult")
 
 _ALLOWED_TRANSITIONS = {
     ExperimentStatus.PENDING: {ExperimentStatus.VALIDATING, ExperimentStatus.BLOCKED},
@@ -41,30 +36,3 @@ class ExperimentPlan:
     config_hash: Sha256
     model_seed: ModelSeed
     calibration_seed: CalibrationSeed
-
-
-@dataclass(slots=True)
-class ExperimentExecution(Generic[TResult]):
-    plan: ExperimentPlan
-    status: ExperimentStatus = ExperimentStatus.PENDING
-    result: TResult | None = None
-    error: str | None = None
-    started_at: datetime | None = None
-    finished_at: datetime | None = None
-
-    def transition(self, status: ExperimentStatus) -> None:
-        assert_transition(self.status, status)
-        self.status = status
-        now = datetime.now(UTC)
-        if status is ExperimentStatus.RUNNING:
-            self.started_at = now
-        if status in {
-            ExperimentStatus.COMPLETE,
-            ExperimentStatus.FAILED,
-            ExperimentStatus.BLOCKED,
-            ExperimentStatus.INVALID,
-        }:
-            self.finished_at = now
-
-
-ExperimentRunner = Callable[[ExperimentPlan], TResult]

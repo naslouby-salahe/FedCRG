@@ -117,7 +117,7 @@ def test_mismatch_only_uses_calibration_empirical_quantile() -> None:
         (client,), primary_protocol(), primary_statistics(), (PolicyId.MISMATCH_ONLY,)
     )
     assert result.for_client(PolicyId.MISMATCH_ONLY, client.client_id) == empirical_quantile(
-        client.calibration_scores
+        client.calibration_scores, primary_protocol().alpha
     )
 
 
@@ -131,4 +131,4 @@ def test_no_mismatch_ablation_retains_reference() -> None:
 
 def test_empirical_quantile_rejects_empty_input() -> None:
     with pytest.raises(ValueError):
-        empirical_quantile(np.array([]))
+        empirical_quantile(np.array([]), 0.01)

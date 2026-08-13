@@ -86,7 +86,7 @@ def utility_preserved(federations: tuple[FederationMetrics, ...], margin: float)
 
 
 def assert_ranking_metric_invariance(
-    evaluations: tuple[PolicyEvaluation, ...], tolerance: float = 1e-12
+    evaluations: tuple[PolicyEvaluation, ...], tolerance: float
 ) -> None:
     by_client: dict[ClientId, list[PolicyEvaluation]] = {}
     for row in evaluations:

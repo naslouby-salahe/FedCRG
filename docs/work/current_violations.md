@@ -87,11 +87,15 @@ matrix IDs (`docs/FedCRG Audit Matrix.md`).
   noxfile (9 sessions), `tools/audit_repository.py`; CI runs pyright + audit +
   pytest -n auto. Matrix: R10, R11, T07.
 
-## F. Dead code / redundancy to audit during hostile audit
+## F. Dead code / redundancy
 
-- F1. `experiments/execution.py` `TResult` generic + `ExperimentRunner` Callable:
-  check actual usage after pipeline fold.
-- F2. `pipeline/` modules may duplicate `experiments/` logic (planning vs run_experiment).
-- F3. `descriptive_statistics.py` / `communication_cost.py` / `computational_benchmark.py`
-  live in `analysis/` but belong to evaluation/experiments per target tree.
-- F4. `outputs/cache/precomputed/` vs `cache/analysis/` naming.
+- F1. ~~`experiments/execution.py` TResult generic + ExperimentRunner~~ RESOLVED
+  2026-08-13: `ExperimentExecution`/`TResult`/`ExperimentRunner` removed (unused
+  after the pipeline fold).
+- F2. ~~`pipeline/` duplication~~ RESOLVED 2026-08-13: pipeline folded into
+  `experiments/` (b6); planning vs run_experiment separation is intentional.
+- F3. ~~`communication_cost` / `computational_benchmark` in `analysis/`~~ RESOLVED
+  2026-08-13: moved to `evaluation/communication_metrics.py` and
+  `experiments/computational_benchmark.py` (b6).
+- F4. ~~`outputs/cache/precomputed/` vs `cache/analysis/`~~ RESOLVED 2026-08-13:
+  renamed to `cache/analysis/` (b3).

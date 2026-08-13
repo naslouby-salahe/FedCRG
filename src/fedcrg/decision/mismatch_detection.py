@@ -98,7 +98,8 @@ class FleetMismatchDecision:
 def bonferroni_fleet_sensitivity(
     counts: dict[ClientId, tuple[int, int]],
     band: OperatingBand,
-    familywise_alpha: float = 0.05,
+    *,
+    familywise_alpha: float,
 ) -> tuple[FleetMismatchDecision, ...]:
     if not counts:
         return ()
@@ -142,7 +143,8 @@ def _holm_rejected(
 def holm_directional_fleet_sensitivity(
     counts: dict[ClientId, tuple[int, int]],
     band: OperatingBand,
-    familywise_alpha: float = 0.05,
+    *,
+    familywise_alpha: float,
 ) -> tuple[FleetMismatchDecision, ...]:
     hypotheses: list[tuple[float, tuple[ClientId, MismatchOutcome]]] = []
     diagnostics: dict[ClientId, tuple[float | None, float]] = {}

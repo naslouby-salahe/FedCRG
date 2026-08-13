@@ -626,6 +626,7 @@ class RunRealSensitivities:
                         mismatch_results=bonferroni_fleet_sensitivity(
                             counts,
                             config.protocol.band,
+                            familywise_alpha=config.statistics.familywise_alpha,
                         ),
                     )
                 )
@@ -636,6 +637,7 @@ class RunRealSensitivities:
                         mismatch_results=holm_directional_fleet_sensitivity(
                             counts,
                             config.protocol.band,
+                            familywise_alpha=config.statistics.familywise_alpha,
                         ),
                     )
                 )

@@ -17,6 +17,7 @@ class StatisticsConfig(BaseModel):
     utility_margin: float = Field(gt=0.0)
     utility_margin_sensitivities: tuple[float, ...]
     familywise_alpha: float = Field(gt=0.0, lt=1.0)
+    ranking_invariance_tolerance: float = Field(gt=0.0)
     shrinkage_n0_candidates: tuple[int, ...]
     supervised_threshold_candidates: int = Field(gt=0)
 

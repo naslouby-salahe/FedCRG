@@ -51,7 +51,7 @@ Status vocabulary (only these values are used):
 
 | ID | Requirement | Expected implementation | Expected location | Config ownership | Current state | Identified problem | Required action | Verification criteria | Status |
 |----|-------------|------------------------|-------------------|------------------|---------------|--------------------|-----------------|----------------------|--------|
-| R01 | Target package layout `configuration/`, `datasets/`, `decision/`, `evaluation/`, `runtime/logging.py`, `cli/app.py` | per prompt §4 | `src/fedcrg/` | n/a | present | — | renames done: `configuration/`, `datasets/`, `decision/` (merged method+thresholds), `runtime/` package, `evaluation/` holds metrics only; `cli/` consolidation is Batch 7 | contract test asserts target module names | PARTIAL |
+| R01 | Target package layout `configuration/`, `datasets/`, `decision/`, `evaluation/`, `runtime/logging.py`, `cli/app.py` | per prompt §4 | `src/fedcrg/` | n/a | present | — | renames done: `configuration/`, `datasets/`, `decision/` (merged method+thresholds), `runtime/` package, `evaluation/` holds metrics only; CLI consolidated to 5 target files in b7 | contract test asserts target module names | VERIFIED |
 | R02 | One execution spine; no extra orchestration layer | `experiments/` owns experiment + campaign execution | `experiments/` | n/a | present | — | `pipeline/` folded: runner/preflight/verification/experiment_runner/policy_cells/model_training/dataset_preparation/table_precompute into `experiments/`; capability modules to `scoring/`+`evaluation/`; no `pipeline/` package | no `pipeline/` package; single runner | VERIFIED |
 | R03 | No vague filenames (utils/helpers/common/manager/handler/processor/engine/service/base/models/registry/factory) without justification | none | `src/fedcrg/` | n/a | present | `federation/server.py`, `federation/client.py` are meaningful; no vague files found | keep; verify by contract test | contract test passes | VERIFIED |
 | R04 | No `canonical` terminology in production source | none | `src/fedcrg/` | n/a | absent | — | renamed: `serialized_payload()`, `serialized`, `normalized_name`, docstrings cleaned | `rg canonical` clean | VERIFIED |
@@ -74,9 +74,9 @@ Status vocabulary (only these values are used):
 | L05 | `results build [CAMPAIGN_ID]` and `results verify [CAMPAIGN_ID]` | commands sharing one builder | `cli/report_commands.py`, `reporting/results.py` | YAML | present | — | build+verify commands; campaign completion invokes the identical `ResultsBuilder` | CLI + verify test | VERIFIED |
 | L06 | `fedcrg monitor` | command + telemetry | `cli/app.py`, `runtime/monitoring.py` | n/a | present | — | command streams samples, persists `outputs/monitoring/telemetry.jsonl`; verified with real GPU | command runs; telemetry file written | VERIFIED |
 | L07 | Structured logs persisted under `outputs/logs/` | file handler | `runtime/logging.py` | n/a | present | — | `configure_logging(logs_root=...)` writes `outputs/logs/fedcrg.log`; CLI wires it; `runtime.py` replaced by `runtime/` package | log files appear | VERIFIED |
-| L08 | Rich console progress for long runs | campaign/experiment console | `cli/`, `experiments/` | n/a | `NOT_IMPLEMENTED` | plain logging only | add Rich progress panels | console shows stages | `NOT_IMPLEMENTED` |
+| L08 | Rich console progress for long runs | campaign/experiment console | `runtime/console.py`, `experiments/campaign.py` | n/a | present | — | `render_campaign_status` + `render_cache_status` wired into the campaign loop (campaign id, experiment, stage, elapsed, per-item status); rich added to deps | console shows stages | VERIFIED |
 | L09 | No print() scattered in production | logging only | `src/fedcrg/` | n/a | present | — | keep | rg print clean | VERIFIED |
-| L10 | Resource telemetry: RAM/CPU/GPU/VRAM/stage durations under `outputs/monitoring/` | sampler + campaign hook | `runtime/monitoring.py` | n/a | present | — | `ResourceMonitor` samples RAM/CPU/CUDA; JSONL + snapshot under outputs/monitoring; campaign hook lands with Batch 5 | telemetry files + tests | PARTIAL |
+| L10 | Resource telemetry: RAM/CPU/GPU/VRAM/stage durations under `outputs/monitoring/` | sampler + campaign hook | `runtime/monitoring.py` | n/a | present | — | `ResourceMonitor` samples RAM/CPU/CUDA; JSONL + snapshot under outputs/monitoring; campaign loop records per-item telemetry | telemetry files + tests | VERIFIED |
 | L11 | GPU: CUDA used when configured; no silent CPU fallback; logs device/VRAM; inference_mode; bounded batches | trainer/scorer | `federation/training.py`, `scoring/compute.py` | training YAML (`device`) | present | — | `resolve_compute_device` refuses CPU fallback for cuda configs; device name/VRAM/peak logged; `torch.inference_mode()` scoring; bounded batches | unit tests + logs | VERIFIED |
 | L12 | RAM/VRAM safety: streaming, Parquet, bounded batches, no giant Python lists | score cache streaming, chunked reads | `scoring/cache.py`, `pipeline/` | n/a | present | — | keep | code review + tests | VERIFIED |
 
@@ -156,18 +156,18 @@ Status vocabulary (only these values are used):
 | ID | Requirement | Expected implementation | Expected location | Config ownership | Current state | Identified problem | Required action | Verification criteria | Status |
 |----|-------------|------------------------|-------------------|------------------|---------------|--------------------|-----------------|----------------------|--------|
 | H01 | README reflects current architecture | README.md | repo root | n/a | present | — | architecture section matches tree; ledger link replaced with audit matrix; commands match CLI | README matches tree | VERIFIED |
-| H02 | `docs/work/` tracking files | current_state.md, current_violations.md, next_actions.md, verification.md | `docs/work/` | n/a | `NOT_IMPLEMENTED` | absent | created in this batch | files exist | `IMPLEMENTED` |
+| H02 | `docs/work/` tracking files | current_state.md, current_violations.md, next_actions.md, verification.md | `docs/work/` | n/a | present | — | all four files maintained per batch | files exist | VERIFIED |
 | H03 | Production never depends on `docs/work/` | n/a | n/a | n/a | present | — | keep | rg | VERIFIED |
-| H04 | Audit matrix is a living document, updated each batch | this file | `docs/FedCRG Audit Matrix.md` | n/a | `IMPLEMENTED` | created fresh now | update after each batch | git history shows updates | `IMPLEMENTED` |
+| H04 | Audit matrix is a living document, updated each batch | this file | `docs/FedCRG Audit Matrix.md` | n/a | present | — | updated after every batch (b1-b10) | git history shows updates | VERIFIED |
 | H05 | License present | LICENSE | repo root | n/a | present | — | keep | — | VERIFIED |
-| H06 | No dead code / test-only production APIs | audit | `src/fedcrg/` | n/a | `PARTIAL` | `experiments/execution.py` `TResult` generic + `ExperimentRunner` Callable used?; `pipeline/` duplication | hostile audit later | audit clean | `PARTIAL` |
+| H06 | No dead code / test-only production APIs | audit | `src/fedcrg/` | n/a | present | — | hostile audit removed `ExperimentExecution`/`TResult`/`ExperimentRunner` from execution.py (unused after pipeline fold); no pipeline duplication | audit clean | VERIFIED |
 
 ## 11. Cross-cutting completion gates
 
 | ID | Requirement | Expected implementation | Expected location | Config ownership | Current state | Identified problem | Required action | Verification criteria | Status |
 |----|-------------|------------------------|-------------------|------------------|---------------|--------------------|-----------------|----------------------|--------|
-| X01 | Full quality gate: format + lint + typecheck + all tests | make quality / nox quality | CI | n/a | `PARTIAL` | no Makefile/nox; CI partially covers | after R10/R11/T03 | one command passes | `PARTIAL` |
-| X02 | Hostile audit → no actionable findings | repeated audits | n/a | n/a | `PARTIAL` | this matrix itself lists actionable items | work until matrix fully VERIFIED | matrix statuses | `PARTIAL` |
+| X01 | Full quality gate: format + lint + typecheck + all tests | make quality / nox quality | CI | n/a | present | — | `nox -s quality` green in clean venv; CI runs format/lint/pyright/audit/tests | one command passes | VERIFIED |
+| X02 | Hostile audit → no actionable findings | repeated audits | n/a | n/a | present | — | all 45 matrix items VERIFIED; `tools/audit_repository.py` clean; hostile pass removed dead code and dict-transport | matrix statuses | VERIFIED |
 
 ---
 

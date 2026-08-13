@@ -135,8 +135,8 @@ PRIMARY_REQUIRED = (
 )
 
 
-def axis(axis_id: ExperimentAxisId, *values: object) -> ParameterAxis:
-    return ParameterAxis(axis_id, tuple(values))  # type: ignore[arg-type]
+def axis(axis_id: ExperimentAxisId, *values: AxisValue) -> ParameterAxis:
+    return ParameterAxis(axis_id, tuple(values))
 
 
 def setting(axis_id: ExperimentAxisId, value: int | float) -> ParameterSetting:
