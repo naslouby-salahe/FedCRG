@@ -43,31 +43,54 @@ def _git(args: list[str], cwd: Path) -> str | None:
         return None
 
 
-def capture_environment(repository_root: Path = Path(".")) -> dict[str, object]:
+@dataclass(frozen=True, slots=True)
+class EnvironmentSnapshot:
+    """Typed reproducibility snapshot, serialized only at the JSON boundary."""
+
+    python: str
+    pytorch: str
+    cuda_runtime: str | None
+    cudnn: str | int | None
+    numpy: str
+    scipy: str
+    pandas: str
+    scikit_learn: str
+    os: str
+    cpu: str
+    gpu: str | None
+    cuda_device_count: int
+    git_commit: str | None
+    git_clean: bool | None
+    git_patch_sha256: str | None
+    environment_pin_kind: str | None
+    environment_pin_sha256: str | None
+
+
+def capture_environment(repository_root: Path = Path(".")) -> EnvironmentSnapshot:
     commit = _git(["rev-parse", "HEAD"], repository_root)
     dirty = _git(["status", "--porcelain"], repository_root)
     patch = _git(["diff", "--binary"], repository_root) if dirty else ""
     lock_candidates = (repository_root / "uv.lock", repository_root / "requirements.lock")
     lock_path = next((path for path in lock_candidates if path.exists()), None)
-    return {
-        "python": sys.version,
-        "pytorch": torch.__version__,
-        "cuda_runtime": torch.version.cuda,
-        "cudnn": torch.backends.cudnn.version(),
-        "numpy": numpy.__version__,
-        "scipy": scipy.__version__,
-        "pandas": pandas.__version__,
-        "scikit_learn": sklearn.__version__,
-        "os": platform.platform(),
-        "cpu": platform.processor() or platform.machine(),
-        "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
-        "cuda_device_count": torch.cuda.device_count(),
-        "git_commit": commit,
-        "git_clean": dirty == "" if dirty is not None else None,
-        "git_patch_sha256": hashlib.sha256((patch or "").encode()).hexdigest() if dirty else None,
-        "environment_pin_kind": lock_path.name if lock_path else None,
-        "environment_pin_sha256": sha256_file(lock_path) if lock_path else None,
-    }
+    return EnvironmentSnapshot(
+        python=sys.version,
+        pytorch=torch.__version__,
+        cuda_runtime=torch.version.cuda,
+        cudnn=torch.backends.cudnn.version(),
+        numpy=numpy.__version__,
+        scipy=scipy.__version__,
+        pandas=pandas.__version__,
+        scikit_learn=sklearn.__version__,
+        os=platform.platform(),
+        cpu=platform.processor() or platform.machine(),
+        gpu=torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+        cuda_device_count=torch.cuda.device_count(),
+        git_commit=commit,
+        git_clean=dirty == "" if dirty is not None else None,
+        git_patch_sha256=hashlib.sha256((patch or "").encode()).hexdigest() if dirty else None,
+        environment_pin_kind=lock_path.name if lock_path else None,
+        environment_pin_sha256=sha256_file(lock_path) if lock_path else None,
+    )
 
 
 @dataclass(frozen=True, slots=True)

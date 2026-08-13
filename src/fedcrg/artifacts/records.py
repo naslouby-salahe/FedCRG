@@ -8,8 +8,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
+from pydantic import BaseModel, ConfigDict, Field
+
 from fedcrg.artifacts.integrity import sha256_file
-from fedcrg.artifacts.json_io import atomic_write_json, to_json_value
+from fedcrg.artifacts.json_io import JsonObject, JsonValue, atomic_write_json, to_json_value
 from fedcrg.domain.enums import (
     DecisionReason,
     DecisionState,
@@ -118,9 +120,14 @@ class CacheReferenceStore:
         )
 
 
-@dataclass(frozen=True, slots=True)
-class ExperimentResultEnvelope:
-    """Self-describing aggregate evidence for one pre-registered S/R experiment."""
+class ExperimentResultEnvelope(BaseModel):
+    """Self-describing aggregate evidence for one pre-registered S/R experiment.
+
+    Pydantic owns parsing and serialization. ``cells`` hold experiment-specific
+    JSON evidence payloads at the artifact boundary.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     experiment_id: ExperimentId
     config_hash: Sha256
@@ -128,9 +135,10 @@ class ExperimentResultEnvelope:
     expected_cells: int | None
     expected_monte_carlo_trials: int
     expected_exact_cells: int
-    cells: tuple[dict[str, object], ...]
+    cells: tuple[JsonObject, ...] = ()
     notes: tuple[str, ...] = ()
-    metadata: dict[str, object] | None = None
+    metadata: JsonObject | None = None
+    schema_version: int = Field(default=1, frozen=True)
 
     @property
     def observed_cells(self) -> int:
@@ -158,23 +166,13 @@ class ExperimentResultEnvelope:
             return False
         return True
 
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "schema_version": 1,
-            "experiment": self.experiment_id.value,
-            "config_hash": self.config_hash.value,
-            "master_seed": self.master_seed,
-            "expected_cells": self.expected_cells,
-            "observed_cells": self.observed_cells,
-            "expected_monte_carlo_trials": self.expected_monte_carlo_trials,
-            "observed_monte_carlo_trials": self.observed_monte_carlo_trials,
-            "expected_exact_cells": self.expected_exact_cells,
-            "complete": self.complete,
-            "created_at": datetime.now(UTC).isoformat(),
-            "notes": list(self.notes),
-            "metadata": self.metadata or {},
-            "cells": list(self.cells),
-        }
+    def to_dict(self) -> dict[str, JsonValue]:
+        payload = self.model_dump(mode="json")
+        payload["observed_cells"] = self.observed_cells
+        payload["observed_monte_carlo_trials"] = self.observed_monte_carlo_trials
+        payload["complete"] = self.complete
+        payload["created_at"] = datetime.now(UTC).isoformat()
+        return payload
 
     def write(self, path: Path) -> Path:
         atomic_write_json(path, self.to_dict())

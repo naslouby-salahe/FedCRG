@@ -8,7 +8,12 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 
-from fedcrg.artifacts.json_io import as_json_float, as_json_int, atomic_write_json
+from fedcrg.artifacts.json_io import (
+    JsonValue,
+    as_json_float,
+    as_json_int,
+    atomic_write_json,
+)
 from fedcrg.artifacts.paths import RunLayout
 from fedcrg.domain.enums import ArtifactType
 from fedcrg.experiments.experiment_definition import ExperimentDefinition
@@ -205,7 +210,7 @@ class ArtifactVerifier:
         return mismatches
 
     @staticmethod
-    def _json(path: Path) -> dict[str, object]:
+    def _json(path: Path) -> dict[str, JsonValue]:
         payload = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(payload, dict):
             raise ValueError(f"Expected JSON object: {path}")
@@ -250,8 +255,8 @@ class ArtifactVerifier:
             mismatches.add("records:client_set")
 
     @staticmethod
-    def _jsonl(path: Path) -> tuple[dict[str, object], ...]:
-        rows: list[dict[str, object]] = []
+    def _jsonl(path: Path) -> tuple[dict[str, JsonValue], ...]:
+        rows: list[dict[str, JsonValue]] = []
         for line in path.read_text(encoding="utf-8").splitlines():
             if not line:
                 continue

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from fedcrg.artifacts.integrity import sha256_file
-from fedcrg.artifacts.json_io import atomic_write_json
+from fedcrg.artifacts.json_io import JsonValue, atomic_write_json
 from fedcrg.configuration.experiment_config import ExperimentConfig
 from fedcrg.configuration.resolve import load_config
 from fedcrg.domain.errors import ConfigurationError
@@ -94,7 +94,7 @@ class ResultsBuilder:
         runs_root = outputs_root / "runs"
         if not runs_root.exists():
             return
-        rows: list[dict[str, object]] = []
+        rows: list[dict[str, JsonValue]] = []
         for run_root in sorted(path for path in runs_root.iterdir() if path.is_dir()):
             metric_path = run_root / "metrics" / "metric_record.jsonl"
             if not metric_path.is_file():
@@ -166,7 +166,7 @@ class ResultsBuilder:
         destination: Path,
         config: ExperimentConfig,
         checksums: dict[str, str],
-    ) -> dict[str, object]:
+    ) -> dict[str, JsonValue]:
         return {
             "campaign_id": campaign_id,
             "complete": True,
@@ -241,14 +241,14 @@ class ResultsVerifier:
         return ResultsVerification(not problems, tuple(problems))
 
 
-def _read_json(path: Path) -> dict[str, object]:
+def _read_json(path: Path) -> dict[str, JsonValue]:
     payload: object = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ConfigurationError(f"Expected a JSON object: {path}")
     return {str(key): value for key, value in payload.items()}
 
 
-def _read_json_if_present(path: Path) -> dict[str, object] | None:
+def _read_json_if_present(path: Path) -> dict[str, JsonValue] | None:
     if not path.is_file():
         return None
     try:

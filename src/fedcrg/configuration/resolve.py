@@ -10,12 +10,13 @@ from pydantic import ValidationError
 from fedcrg.configuration.dataset_config import DatasetConfig
 from fedcrg.configuration.detector_config import DetectorConfig
 from fedcrg.configuration.experiment_config import ExperimentConfig
+from fedcrg.artifacts.json_io import JsonValue
 from fedcrg.configuration.load import load_yaml
 from fedcrg.configuration.method_config import ProtocolConfig
 from fedcrg.configuration.statistics_config import StatisticsConfig
 from fedcrg.configuration.training_config import RandomnessConfig, TrainingConfig
 from fedcrg.configuration.validate import validate_experiment_config
-from fedcrg.domain.enums import DetectorId, ExperimentId
+from fedcrg.domain.enums import DetectorId, ExperimentId, PolicyId
 from fedcrg.domain.errors import ConfigurationError
 
 _SECTION_KEYS = (
@@ -28,13 +29,13 @@ _SECTION_KEYS = (
 )
 
 
-def _mapping(value: object, context: str) -> dict[str, object]:
+def _mapping(value: object, context: str) -> dict[str, JsonValue]:
     if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
         raise ConfigurationError(f"{context} must be a string-keyed mapping")
     return {str(key): item for key, item in value.items()}
 
 
-def _deep_merge(base: dict[str, object], override: dict[str, object]) -> dict[str, object]:
+def _deep_merge(base: dict[str, JsonValue], override: dict[str, JsonValue]) -> dict[str, JsonValue]:
     result = deepcopy(base)
     for key, value in override.items():
         current = result.get(key)
@@ -45,7 +46,7 @@ def _deep_merge(base: dict[str, object], override: dict[str, object]) -> dict[st
     return result
 
 
-def _load_experiment_document(path: Path, stack: tuple[Path, ...] = ()) -> dict[str, object]:
+def _load_experiment_document(path: Path, stack: tuple[Path, ...] = ()) -> dict[str, JsonValue]:
     resolved = path.resolve()
     if resolved in stack:
         cycle = " -> ".join(str(item) for item in (*stack, resolved))
@@ -64,7 +65,7 @@ def _load_experiment_document(path: Path, stack: tuple[Path, ...] = ()) -> dict[
     return _deep_merge(parent_document, root)
 
 
-def _resolve_section(value: object, context: str) -> dict[str, object]:
+def _resolve_section(value: object, context: str) -> dict[str, JsonValue]:
     if isinstance(value, str):
         return load_yaml(Path(value))
     return _mapping(value, context)
@@ -112,7 +113,7 @@ class ExperimentConfigResolver:
                 statistics=StatisticsConfig.model_validate(
                     _resolve_section(root["statistics"], "statistics")
                 ),
-                policies=tuple(policies_raw),
+                policies=tuple(PolicyId(str(item)) for item in policies_raw),
                 outputs_root=Path(outputs_raw),
                 preprocessed_root=Path(preprocessed_raw),
             )

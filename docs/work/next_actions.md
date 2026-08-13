@@ -69,12 +69,17 @@ narrow cast (publication groupby, nbaiot apply, cache column); `canonical`
 removed from nbaiot (`_FIXED_DEVICES`); requirements.lock updated (pyright,
 nox, pytest-xdist); tests/ made a package; pytest pythonpath includes ".".
 
-## Batch 9 — Contract tests and typing audit (matrix T02, T06, D09, E1, E3)
+## Batch 9 — Contract tests and typing audit (matrix T02, T06, D09, D10, E1, E3)
 
-1. Type `artifacts/records.py`, `environment.py` (typed models), integrity helpers.
-2. Add missing contract tests (preprocessed root, no pipeline pkg, no constants.py,
-   results verify, no scientific defaults, YAML ownership).
-3. Update stale contract tests (output layout, preprocessing artifact).
+DONE 2026-08-13: `JsonValue`/`JsonObject` PEP-695 recursive alias; Pydantic now owns
+`ExperimentResultEnvelope` (frozen BaseModel, cells/metadata as JsonObject) and
+`CampaignStatus`/`ExperimentCampaignStatus` (model_dump / model_validate_json, manual
+loaders deleted); `EnvironmentSnapshot` typed dataclass; all manifest/integrity/
+reporting/cache JSON helpers typed `JsonValue` or `Mapping[str, JsonValue]`; zero
+`dict[str, object]` and zero bare `object` returns remain in src; new
+`tests/contract/test_architecture_contract.py` enforces §28 (canonical, redirect
+modules, scientific defaults in config models, dict-transport, preprocessing identity
+sharing). 146 tests, pyright 0/0, nox quality green.
 
 ## Batch 10 — Full quality gate and hostile audit (matrix X01, X02, F1-F4)
 

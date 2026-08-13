@@ -292,9 +292,14 @@ class ExperimentCompletionAuditor:
             return ExperimentCompletion(
                 experiment_id, False, None, 0, ("experiment evidence missing",)
             )
-        payload = json.loads(result_path.read_text(encoding="utf-8"))
+        try:
+            payload = json.loads(result_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            return ExperimentCompletion(
+                experiment_id, False, None, 0, (f"experiment evidence is not JSON: {exc}",)
+            )
         problems: list[str] = []
-        if payload.get("experiment") != experiment_id.value:
+        if payload.get("experiment_id") != experiment_id.value:
             problems.append("experiment identity mismatch")
         if payload.get("complete") is not True:
             problems.append("experiment result envelope is not complete")

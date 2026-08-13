@@ -6,10 +6,11 @@ from pathlib import Path
 
 import yaml
 
+from fedcrg.artifacts.json_io import JsonValue
 from fedcrg.domain.errors import ConfigurationError
 
 
-def load_yaml(path: Path) -> dict[str, object]:
+def load_yaml(path: Path) -> dict[str, JsonValue]:
     try:
         raw: object = yaml.safe_load(path.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:

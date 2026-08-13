@@ -14,7 +14,7 @@ import numpy as np
 from fedcrg.analysis.policy_contrasts import FederationResultRecord, load_federation_results
 from fedcrg.artifacts.paths import RunLayout
 from fedcrg.artifacts.manifests import RunManifestStore
-from fedcrg.artifacts.json_io import atomic_write_json
+from fedcrg.artifacts.json_io import JsonValue, atomic_write_json
 from fedcrg.artifacts.integrity import ArtifactVerifier
 from fedcrg.configuration.experiment_config import ExperimentConfig
 from fedcrg.configuration.resolve import ExperimentConfigResolver
@@ -103,7 +103,7 @@ class ClaimGateReport:
     assessment: ClaimAssessment
     diagnostics: tuple[GateDiagnostic, ...]
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, JsonValue]:
         return {
             "evidence": asdict(self.evidence),
             "assessment": {

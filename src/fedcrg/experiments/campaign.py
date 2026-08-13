@@ -13,7 +13,9 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from fedcrg.artifacts.json_io import atomic_write_json
+from pydantic import BaseModel, ConfigDict, Field
+
+from fedcrg.artifacts.json_io import JsonValue, atomic_write_json
 from fedcrg.configuration.resolve import load_config
 from fedcrg.domain.enums import CampaignStatusValue, ExperimentId
 from fedcrg.domain.errors import ConfigurationError
@@ -24,8 +26,9 @@ from fedcrg.runtime.monitoring import ResourceMonitor, write_telemetry
 _LOGGER = get_logger(__name__)
 
 
-@dataclass(frozen=True, slots=True)
-class ExperimentCampaignStatus:
+class ExperimentCampaignStatus(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     experiment_id: ExperimentId
     status: CampaignStatusValue
     started_at: str | None = None
@@ -37,8 +40,9 @@ class ExperimentCampaignStatus:
     reused_scores: bool = False
 
 
-@dataclass(frozen=True, slots=True)
-class CampaignStatus:
+class CampaignStatus(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     campaign_id: str
     created_at: str
     updated_at: str
@@ -46,7 +50,7 @@ class CampaignStatus:
     current_stage: str | None = None
     experiments: tuple[ExperimentCampaignStatus, ...] = ()
     results_path: str | None = None
-    elapsed_seconds: float = 0.0
+    elapsed_seconds: float = Field(default=0.0, ge=0.0)
 
     @property
     def completed_experiments(self) -> tuple[str, ...]:
@@ -80,30 +84,8 @@ class CampaignStatus:
             if item.status is CampaignStatusValue.BLOCKED
         )
 
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "campaign_id": self.campaign_id,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
-            "current_experiment": self.current_experiment,
-            "current_stage": self.current_stage,
-            "experiments": [
-                {
-                    "experiment_id": item.experiment_id.value,
-                    "status": item.status.value,
-                    "started_at": item.started_at,
-                    "finished_at": item.finished_at,
-                    "problem": item.problem,
-                    "run_directories": list(item.run_directories),
-                    "reused_preprocessing": item.reused_preprocessing,
-                    "reused_models": item.reused_models,
-                    "reused_scores": item.reused_scores,
-                }
-                for item in self.experiments
-            ],
-            "results_path": self.results_path,
-            "elapsed_seconds": self.elapsed_seconds,
-        }
+    def to_dict(self) -> dict[str, JsonValue]:
+        return self.model_dump(mode="json")
 
 
 class CampaignStatusStore:
@@ -127,70 +109,7 @@ class CampaignStatusStore:
         path = self.path_for(campaign_id)
         if not path.is_file():
             raise ConfigurationError(f"Campaign has no recorded status: {campaign_id}")
-        payload = _read_json(path)
-        experiments = tuple(
-            ExperimentCampaignStatus(
-                experiment_id=ExperimentId(str(item["experiment_id"])),
-                status=CampaignStatusValue(str(item["status"])),
-                started_at=_optional_str(item.get("started_at")),
-                finished_at=_optional_str(item.get("finished_at")),
-                problem=_optional_str(item.get("problem")),
-                run_directories=_string_tuple(item.get("run_directories")),
-                reused_preprocessing=bool(item.get("reused_preprocessing", False)),
-                reused_models=bool(item.get("reused_models", False)),
-                reused_scores=bool(item.get("reused_scores", False)),
-            )
-            for item in _mapping_list(payload.get("experiments"))
-        )
-        return CampaignStatus(
-            campaign_id=str(payload["campaign_id"]),
-            created_at=str(payload["created_at"]),
-            updated_at=str(payload["updated_at"]),
-            current_experiment=_optional_str(payload.get("current_experiment")),
-            current_stage=_optional_str(payload.get("current_stage")),
-            experiments=experiments,
-            results_path=_optional_str(payload.get("results_path")),
-            elapsed_seconds=_optional_float(payload.get("elapsed_seconds"), 0.0),
-        )
-
-
-def _read_json(path: Path) -> dict[str, object]:
-    import json
-
-    payload: object = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ConfigurationError(f"Campaign status must be a JSON object: {path}")
-    result: dict[str, object] = {}
-    for key, value in payload.items():
-        if isinstance(key, str):
-            result[key] = value
-    return result
-
-
-def _optional_str(value: object | None) -> str | None:
-    return str(value) if value is not None else None
-
-
-def _optional_float(value: object | None, default: float) -> float:
-    if isinstance(value, (int, float)):
-        return float(value)
-    return default
-
-
-def _string_tuple(value: object) -> tuple[str, ...]:
-    if not isinstance(value, list):
-        return ()
-    return tuple(str(item) for item in value)
-
-
-def _mapping_list(value: object) -> list[dict[str, object]]:
-    if not isinstance(value, list):
-        return []
-    rows: list[dict[str, object]] = []
-    for item in value:
-        if isinstance(item, dict):
-            rows.append({str(key): entry for key, entry in item.items() if isinstance(key, str)})
-    return rows
+        return CampaignStatus.model_validate_json(path.read_text(encoding="utf-8"))
 
 
 @dataclass(frozen=True, slots=True)

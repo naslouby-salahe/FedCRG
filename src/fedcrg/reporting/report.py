@@ -12,6 +12,7 @@ import pandas as pd
 from fedcrg.analysis.policy_contrasts import confirmatory_contrasts, load_federation_results
 from fedcrg.analysis.split_stability import split_sensitivity
 from fedcrg.experiments.verification import VerifyOutputs
+from fedcrg.artifacts.json_io import JsonValue
 from fedcrg.artifacts.paths import RunLayout
 from fedcrg.artifacts.integrity import ArtifactVerifier
 from fedcrg.artifacts.json_io import as_json_dict, to_json_value
@@ -178,7 +179,7 @@ class ReportBuilder:
         run_dirs: tuple[Path, ...],
         output: Path,
     ) -> Path:
-        rows: list[dict[str, object]] = []
+        rows: list[dict[str, JsonValue]] = []
         for run_dir in run_dirs:
             layout = RunLayout(run_dir)
             if not layout.federation_metrics.exists():

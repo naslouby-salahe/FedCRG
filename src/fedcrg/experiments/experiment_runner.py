@@ -95,11 +95,11 @@ class RunExperiment:
                 "config_hash": config.config_hash,
                 "data_spec_hash": config.data_spec_hash,
                 "training_spec_hash": config.training_spec_hash,
-                "git_commit": environment["git_commit"],
-                "git_clean": environment["git_clean"],
-                "git_patch_sha256": environment["git_patch_sha256"],
-                "environment_pin_sha256": environment["environment_pin_sha256"],
-                "environment_pin_kind": environment["environment_pin_kind"],
+                "git_commit": environment.git_commit,
+                "git_clean": environment.git_clean,
+                "git_patch_sha256": environment.git_patch_sha256,
+                "environment_pin_sha256": environment.environment_pin_sha256,
+                "environment_pin_kind": environment.environment_pin_kind,
             },
         )
         return plan, layout

@@ -9,12 +9,17 @@ from datetime import date, datetime
 from enum import Enum
 from pathlib import PurePath
 from typing import TypeAlias
+from typing_extensions import TypeAliasType
 from collections.abc import Mapping
 
 from fedcrg.domain.identifiers import AttackGroupId, ClientId, RowId, RunId, Sha256
 
 JsonScalar: TypeAlias = str | int | float | bool | None
-JsonValue: TypeAlias = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
+JsonValue = TypeAliasType(
+    "JsonValue",
+    JsonScalar | list["JsonValue"] | dict[str, "JsonValue"],
+)
+JsonObject: TypeAlias = dict[str, JsonValue]
 
 
 def _json_key(value: object) -> str:
@@ -75,7 +80,7 @@ def as_json_list(value: object) -> list[object]:
     return value
 
 
-def as_json_dict(value: object) -> dict[str, object]:
+def as_json_dict(value: object) -> dict[str, JsonValue]:
     """Narrow a parsed-JSON value known to be an object."""
     if not isinstance(value, dict):
         raise ValueError("Expected a JSON object")

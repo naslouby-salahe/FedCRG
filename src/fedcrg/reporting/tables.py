@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from fedcrg.analysis.policy_contrasts import confirmatory_contrasts, load_federation_results
-from fedcrg.artifacts.json_io import as_json_dict, to_json_value
+from fedcrg.artifacts.json_io import JsonValue, as_json_dict, to_json_value
 from fedcrg.artifacts.paths import RunLayout
 from fedcrg.configuration.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import ExperimentId, PolicyId
@@ -47,7 +47,7 @@ class PublicationTableBuilder:
         return self.primary_policy_results(run_dirs, output)
 
     def admission_states_from_runs(self, run_dirs: tuple[Path, ...], output: Path) -> Path:
-        records: list[dict[str, object]] = []
+        records: list[dict[str, JsonValue]] = []
         for run_dir in run_dirs:
             path = RunLayout(run_dir).threshold_records
             if not path.is_file():
@@ -106,7 +106,7 @@ class PublicationTableBuilder:
     def sensitivity(self, experiments_root: Path, output: Path) -> Path:
         """Each real-score sensitivity writes one SensitivityEnvelope/MultiplicityEnvelope
         per cells/*.json file."""
-        rows: list[dict[str, object]] = []
+        rows: list[dict[str, JsonValue]] = []
         experiments = (
             ExperimentId.READINESS_SAMPLE_SIZE,
             ExperimentId.MISMATCH_SAMPLE_SIZE,
@@ -153,9 +153,9 @@ class PublicationTableBuilder:
     def dataset_inventory(self, prepared_manifest: Path, output: Path) -> Path:
         payload = json.loads(prepared_manifest.read_text(encoding="utf-8"))
         feature_count = len(payload.get("feature_names", []))
-        rows: list[dict[str, object]] = []
+        rows: list[dict[str, JsonValue]] = []
         for client in sorted(payload.get("clients", []), key=lambda item: item["client_id"]):
-            row: dict[str, object] = {
+            row: dict[str, JsonValue] = {
                 "client_id": client["client_id"],
                 "feature_count": feature_count,
             }
@@ -167,7 +167,7 @@ class PublicationTableBuilder:
         return self._write(pd.DataFrame.from_records(rows), output)
 
     def federation_results(self, run_dirs: tuple[Path, ...], output: Path) -> Path:
-        rows: list[dict[str, object]] = []
+        rows: list[dict[str, JsonValue]] = []
         for run_dir in run_dirs:
             metrics = run_dir / "metrics" / "federation.json"
             if metrics.exists():

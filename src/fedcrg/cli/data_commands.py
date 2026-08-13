@@ -61,7 +61,7 @@ def data_status(dataset_id: str | None) -> None:
     if not root.exists():
         click.echo(json.dumps({"prepared": []}, indent=2))
         return
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, bool | str]] = []
     for dataset_root in sorted(path for path in root.iterdir() if path.is_dir()):
         if dataset_id is not None and dataset_root.name != dataset_id:
             continue

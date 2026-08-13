@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from fedcrg.artifacts.json_io import as_json_int
+from fedcrg.artifacts.json_io import JsonValue, as_json_int
 from fedcrg.configuration.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import CalibrationAssignmentMode, DataRole, DatasetId
 from fedcrg.domain.identifiers import ClientId
@@ -109,7 +109,7 @@ class PreparedDatasetAuditor:
         )
 
     @staticmethod
-    def _load_object(path: Path, problems: list[str]) -> dict[str, object]:
+    def _load_object(path: Path, problems: list[str]) -> dict[str, JsonValue]:
         if not path.is_file():
             problems.append(f"missing prepared artifact: {path.name}")
             return {}
@@ -124,7 +124,7 @@ class PreparedDatasetAuditor:
         return payload
 
     @staticmethod
-    def _eligible_clients(payload: dict[str, object]) -> set[ClientId]:
+    def _eligible_clients(payload: dict[str, JsonValue]) -> set[ClientId]:
         values = payload.get("eligible_clients")
         if not isinstance(values, list):
             return set()
@@ -132,7 +132,7 @@ class PreparedDatasetAuditor:
 
     @staticmethod
     def _audit_assignment(
-        payload: dict[str, object],
+        payload: dict[str, JsonValue],
         expected_seed: int,
         expected_mode: CalibrationAssignmentMode,
         eligible_clients: set[ClientId],
@@ -171,8 +171,10 @@ class PreparedDatasetAuditor:
                 if not isinstance(record, dict):
                     problems.append(f"{client}: missing {role.value} assignment")
                     continue
-                count = int(record.get("row_count", -1))
-                digest = str(record.get("row_id_sha256", ""))
+                raw_count = record.get("row_count", -1)
+                count = int(raw_count) if isinstance(raw_count, (int, float, str)) else -1
+                raw_digest = record.get("row_id_sha256", "")
+                digest = str(raw_digest) if isinstance(raw_digest, str) else ""
                 if count != expected_count:
                     problems.append(f"{client}/{role.value}: {count} rows != {expected_count}")
                 if len(digest) != 64:

@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
 from fedcrg.artifacts.json_io import (
+    JsonValue,
     as_json_dict,
     as_json_float,
     as_json_int,
@@ -360,7 +362,7 @@ class TrainingManifestStore:
         return manifest
 
     @staticmethod
-    def _round(raw: dict[str, object]) -> RoundResult:
+    def _round(raw: Mapping[str, JsonValue]) -> RoundResult:
         clients = tuple(
             ClientRoundResult(
                 client_id=ClientId(str(as_json_dict(item)["client_id"])),

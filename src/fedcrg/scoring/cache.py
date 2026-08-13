@@ -13,14 +13,20 @@ import shutil
 import uuid
 from dataclasses import dataclass, replace
 from pathlib import Path
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Literal, cast
 
 import numpy as np
 import pandas as pd
 
 from fedcrg.artifacts.integrity import sha256_file
-from fedcrg.artifacts.json_io import as_json_dict, as_json_int, as_json_list, atomic_write_json
+from fedcrg.artifacts.json_io import (
+    JsonValue,
+    as_json_dict,
+    as_json_int,
+    as_json_list,
+    atomic_write_json,
+)
 from fedcrg.domain.enums import DataRole, DatasetId
 from fedcrg.domain.errors import ImmutableRunError
 from fedcrg.domain.identifiers import AttackGroupId, ClientId, ModelSeed, RowId, Sha256
@@ -255,18 +261,18 @@ class ScoreCache:
         cache_hash: Sha256,
         client_ids: tuple[ClientId, ...],
         records: tuple[ScoreRoleCacheRecord, ...],
-    ) -> dict[str, object]:
+    ) -> dict[str, JsonValue]:
         return {
-            "dataset": identity.dataset,
+            "dataset": identity.dataset.value,
             "model_seed": int(identity.model_seed),
-            "model_hash": identity.model_hash,
-            "data_spec_hash": identity.data_spec_hash,
-            "training_spec_hash": identity.training_spec_hash,
-            "dataset_manifest_hash": identity.dataset_manifest_hash,
-            "preprocessing_hash": identity.preprocessing_hash,
+            "model_hash": identity.model_hash.value,
+            "data_spec_hash": identity.data_spec_hash.value,
+            "training_spec_hash": identity.training_spec_hash.value,
+            "dataset_manifest_hash": identity.dataset_manifest_hash.value,
+            "preprocessing_hash": identity.preprocessing_hash.value,
             "score_cache_file": cls.filename,
-            "score_cache_sha256": cache_hash,
-            "client_ids": client_ids,
+            "score_cache_sha256": cache_hash.value,
+            "client_ids": [client.value for client in client_ids],
             "records": [
                 {
                     "client_id": record.client_id.value,
@@ -299,7 +305,9 @@ class ScoreCache:
         )
 
     @staticmethod
-    def _records_from_metadata(metadata: dict[str, object]) -> tuple[ScoreRoleCacheRecord, ...]:
+    def _records_from_metadata(
+        metadata: Mapping[str, JsonValue],
+    ) -> tuple[ScoreRoleCacheRecord, ...]:
         records: list[ScoreRoleCacheRecord] = []
         for raw_entry in as_json_list(metadata["records"]):
             entry = as_json_dict(raw_entry)
@@ -389,7 +397,7 @@ class ScoreCache:
             score_list = tuple(self.read_role(root, client_id, role) for role in roles)
             yield ClientScoreSet(client_id, score_list)
 
-    def _read_verified_metadata(self, root: Path) -> dict[str, object]:
+    def _read_verified_metadata(self, root: Path) -> dict[str, JsonValue]:
         metadata_path = root / self.manifest_filename
         metadata = as_json_dict(json.loads(metadata_path.read_text(encoding="utf-8")))
         parquet_path = root / str(metadata["score_cache_file"])

@@ -14,6 +14,7 @@ from pathlib import Path
 import numpy as np
 
 from fedcrg.artifacts.environment import capture_environment
+from fedcrg.artifacts.json_io import to_json_value
 from fedcrg.artifacts.records import ExperimentResultEnvelope
 from fedcrg.configuration.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import ExperimentId
@@ -190,5 +191,5 @@ class RunBenchmark:
             expected_exact_cells=0,
             cells=tuple(rows),
             notes=notes,
-            metadata={"environment": environment, "pinned_cpu": pinned_cpu},
+            metadata={"environment": to_json_value(environment), "pinned_cpu": pinned_cpu},
         ).write(output)

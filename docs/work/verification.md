@@ -30,3 +30,4 @@ Baseline (before any changes in this effort, 2026-08-13):
 | b6 (spine + package layout) | pytest; pyright; ruff; boundary contract | 140 passed; no pipeline/config/data/method/thresholds packages | 2026-08-13 |
 | b7 (CLI surface) | pytest; pyright; ruff; CLI help + validate smoke | 140 passed; 5 target CLI files; entry point cli.app:cli | 2026-08-13 |
 | b8 (tooling) | nox -s quality; make help; audit tool; pytest -n auto | 140 passed; all 9 nox sessions green; audit clean; pyright 0/0 | 2026-08-13 |
+| b9 (typing audit) | pytest; pyright; ruff; contract tests; nox quality | 146 passed; zero dict[str,object]/object in src; Pydantic-owned transport | 2026-08-13 |

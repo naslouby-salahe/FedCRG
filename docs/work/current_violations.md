@@ -74,13 +74,15 @@ matrix IDs (`docs/FedCRG Audit Matrix.md`).
 
 ## E. Typing / tests / tooling (prompt §28-§30)
 
-- E1. `dict[str, object]` / `object` at non-boundary locations: `artifacts/records.py`
-  (cells, metadata, to_dict), `artifacts/environment.py:46` return type, integrity
-  helpers. json_io boundary itself is acceptable; type the rest. Matrix: T02, D09.
+- E1. ~~`dict[str, object]` / `object` at non-boundary locations~~ RESOLVED
+  2026-08-13: `JsonValue`/`JsonObject` (PEP 695 recursive alias); Pydantic owns
+  `ExperimentResultEnvelope` + `CampaignStatus`; all manifest/integrity/reporting
+  helpers typed `JsonValue`; contract tests forbid the pattern. Matrix: T02, D09, D10.
 - E2. ~~CI uses mypy~~ RESOLVED 2026-08-13: switched to pyright (prompt §29);
   `[tool.pyright]` standard mode in pyproject; CI + nox run pyright. Matrix: T03.
-- E3. Missing contract tests: preprocessed root, no pipeline package, no constants.py,
-  results build/verify, config YAML ownership, no scientific defaults. Matrix: T06.
+- E3. ~~Missing contract tests~~ RESOLVED 2026-08-13: `test_architecture_contract.py`
+  adds canonical/redirect/scientific-default/dict-transport/preprocessing-sharing
+  guards. Matrix: T06.
 - E4. ~~No `Makefile`, no `noxfile.py`~~ RESOLVED 2026-08-13: Makefile (22 targets),
   noxfile (9 sessions), `tools/audit_repository.py`; CI runs pyright + audit +
   pytest -n auto. Matrix: R10, R11, T07.

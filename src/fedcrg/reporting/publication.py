@@ -10,6 +10,7 @@ from collections.abc import Callable, Iterator
 
 import pandas as pd
 
+from fedcrg.artifacts.json_io import JsonValue
 from fedcrg.reporting.decision_figure import build_decision_architecture_figure
 from fedcrg.reporting.figures import (
     assumption_stress,
@@ -228,7 +229,7 @@ class PublicationPackageBuilder:
         return PublicationPackage(tables, figures, manifest)
 
     @staticmethod
-    def _artifact_dict(item: PublicationArtifact, root: Path) -> dict[str, object]:
+    def _artifact_dict(item: PublicationArtifact, root: Path) -> dict[str, str | bool | None]:
         return {
             "name": item.name,
             "available": item.available,
@@ -309,12 +310,13 @@ class PublicationPackageBuilder:
                 yield path
 
     @staticmethod
-    def _manifest_value(run: Path, key: str) -> object:
+    def _manifest_value(run: Path, key: str) -> JsonValue | None:
         payload = json.loads((run / "manifest.json").read_text(encoding="utf-8"))
-        return payload.get(key)
+        value: object = payload.get(key)
+        return cast(JsonValue | None, value)
 
     @staticmethod
-    def _jsonl(path: Path) -> tuple[dict[str, object], ...]:
+    def _jsonl(path: Path) -> tuple[dict[str, JsonValue], ...]:
         if not path.is_file():
             return ()
         return tuple(
@@ -353,7 +355,7 @@ class PublicationPackageBuilder:
             PolicyId.SHRINKAGE.value,
             PolicyId.FEDCRG.value,
         }
-        rows: list[dict[str, object]] = []
+        rows: list[dict[str, JsonValue]] = []
         for run in runs:
             policy = str(cls._manifest_value(run, "policy_id"))
             if policy not in selected:
@@ -370,7 +372,7 @@ class PublicationPackageBuilder:
 
     @classmethod
     def _reliability_utility_frame(cls, runs: tuple[Path, ...]) -> pd.DataFrame:
-        rows: list[dict[str, object]] = []
+        rows: list[dict[str, JsonValue]] = []
         for run in runs:
             path = run / "metrics" / "federation.json"
             if not path.is_file():
@@ -402,7 +404,7 @@ class PublicationPackageBuilder:
 
     @classmethod
     def _phase_transition_frame(cls, outputs_root: Path) -> pd.DataFrame:
-        rows: list[dict[str, object]] = []
+        rows: list[dict[str, JsonValue]] = []
         for code, evidence, key in (
             ("R2", "readiness", "sample_count"),
             ("R3", "mismatch", "sample_count"),
@@ -442,7 +444,7 @@ class PublicationPackageBuilder:
 
     @classmethod
     def _assumption_stress_frame(cls, outputs_root: Path) -> pd.DataFrame:
-        rows: list[dict[str, object]] = []
+        rows: list[dict[str, JsonValue]] = []
         for code, condition_name in (
             ("S3", "temporal_dependence"),
             ("S4", "mean_shift"),
@@ -471,7 +473,7 @@ class PublicationPackageBuilder:
 
     @classmethod
     def _external_client_frame(cls, runs: tuple[Path, ...]) -> pd.DataFrame:
-        rows: list[dict[str, object]] = []
+        rows: list[dict[str, JsonValue]] = []
         for run in runs:
             policy = str(cls._manifest_value(run, "policy_id"))
             for row in cls._jsonl(run / "metrics" / "metric_record.jsonl"):

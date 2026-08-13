@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from fedcrg.artifacts.json_io import JsonValue
 from fedcrg.datasets.prepare import hash_row_ids
 from fedcrg.datasets.splits import ClientSplits
 from fedcrg.domain.enums import DataRole, DatasetId
@@ -98,7 +99,7 @@ class PreprocessingModel:
         result.loc[:, list(self.feature_columns)] = scaled
         return result
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, JsonValue]:
         return {
             "dataset": self.dataset.value,
             "feature_columns": list(self.feature_columns),
