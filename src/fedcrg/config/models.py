@@ -13,6 +13,7 @@ from fedcrg.core.enums import (
     ActivationId,
     AggregationId,
     ComputeDeviceId,
+    DatasetFeatureContractId,
     DatasetId,
     DeepSvddCenterMode,
     DetectorId,
@@ -78,9 +79,11 @@ class SplitConfig(FrozenModel):
 
 class DatasetConfig(FrozenModel):
     id: DatasetId
+    feature_contract: DatasetFeatureContractId
     source_version: str
     parser_version: str = "1"
     feature_count: int = Field(gt=0)
+    feature_names: tuple[str, ...] = ()
     expected_clients: int | None = Field(default=None, gt=0)
     expected_source_clients: int | None = Field(default=None, gt=0)
     minimum_clients: int = Field(default=1, gt=0)
@@ -99,18 +102,43 @@ class DatasetConfig(FrozenModel):
             raise ValueError("Calibration seeds must be unique")
         if self.primary_calibration_seed not in self.calibration_seeds:
             raise ValueError("Primary calibration seed must be in calibration_seeds")
+        if self.feature_names and len(set(self.feature_names)) != len(self.feature_names):
+            raise ValueError("Feature names must be unique")
+
         if self.id is DatasetId.NBAIOT:
+            if self.feature_contract is not DatasetFeatureContractId.NBAIOT_LOCKED_115:
+                raise ValueError("N-BaIoT must use the locked 115-feature contract")
             if self.feature_count != 115 or self.expected_clients != 9:
                 raise ValueError("N-BaIoT contract requires 115 features and nine clients")
             if len(self.expected_benign_counts) != 9:
                 raise ValueError("N-BaIoT requires the nine-client benign-count cross-check ledger")
-        if self.id is DatasetId.DIAD:
-            if self.feature_count != 86 or self.expected_source_clients != 105:
-                raise ValueError("DIAD contract requires 86 features and 105 source identities")
+
+        elif self.id is DatasetId.DIAD:
+            if self.feature_contract not in {
+                DatasetFeatureContractId.DIAD_LOCKED_86,
+                DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE,
+            }:
+                raise ValueError("DIAD uses either the locked or training-derived feature contract")
+            if self.expected_source_clients != 105:
+                raise ValueError("DIAD contract requires 105 source identities")
             if self.minimum_benign_rows != 7800 or self.minimum_malicious_rows != 1000:
                 raise ValueError("DIAD eligibility counts must remain 7800 benign / 1000 malicious")
             if self.minimum_clients != 10:
                 raise ValueError("DIAD external validation requires at least ten eligible clients")
+            if self.feature_contract is DatasetFeatureContractId.DIAD_LOCKED_86:
+                if self.feature_count != 86:
+                    raise ValueError("Confirmatory DIAD requires exactly 86 model features")
+                if self.feature_names:
+                    raise ValueError("Locked DIAD feature names are owned by the dataset adapter")
+            else:
+                if not self.feature_names or len(self.feature_names) != self.feature_count:
+                    raise ValueError(
+                        "Training-derived DIAD requires a frozen feature-name list matching feature_count"
+                    )
+
+        elif self.id is DatasetId.SYNTHETIC:
+            if self.feature_contract is not DatasetFeatureContractId.SYNTHETIC:
+                raise ValueError("Synthetic experiments must use the synthetic feature contract")
         return self
 
 
@@ -193,13 +221,23 @@ class ExperimentConfig(FrozenModel):
             raise ValueError("Policies must be non-empty and unique")
         if self.id is ExperimentId.SECOND_DETECTOR and self.detector.id is not DetectorId.DEEP_SVDD:
             raise ValueError("Second-detector experiment requires Deep-SVDD")
-        if self.id is ExperimentId.EXTERNAL_DIAD and self.dataset.id is not DatasetId.DIAD:
-            raise ValueError("External validation requires DIAD")
+        if self.id is ExperimentId.EXTERNAL_DIAD:
+            if self.dataset.id is not DatasetId.DIAD:
+                raise ValueError("External validation requires DIAD")
+            if self.dataset.feature_contract is not DatasetFeatureContractId.DIAD_LOCKED_86:
+                raise ValueError("Confirmatory DIAD external validation requires the locked 86-feature contract")
+        if self.id is ExperimentId.DIAD_FEATURE_SENSITIVITY:
+            if self.dataset.id is not DatasetId.DIAD:
+                raise ValueError("R14 requires DIAD")
+            if self.dataset.feature_contract is not DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE:
+                raise ValueError("R14 requires a frozen training-schema-derived feature contract")
+        elif self.dataset.feature_contract is DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE:
+            raise ValueError("The training-schema-derived DIAD feature contract is exclusive to R14")
         return self
 
     def canonical_json(self) -> str:
-        payload = self.model_dump(mode="json")
-        payload["outputs_root"] = str(self.outputs_root)
+        """Canonical scientific configuration, independent of output location."""
+        payload = self.model_dump(mode="json", exclude={"outputs_root"})
         return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
     @property
@@ -209,17 +247,24 @@ class ExperimentConfig(FrozenModel):
     @property
     def data_spec_hash(self) -> str:
         """Hash only inputs that determine the seed-independent prepared dataset cache."""
-        dataset_payload = self.dataset.model_dump(mode="json", exclude={"calibration_seeds", "primary_calibration_seed"})
-        return _sha256_json({
-            "dataset": dataset_payload,
-            "attack_split_seed": self.randomness.attack_split_seed,
-        })
+        dataset_payload = self.dataset.model_dump(
+            mode="json",
+            exclude={"calibration_seeds", "primary_calibration_seed"},
+        )
+        return _sha256_json(
+            {
+                "dataset": dataset_payload,
+                "attack_split_seed": self.randomness.attack_split_seed,
+            }
+        )
 
     @property
     def training_spec_hash(self) -> str:
         """Hash the exact detector-training specification, excluding policy/protocol axes."""
-        return _sha256_json({
-            "data_spec_hash": self.data_spec_hash,
-            "detector": self.detector.model_dump(mode="json"),
-            "training": self.training.model_dump(mode="json"),
-        })
+        return _sha256_json(
+            {
+                "data_spec_hash": self.data_spec_hash,
+                "detector": self.detector.model_dump(mode="json"),
+                "training": self.training.model_dump(mode="json"),
+            }
+        )
