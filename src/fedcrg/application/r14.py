@@ -9,7 +9,13 @@ import pandas as pd
 
 from fedcrg.artifacts.serialization import atomic_write_json
 from fedcrg.config.models import AutoencoderConfig, ExperimentConfig
-from fedcrg.core.enums import ActivationId, DatasetId, ExperimentId, PolicyId
+from fedcrg.core.enums import (
+    ActivationId,
+    DatasetFeatureContractId,
+    DatasetId,
+    ExperimentId,
+    PolicyId,
+)
 from fedcrg.core.ids import ClientId
 from fedcrg.data.feature_sensitivity import (
     NumericSafeFeatureContract,
@@ -52,6 +58,7 @@ class R14FeatureSensitivityBuilder:
         payload = base_config.model_dump(mode="python")
         payload["id"] = ExperimentId.DIAD_FEATURE_SENSITIVITY
         dataset = dict(payload["dataset"])
+        dataset["feature_contract"] = DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE
         dataset["feature_count"] = contract.dimension
         dataset["feature_names"] = contract.features
         payload["dataset"] = dataset
@@ -61,11 +68,12 @@ class R14FeatureSensitivityBuilder:
         atomic_write_json(
             manifest_path,
             {
-                "experiment_id": ExperimentId.DIAD_FEATURE_SENSITIVITY.value,
+                "experiment_id": ExperimentId.DIAD_FEATURE_SENSITIVITY,
                 "derivation_scope": "eligible_client_training_schema_only",
                 "config_hash": config.config_hash,
                 "data_spec_hash": config.data_spec_hash,
                 "training_spec_hash": config.training_spec_hash,
+                "feature_contract": DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE,
                 **contract.to_dict(),
             },
         )
