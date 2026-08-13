@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from fedcrg.config.models import ProtocolConfig
-from fedcrg.core.enums import (
+from fedcrg.config.method_config import ProtocolConfig
+from fedcrg.domain.enums import (
     CalibrationReadinessState,
     DecisionReason,
     DecisionState,
@@ -10,8 +10,8 @@ from fedcrg.core.enums import (
     PolicyId,
     ThresholdSource,
 )
-from fedcrg.core.ids import ClientId
-from fedcrg.core.types import ConfidenceInterval
+from fedcrg.domain.identifiers import ClientId
+from fedcrg.domain.values import ConfidenceInterval
 from fedcrg.policies.base import (
     BenignPolicyEvidence,
     SupervisedDevelopmentEvidence,

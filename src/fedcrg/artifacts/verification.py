@@ -12,7 +12,7 @@ from fedcrg.artifacts.layout import RunLayout
 from fedcrg.artifacts.manifest import RunManifestStore
 from fedcrg.artifacts.references import CacheReferenceStore
 from fedcrg.artifacts.serialization import as_json_float, as_json_int, atomic_write_json
-from fedcrg.core.enums import ArtifactType
+from fedcrg.domain.enums import ArtifactType
 from fedcrg.experiments.models import ExperimentDefinition
 
 

@@ -2,7 +2,7 @@
 
 Update this file as phases complete. Status values: TODO / IN_PROGRESS / DONE.
 
-- [ ] Phase 1: domain + config          STATUS: TODO
+- [x] Phase 1: domain + config          STATUS: DONE
 - [ ] Phase 2: data + detectors          STATUS: TODO
 - [ ] Phase 3: federation + scoring      STATUS: TODO
 - [ ] Phase 4: method + thresholds       STATUS: TODO
@@ -21,6 +21,39 @@ Each phase, when started, must:
 6. Update this file's status and commit.
 
 Do not run full pytest/mypy/ruff after every micro-edit -- only at phase completion.
+
+## Phase 1 completion notes (domain + config)
+- core/ deleted; enums.py/constants.py/errors.py(was exceptions.py)/identifiers.py(was ids.py)/
+  values.py(was types.py) now live under domain/. logging.py moved to top-level runtime.py
+  (process/runtime concern, not domain).
+- config/models.py (282-line monolith) split into method_config.py (ProtocolConfig),
+  dataset_config.py (DatasetConfig, SplitConfig), training_config.py (AutoencoderConfig,
+  DeepSvddConfig, DetectorConfig, TrainingConfig, RandomnessConfig), experiment_config.py
+  (ExperimentConfig + hashing helpers). No shared FrozenModel base class was recreated --
+  each pydantic model declares its own `model_config = {"frozen": True, "extra": "forbid",
+  "use_enum_values": False}` dict literal directly (avoids reintroducing a vague shared/base
+  concept for a 1-line body used by ~8 classes).
+- config/loader.py -> config/load.py, config/resolver.py -> config/resolve.py,
+  config/validation.py -> config/validate.py. config/variants.py left in place with imports
+  fixed (its final home is experiments/definitions/sensitivity.py per migration_map.md,
+  deferred to Phase 6 since its only consumer, application/sensitivity.py, moves then too).
+- config/validate.py still imports fedcrg.policies.registry.PolicyRegistry (downward
+  dependency, pre-existing finding #9 in audit_findings.md) -- NOT fixed yet, deferred to
+  Phase 4 when policies/ becomes thresholds/.
+- Bulk-updated ~51 call sites across src/ and tests/ that imported from the old
+  fedcrg.config.models / .loader / .resolver / .validation paths.
+- Fixed tests/contract/test_architecture_boundaries.py's
+  test_core_is_dependency_free_from_outer_layers -> test_domain_is_dependency_free_from_outer_layers
+  (path core/ -> domain/, added fedcrg.config to forbidden-import list since domain sits below
+  config in the target dependency chain).
+- Validation: ruff check/format clean on full src+tests; mypy (py312 override, repo's declared
+  py311 target chokes on installed numpy stubs -- pre-existing environment mismatch, not
+  introduced by this migration) shows 0 errors in domain/ or config/; 11 pre-existing errors
+  remain in untouched files (experiments/executor.py, scoring/cache.py, analysis/publication.py,
+  detectors/deep_svdd.py, detectors/autoencoder.py, application/report.py, application/claims.py,
+  application/federation_cell.py, cli/research.py) -- to be fixed as those files migrate in
+  later phases, must all be clean before final audit. Full pytest -n auto suite passes (129
+  tests, unchanged pass count).
 
 ## Notes / open decisions to resolve during implementation
 - config/validate.py must not import thresholds/ (downward dependency violation in old

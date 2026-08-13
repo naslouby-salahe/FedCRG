@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from fedcrg.core.constants import SUPERVISED_THRESHOLD_CANDIDATES
+from fedcrg.domain.constants import SUPERVISED_THRESHOLD_CANDIDATES
 from fedcrg.metrics.classification import confusion_matrix, f1
 from fedcrg.policies.base import SupervisedDevelopmentEvidence
 

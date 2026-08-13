@@ -8,9 +8,9 @@ from pathlib import Path
 import pandas as pd
 
 from fedcrg.artifacts.dataset import CalibrationAssignmentManifestStore
-from fedcrg.config.models import DatasetConfig
-from fedcrg.core.enums import CalibrationAssignmentMode, DataRole, DatasetId
-from fedcrg.core.ids import CalibrationSeed, ClientId
+from fedcrg.config.dataset_config import DatasetConfig
+from fedcrg.domain.enums import CalibrationAssignmentMode, DataRole, DatasetId
+from fedcrg.domain.identifiers import CalibrationSeed, ClientId
 from fedcrg.data.manifests import CalibrationAssignmentManifest
 from fedcrg.data.splitting import CalibrationAssignmentBuilder
 from fedcrg.scoring.cache import ScoreCache

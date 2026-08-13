@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from fedcrg.core.enums import DataRole
-from fedcrg.core.ids import RowId
+from fedcrg.domain.enums import DataRole
+from fedcrg.domain.identifiers import RowId
 from fedcrg.scoring.models import ScoreManifest
 
 _REQUIRED_BASE_ROLES = frozenset(

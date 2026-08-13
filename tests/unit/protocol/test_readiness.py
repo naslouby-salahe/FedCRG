@@ -1,6 +1,6 @@
 import numpy as np
-from fedcrg.core.enums import CalibrationReadinessState
-from fedcrg.core.types import OperatingBand
+from fedcrg.domain.enums import CalibrationReadinessState
+from fedcrg.domain.values import OperatingBand
 from fedcrg.protocol.readiness import CalibrationReadinessEvaluator, ReadinessPlanBuilder
 
 

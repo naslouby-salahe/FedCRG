@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from fedcrg.core.ids import AttackGroupId, ClientId
+from fedcrg.domain.identifiers import AttackGroupId, ClientId
 from fedcrg.protocol.results import ClientProtocolResult
 
 

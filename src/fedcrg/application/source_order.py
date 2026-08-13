@@ -6,8 +6,8 @@ from pathlib import Path
 
 from fedcrg.application.evaluate import EvaluatePolicies
 from fedcrg.artifacts.serialization import atomic_write_json
-from fedcrg.config.models import ExperimentConfig
-from fedcrg.core.enums import CalibrationAssignmentMode, ExperimentCode
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.domain.enums import CalibrationAssignmentMode, ExperimentCode
 from fedcrg.scoring.cache import ScoreCache
 
 

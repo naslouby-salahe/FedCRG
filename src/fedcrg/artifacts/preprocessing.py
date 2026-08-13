@@ -6,8 +6,8 @@ import json
 from pathlib import Path
 
 from fedcrg.artifacts.serialization import atomic_write_json
-from fedcrg.core.enums import DatasetId
-from fedcrg.core.ids import ClientId, Sha256
+from fedcrg.domain.enums import DatasetId
+from fedcrg.domain.identifiers import ClientId, Sha256
 from fedcrg.data.preprocessing import (
     ClientPreprocessingParameters,
     PreprocessingModel,

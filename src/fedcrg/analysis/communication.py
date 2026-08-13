@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from fedcrg.config.models import ExperimentConfig
-from fedcrg.core.constants import SUPERVISED_THRESHOLD_CANDIDATES
-from fedcrg.core.enums import PolicyId
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.domain.constants import SUPERVISED_THRESHOLD_CANDIDATES
+from fedcrg.domain.enums import PolicyId
 
 _FLOAT32_BYTES = 4
 _FLOAT64_BYTES = 8

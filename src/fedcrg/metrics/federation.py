@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from fedcrg.core.enums import PolicyEvaluationStatus, PolicyId
-from fedcrg.core.ids import ClientId
+from fedcrg.domain.enums import PolicyEvaluationStatus, PolicyId
+from fedcrg.domain.identifiers import ClientId
 from fedcrg.metrics.results import FederationMetrics, PolicyEvaluation, UtilityAssessment
 
 

@@ -6,9 +6,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from fedcrg.artifacts.serialization import atomic_write_json
-from fedcrg.config.models import ExperimentConfig, ProtocolConfig
-from fedcrg.core.enums import ExperimentAxisId, ExperimentId
-from fedcrg.core.types import OperatingBand
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.config.method_config import ProtocolConfig
+from fedcrg.domain.enums import ExperimentAxisId, ExperimentId
+from fedcrg.domain.values import OperatingBand
 from fedcrg.experiments.registry import ExperimentRegistry
 from fedcrg.protocol.mismatch import (
     clopper_pearson_interval,

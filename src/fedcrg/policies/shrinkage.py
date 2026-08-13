@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from fedcrg.core.constants import SHRINKAGE_N0_CANDIDATES
+from fedcrg.domain.constants import SHRINKAGE_N0_CANDIDATES
 from fedcrg.policies.base import BenignPolicyEvidence, empirical_quantile
 
 

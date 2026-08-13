@@ -1,6 +1,6 @@
 """Deterministic threshold-deployment decision state machine."""
 
-from fedcrg.core.enums import (
+from fedcrg.domain.enums import (
     CalibrationReadinessState,
     DecisionReason,
     DecisionState,

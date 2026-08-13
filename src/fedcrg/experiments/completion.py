@@ -9,7 +9,7 @@ from pathlib import Path
 
 from fedcrg.artifacts.layout import RunLayout
 from fedcrg.artifacts.manifest import RunManifest, RunManifestStore
-from fedcrg.core.enums import ExperimentCode, ExperimentId, ExperimentStatus, PolicyId
+from fedcrg.domain.enums import ExperimentCode, ExperimentId, ExperimentStatus, PolicyId
 from fedcrg.experiments.definitions import SECOND_DETECTOR_POLICIES
 from fedcrg.experiments.registry import ExperimentRegistry
 

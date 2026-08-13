@@ -8,7 +8,7 @@ from pathlib import Path
 import click
 
 from fedcrg.cli.shared import load_config
-from fedcrg.core.enums import ExperimentId, PolicyId
+from fedcrg.domain.enums import ExperimentId, PolicyId
 from fedcrg.experiments.planner import ExperimentPlanner
 
 

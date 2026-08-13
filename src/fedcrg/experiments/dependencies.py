@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fedcrg.core.enums import ExperimentId, ExperimentStatus
+from fedcrg.domain.enums import ExperimentId, ExperimentStatus
 from fedcrg.experiments.registry import ExperimentRegistry
 
 

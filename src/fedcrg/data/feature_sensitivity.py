@@ -8,7 +8,7 @@ from math import floor
 import numpy as np
 import pandas as pd
 
-from fedcrg.core.ids import ClientId, Sha256
+from fedcrg.domain.identifiers import ClientId, Sha256
 from fedcrg.data.manifests import hash_row_ids
 
 # Exclude direct identity/label/port fields, not behavioral statistics whose names

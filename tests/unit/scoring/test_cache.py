@@ -4,8 +4,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from fedcrg.core.enums import DataRole, DatasetId
-from fedcrg.core.ids import ClientId, ModelSeed, RowId, Sha256
+from fedcrg.domain.enums import DataRole, DatasetId
+from fedcrg.domain.identifiers import ClientId, ModelSeed, RowId, Sha256
 from fedcrg.scoring.cache import ScoreCache
 from fedcrg.scoring.models import ClientScoreSet, RoleScores, ScoreManifest
 

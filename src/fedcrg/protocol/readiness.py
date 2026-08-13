@@ -14,8 +14,8 @@ from pathlib import Path
 import numpy as np
 from scipy import special
 
-from fedcrg.core.enums import CalibrationReadinessState
-from fedcrg.core.types import OperatingBand
+from fedcrg.domain.enums import CalibrationReadinessState
+from fedcrg.domain.values import OperatingBand
 from fedcrg.protocol.results import (
     CalibrationReadiness,
     ContinuityDiagnostics,

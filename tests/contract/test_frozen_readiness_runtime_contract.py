@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from fedcrg.core.types import OperatingBand
+from fedcrg.domain.values import OperatingBand
 from fedcrg.protocol.readiness import ReadinessPlanCache
 
 

@@ -9,9 +9,9 @@ import numpy as np
 
 from fedcrg.application.evaluate import EvaluatePolicies
 from fedcrg.artifacts.serialization import atomic_write_json
-from fedcrg.config.models import ExperimentConfig
+from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.config.variants import ExperimentVariantFactory
-from fedcrg.core.enums import (
+from fedcrg.domain.enums import (
     CalibrationAssignmentMode,
     DataRole,
     ExperimentAxisId,
@@ -21,7 +21,7 @@ from fedcrg.core.enums import (
     PolicyEvaluationStatus,
     PolicyId,
 )
-from fedcrg.core.ids import CalibrationSeed, ClientId
+from fedcrg.domain.identifiers import CalibrationSeed, ClientId
 from fedcrg.experiments.models import ParameterSetting
 from fedcrg.experiments.real_sensitivity import (
     contaminate_benign_scores,

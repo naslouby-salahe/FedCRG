@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fedcrg.config.models import ExperimentConfig
-from fedcrg.config.resolver import ExperimentConfigResolver
-from fedcrg.config.validation import validate_experiment_config
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.config.resolve import ExperimentConfigResolver
+from fedcrg.config.validate import validate_experiment_config
 
 
 def load_config(path: Path) -> ExperimentConfig:

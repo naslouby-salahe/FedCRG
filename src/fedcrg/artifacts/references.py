@@ -8,7 +8,7 @@ from pathlib import Path, PurePosixPath
 
 from fedcrg.artifacts.hashing import sha256_file
 from fedcrg.artifacts.serialization import atomic_write_json
-from fedcrg.core.ids import Sha256
+from fedcrg.domain.identifiers import Sha256
 
 
 @dataclass(frozen=True, slots=True)

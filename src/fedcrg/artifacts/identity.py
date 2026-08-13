@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from fedcrg.config.models import ExperimentConfig
-from fedcrg.core.enums import DetectorId, PolicyId
-from fedcrg.core.ids import CalibrationSeed, ModelSeed, RunId
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.domain.enums import DetectorId, PolicyId
+from fedcrg.domain.identifiers import CalibrationSeed, ModelSeed, RunId
 
 
 class RunIdentityFactory:

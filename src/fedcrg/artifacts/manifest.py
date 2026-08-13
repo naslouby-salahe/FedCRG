@@ -7,9 +7,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from fedcrg.artifacts.serialization import atomic_write_json
-from fedcrg.core.enums import ExperimentId, ExperimentStatus, PolicyId
-from fedcrg.core.exceptions import ImmutableRunError
-from fedcrg.core.ids import CalibrationSeed, ModelSeed, RunId, Sha256
+from fedcrg.domain.enums import ExperimentId, ExperimentStatus, PolicyId
+from fedcrg.domain.errors import ImmutableRunError
+from fedcrg.domain.identifiers import CalibrationSeed, ModelSeed, RunId, Sha256
 
 
 @dataclass(frozen=True, slots=True)

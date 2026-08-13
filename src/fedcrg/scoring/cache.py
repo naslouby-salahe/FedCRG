@@ -26,9 +26,9 @@ from fedcrg.artifacts.serialization import (
     as_json_list,
     atomic_write_json,
 )
-from fedcrg.core.enums import DataRole, DatasetId
-from fedcrg.core.exceptions import ImmutableRunError
-from fedcrg.core.ids import AttackGroupId, ClientId, ModelSeed, RowId, Sha256
+from fedcrg.domain.enums import DataRole, DatasetId
+from fedcrg.domain.errors import ImmutableRunError
+from fedcrg.domain.identifiers import AttackGroupId, ClientId, ModelSeed, RowId, Sha256
 from fedcrg.scoring.integrity import validate_score_manifest
 from fedcrg.scoring.models import ClientScoreSet, RoleScores, ScoreManifest
 

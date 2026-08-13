@@ -8,14 +8,14 @@ import numpy as np
 
 from fedcrg.artifacts.records import MetricRecord, ThresholdRecord, write_jsonl
 from fedcrg.artifacts.serialization import JsonValue, atomic_write_json, to_json_value
-from fedcrg.config.models import ExperimentConfig
-from fedcrg.core.enums import (
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.domain.enums import (
     CalibrationAssignmentMode,
     DataRole,
     PolicyEvaluationStatus,
     PolicyId,
 )
-from fedcrg.core.ids import CalibrationSeed, ClientId, RunId, Sha256
+from fedcrg.domain.identifiers import CalibrationSeed, ClientId, RunId, Sha256
 from fedcrg.metrics.attack_balanced import attack_balanced_tpr
 from fedcrg.metrics.classification import (
     balanced_accuracy,

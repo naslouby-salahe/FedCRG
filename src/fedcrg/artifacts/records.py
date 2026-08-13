@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from fedcrg.artifacts.serialization import to_json_value
-from fedcrg.core.enums import DecisionReason, DecisionState, PolicyId, ThresholdSource
-from fedcrg.core.ids import ClientId, RunId
+from fedcrg.domain.enums import DecisionReason, DecisionState, PolicyId, ThresholdSource
+from fedcrg.domain.identifiers import ClientId, RunId
 
 
 @dataclass(frozen=True, slots=True)

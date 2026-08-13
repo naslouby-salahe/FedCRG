@@ -1,5 +1,5 @@
-from fedcrg.core.enums import ExperimentId, ExperimentStatus
-from fedcrg.core.ids import CalibrationSeed, ModelSeed, Sha256
+from fedcrg.domain.enums import ExperimentId, ExperimentStatus
+from fedcrg.domain.identifiers import CalibrationSeed, ModelSeed, Sha256
 from fedcrg.experiments.dependencies import DependencyResolver
 from fedcrg.experiments.executor import ExperimentExecutor
 from fedcrg.experiments.models import ExperimentPlan

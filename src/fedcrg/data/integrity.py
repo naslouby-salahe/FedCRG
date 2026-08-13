@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from fedcrg.core.enums import DataRole
-from fedcrg.core.exceptions import DataIntegrityError
+from fedcrg.domain.enums import DataRole
+from fedcrg.domain.errors import DataIntegrityError
 from fedcrg.data.models import ClientSplits
 
 

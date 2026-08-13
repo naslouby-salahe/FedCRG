@@ -9,9 +9,9 @@ from fedcrg.application.federation_cell import FederationCellMaterializer
 from fedcrg.application.policy_cell import FrozenCacheInputs
 from fedcrg.application.score import ComputeScores
 from fedcrg.application.train import TrainDetector
-from fedcrg.config.models import ExperimentConfig
-from fedcrg.core.enums import ExperimentId
-from fedcrg.core.ids import CalibrationSeed, ModelSeed
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.domain.enums import ExperimentId
+from fedcrg.domain.identifiers import CalibrationSeed, ModelSeed
 
 
 @dataclass(frozen=True, slots=True)

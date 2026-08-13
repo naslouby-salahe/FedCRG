@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from fedcrg.config.models import ProtocolConfig
-from fedcrg.core.enums import FailureCode, PolicyId
-from fedcrg.core.ids import ClientId
+from fedcrg.config.method_config import ProtocolConfig
+from fedcrg.domain.enums import FailureCode, PolicyId
+from fedcrg.domain.identifiers import ClientId
 from fedcrg.policies.attack_aware import (
     dev_local_global,
     summary_statistic_threshold,

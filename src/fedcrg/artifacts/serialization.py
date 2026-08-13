@@ -11,7 +11,7 @@ from pathlib import PurePath
 from typing import TypeAlias
 from collections.abc import Mapping
 
-from fedcrg.core.ids import AttackGroupId, ClientId, RowId, RunId, Sha256
+from fedcrg.domain.identifiers import AttackGroupId, ClientId, RowId, RunId, Sha256
 
 JsonScalar: TypeAlias = str | int | float | bool | None
 JsonValue: TypeAlias = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]

@@ -1,15 +1,15 @@
 """Cross-component validation that cannot live inside one Pydantic model."""
 
-from fedcrg.config.models import ExperimentConfig
-from fedcrg.core.constants import DEEP_SVDD_MODEL_SEEDS, PRIMARY_MODEL_SEEDS
-from fedcrg.core.enums import (
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.domain.constants import DEEP_SVDD_MODEL_SEEDS, PRIMARY_MODEL_SEEDS
+from fedcrg.domain.enums import (
     DatasetFeatureContractId,
     DatasetId,
     DetectorId,
     ExperimentId,
     PolicyId,
 )
-from fedcrg.core.exceptions import ConfigurationError
+from fedcrg.domain.errors import ConfigurationError
 from fedcrg.policies.registry import PolicyRegistry
 
 

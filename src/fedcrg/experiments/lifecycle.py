@@ -1,6 +1,6 @@
 """Allowed experiment lifecycle transitions."""
 
-from fedcrg.core.enums import ExperimentStatus
+from fedcrg.domain.enums import ExperimentStatus
 
 _ALLOWED = {
     ExperimentStatus.PENDING: {ExperimentStatus.VALIDATING, ExperimentStatus.BLOCKED},

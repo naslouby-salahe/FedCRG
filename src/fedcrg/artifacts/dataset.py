@@ -8,7 +8,7 @@ from datetime import datetime, UTC
 from pathlib import Path, PurePosixPath
 
 from fedcrg.artifacts.serialization import atomic_write_json, to_json_value
-from fedcrg.core.enums import (
+from fedcrg.domain.enums import (
     CalibrationAssignmentMode,
     ChronologyStatus,
     DataRole,
@@ -16,7 +16,7 @@ from fedcrg.core.enums import (
     EligibilityStatus,
     FailureCode,
 )
-from fedcrg.core.ids import CalibrationSeed, ClientId, Sha256
+from fedcrg.domain.identifiers import CalibrationSeed, ClientId, Sha256
 from fedcrg.data.manifests import (
     CalibrationAssignmentManifest,
     CalibrationAssignmentReference,

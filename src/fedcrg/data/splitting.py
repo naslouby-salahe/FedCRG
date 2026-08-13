@@ -7,11 +7,11 @@ import hashlib
 import numpy as np
 import pandas as pd
 
-from fedcrg.config.models import DatasetConfig
-from fedcrg.core.constants import ATTACK_DEVELOPMENT_SEED
-from fedcrg.core.enums import CalibrationAssignmentMode, DataRole, DatasetId, FailureCode
-from fedcrg.core.exceptions import DataIntegrityError
-from fedcrg.core.ids import AttackGroupId, CalibrationSeed, ClientId, RowId
+from fedcrg.config.dataset_config import DatasetConfig
+from fedcrg.domain.constants import ATTACK_DEVELOPMENT_SEED
+from fedcrg.domain.enums import CalibrationAssignmentMode, DataRole, DatasetId, FailureCode
+from fedcrg.domain.errors import DataIntegrityError
+from fedcrg.domain.identifiers import AttackGroupId, CalibrationSeed, ClientId, RowId
 from fedcrg.data.integrity import validate_split_disjointness
 from fedcrg.data.manifests import hash_row_ids
 from fedcrg.data.models import (

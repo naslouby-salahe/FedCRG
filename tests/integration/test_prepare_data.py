@@ -4,17 +4,12 @@ import numpy as np
 import pandas as pd
 
 from fedcrg.application.prepare_data import PrepareData
-from fedcrg.config.models import (
-    AutoencoderConfig,
-    DatasetConfig,
-    ExperimentConfig,
-    ProtocolConfig,
-    RandomnessConfig,
-    SplitConfig,
-    TrainingConfig,
-)
-from fedcrg.core.enums import DatasetFeatureContractId, DatasetId, ExperimentId, PolicyId
-from fedcrg.core.ids import ClientId
+from fedcrg.config.dataset_config import DatasetConfig, SplitConfig
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.config.method_config import ProtocolConfig
+from fedcrg.config.training_config import AutoencoderConfig, RandomnessConfig, TrainingConfig
+from fedcrg.domain.enums import DatasetFeatureContractId, DatasetId, ExperimentId, PolicyId
+from fedcrg.domain.identifiers import ClientId
 from fedcrg.data.adapter import DatasetAdapter
 from fedcrg.data.models import ClientData
 

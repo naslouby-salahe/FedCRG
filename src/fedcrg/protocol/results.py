@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from fedcrg.core.enums import (
+from fedcrg.domain.enums import (
     CalibrationReadinessState,
     DecisionReason,
     DecisionState,
     MismatchOutcome,
     ThresholdSource,
 )
-from fedcrg.core.ids import ClientId
-from fedcrg.core.types import ConfidenceInterval, OperatingBand
+from fedcrg.domain.identifiers import ClientId
+from fedcrg.domain.values import ConfidenceInterval, OperatingBand
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,7 +1,7 @@
 from pathlib import Path
-from fedcrg.config.resolver import ExperimentConfigResolver
-from fedcrg.config.validation import validate_experiment_config
-from fedcrg.core.enums import DatasetId, DetectorId, PolicyId
+from fedcrg.config.resolve import ExperimentConfigResolver
+from fedcrg.config.validate import validate_experiment_config
+from fedcrg.domain.enums import DatasetId, DetectorId, PolicyId
 
 
 def test_primary_config_resolves_without_filename_inference() -> None:

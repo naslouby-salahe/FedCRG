@@ -6,7 +6,7 @@ import math
 
 import numpy as np
 
-from fedcrg.core.ids import ClientId
+from fedcrg.domain.identifiers import ClientId
 
 
 class ClientSampler:

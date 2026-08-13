@@ -8,12 +8,12 @@ from math import sqrt
 import numpy as np
 from scipy.stats import binom, gamma, lognorm, norm
 
-from fedcrg.core.enums import (
+from fedcrg.domain.enums import (
     ContaminationDirection,
     ExperimentCode,
     SyntheticDistribution,
 )
-from fedcrg.core.types import OperatingBand
+from fedcrg.domain.values import OperatingBand
 from fedcrg.protocol.mismatch import clopper_pearson_interval
 from fedcrg.protocol.readiness import ReadinessPlanBuilder
 

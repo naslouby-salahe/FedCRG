@@ -7,10 +7,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from fedcrg.artifacts.serialization import as_json_int
-from fedcrg.config.models import ExperimentConfig
-from fedcrg.core.constants import DIAD_EXPECTED_SOURCE_CLIENTS
-from fedcrg.core.enums import CalibrationAssignmentMode, DataRole, DatasetId
-from fedcrg.core.ids import ClientId
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.domain.constants import DIAD_EXPECTED_SOURCE_CLIENTS
+from fedcrg.domain.enums import CalibrationAssignmentMode, DataRole, DatasetId
+from fedcrg.domain.identifiers import ClientId
 
 
 @dataclass(frozen=True, slots=True)

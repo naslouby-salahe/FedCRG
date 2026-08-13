@@ -10,8 +10,8 @@ import pandas as pd
 
 from fedcrg.analysis.primary import confirmatory_contrasts, load_federation_results
 from fedcrg.artifacts.layout import RunLayout
-from fedcrg.config.models import ExperimentConfig
-from fedcrg.core.enums import PolicyId
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.domain.enums import PolicyId
 
 
 class PublicationTableBuilder:

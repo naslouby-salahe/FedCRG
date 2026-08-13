@@ -15,7 +15,7 @@ from fedcrg.artifacts.layout import RunLayout
 from fedcrg.artifacts.manifest import RunManifestStore
 from fedcrg.artifacts.serialization import atomic_write_json
 from fedcrg.artifacts.verification import ArtifactVerifier
-from fedcrg.core.enums import ExperimentCode, ExperimentId, ExperimentStatus, PolicyId
+from fedcrg.domain.enums import ExperimentCode, ExperimentId, ExperimentStatus, PolicyId
 from fedcrg.experiments.completion import ExperimentCompletion, ExperimentCompletionAuditor
 from fedcrg.metrics.federation import utility_margin_satisfied
 

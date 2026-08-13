@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-from fedcrg.core.exceptions import ConfigurationError
+from fedcrg.domain.errors import ConfigurationError
 
 
 def load_yaml(path: Path) -> dict[str, object]:

@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from fedcrg.config.resolver import ExperimentConfigResolver
-from fedcrg.config.validation import validate_experiment_config
-from fedcrg.core.constants import DIAD_EXPECTED_SOURCE_CLIENTS
-from fedcrg.core.enums import DatasetId, DetectorId, ExperimentId, PolicyId
+from fedcrg.config.resolve import ExperimentConfigResolver
+from fedcrg.config.validate import validate_experiment_config
+from fedcrg.domain.constants import DIAD_EXPECTED_SOURCE_CLIENTS
+from fedcrg.domain.enums import DatasetId, DetectorId, ExperimentId, PolicyId
 
 ROOT = Path(__file__).resolve().parents[2]
 

@@ -13,8 +13,8 @@ from fedcrg.artifacts.serialization import (
     as_json_list,
     atomic_write_json,
 )
-from fedcrg.core.enums import DatasetId, DetectorId
-from fedcrg.core.ids import ClientId, ModelSeed, Sha256
+from fedcrg.domain.enums import DatasetId, DetectorId
+from fedcrg.domain.identifiers import ClientId, ModelSeed, Sha256
 from fedcrg.federated.models import ClientRoundResult, RoundResult, TrainingResult
 
 

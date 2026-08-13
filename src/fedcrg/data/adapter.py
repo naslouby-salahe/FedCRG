@@ -5,8 +5,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from fedcrg.core.enums import DatasetId
-from fedcrg.core.ids import ClientId
+from fedcrg.domain.enums import DatasetId
+from fedcrg.domain.identifiers import ClientId
 from fedcrg.data.models import ClientData
 
 

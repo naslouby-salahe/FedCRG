@@ -11,7 +11,7 @@ from pathlib import Path
 from fedcrg.artifacts.layout import RunLayout
 from fedcrg.artifacts.manifest import RunManifestStore
 from fedcrg.artifacts.verification import ArtifactVerifier, VerificationResult
-from fedcrg.core.enums import ExperimentStatus
+from fedcrg.domain.enums import ExperimentStatus
 from fedcrg.experiments.completion import ExperimentCompletion, ExperimentCompletionAuditor
 from fedcrg.experiments.registry import ExperimentRegistry
 from fedcrg.protocol.mismatch import minimum_bidirectional_sample_count

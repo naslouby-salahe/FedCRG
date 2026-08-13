@@ -7,8 +7,8 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.stats import norm
 
-from fedcrg.core.enums import ExperimentAxisId
-from fedcrg.core.types import OperatingBand
+from fedcrg.domain.enums import ExperimentAxisId
+from fedcrg.domain.values import OperatingBand
 from fedcrg.protocol.readiness import ReadinessPlanBuilder
 
 

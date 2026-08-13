@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from fedcrg.config.models import ExperimentConfig, ProtocolConfig
-from fedcrg.config.validation import validate_experiment_config
-from fedcrg.core.enums import ExperimentId, PolicyId
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.config.method_config import ProtocolConfig
+from fedcrg.config.validate import validate_experiment_config
+from fedcrg.domain.enums import ExperimentId, PolicyId
 
 
 class ExperimentVariantFactory:

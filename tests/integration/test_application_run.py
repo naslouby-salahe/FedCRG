@@ -4,16 +4,11 @@ import pytest
 
 from fedcrg.application.run_experiment import RunExperiment
 from fedcrg.artifacts.manifest import RunManifestStore
-from fedcrg.config.models import (
-    AutoencoderConfig,
-    DatasetConfig,
-    ExperimentConfig,
-    ProtocolConfig,
-    RandomnessConfig,
-    SplitConfig,
-    TrainingConfig,
-)
-from fedcrg.core.enums import (
+from fedcrg.config.dataset_config import DatasetConfig, SplitConfig
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.config.method_config import ProtocolConfig
+from fedcrg.config.training_config import AutoencoderConfig, RandomnessConfig, TrainingConfig
+from fedcrg.domain.enums import (
     DatasetFeatureContractId,
     DatasetId,
     ExperimentId,

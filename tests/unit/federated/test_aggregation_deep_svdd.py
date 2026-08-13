@@ -1,5 +1,5 @@
 import torch
-from fedcrg.config.models import AutoencoderConfig, DeepSvddConfig
+from fedcrg.config.training_config import AutoencoderConfig, DeepSvddConfig
 from fedcrg.detectors.autoencoder import Autoencoder
 from fedcrg.detectors.deep_svdd import DeepSvdd
 from fedcrg.detectors.factory import DetectorFactory

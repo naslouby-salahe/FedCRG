@@ -1,4 +1,4 @@
-from fedcrg.core.enums import PolicyId
+from fedcrg.domain.enums import PolicyId
 from fedcrg.policies.registry import InformationRegime, PolicyRegistry
 
 

@@ -20,8 +20,8 @@ from fedcrg.analysis.figures import (
     reliability_utility_frontier,
 )
 from fedcrg.analysis.tables import PublicationTableBuilder
-from fedcrg.config.models import ExperimentConfig
-from fedcrg.core.enums import PolicyId
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.domain.enums import PolicyId
 
 
 @dataclass(frozen=True, slots=True)

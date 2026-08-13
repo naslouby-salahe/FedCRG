@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from fedcrg.config.models import DatasetConfig
-from fedcrg.core.enums import (
+from fedcrg.config.dataset_config import DatasetConfig
+from fedcrg.domain.enums import (
     DatasetFeatureContractId,
     DatasetId,
     EligibilityStatus,

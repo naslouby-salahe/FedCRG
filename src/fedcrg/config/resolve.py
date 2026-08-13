@@ -7,18 +7,18 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from fedcrg.config.loader import load_yaml
-from fedcrg.config.models import (
+from fedcrg.config.dataset_config import DatasetConfig
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.config.load import load_yaml
+from fedcrg.config.method_config import ProtocolConfig
+from fedcrg.config.training_config import (
     AutoencoderConfig,
-    DatasetConfig,
     DeepSvddConfig,
-    ExperimentConfig,
-    ProtocolConfig,
     RandomnessConfig,
     TrainingConfig,
 )
-from fedcrg.core.enums import DetectorId, ExperimentId
-from fedcrg.core.exceptions import ConfigurationError
+from fedcrg.domain.enums import DetectorId, ExperimentId
+from fedcrg.domain.errors import ConfigurationError
 
 _SECTION_KEYS = ("protocol", "dataset", "detector")
 

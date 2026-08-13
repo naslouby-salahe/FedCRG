@@ -3,8 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from fedcrg.core.enums import CalibrationReadinessState, MismatchOutcome
-from fedcrg.core.types import OperatingBand
+from fedcrg.domain.enums import CalibrationReadinessState, MismatchOutcome
+from fedcrg.domain.values import OperatingBand
 from fedcrg.protocol.mismatch import ReferenceMismatchEvaluator, minimum_bidirectional_sample_count
 from fedcrg.protocol.readiness import ReadinessPlanBuilder
 from fedcrg.protocol.reference import reference_rank

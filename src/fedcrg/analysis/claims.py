@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from fedcrg.core.enums import ClaimLevel
+from fedcrg.domain.enums import ClaimLevel
 
 
 @dataclass(frozen=True, slots=True)

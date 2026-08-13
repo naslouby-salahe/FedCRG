@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fedcrg.artifacts.layout import RunLayout
-from fedcrg.core.ids import RunId
+from fedcrg.domain.identifiers import RunId
 
 
 def test_run_layout_has_one_canonical_evidence_namespace(tmp_path: Path) -> None:

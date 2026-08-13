@@ -13,7 +13,7 @@ from fedcrg.analysis.statistics import (
     paired_model_seed_bootstrap,
     split_sensitivity_summary,
 )
-from fedcrg.core.enums import PolicyId
+from fedcrg.domain.enums import PolicyId
 
 
 @dataclass(frozen=True, slots=True)

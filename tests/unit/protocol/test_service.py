@@ -1,7 +1,7 @@
 import numpy as np
-from fedcrg.config.models import ProtocolConfig
-from fedcrg.core.enums import DecisionState
-from fedcrg.core.ids import ClientId
+from fedcrg.config.method_config import ProtocolConfig
+from fedcrg.domain.enums import DecisionState
+from fedcrg.domain.identifiers import ClientId
 from fedcrg.protocol.service import FedCRGProtocol
 
 

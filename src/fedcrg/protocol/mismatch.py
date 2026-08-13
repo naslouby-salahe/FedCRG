@@ -9,9 +9,9 @@ import numpy as np
 from scipy import special
 from scipy.stats import binom
 
-from fedcrg.core.enums import MismatchOutcome
-from fedcrg.core.ids import ClientId
-from fedcrg.core.types import ConfidenceInterval, OperatingBand
+from fedcrg.domain.enums import MismatchOutcome
+from fedcrg.domain.identifiers import ClientId
+from fedcrg.domain.values import ConfidenceInterval, OperatingBand
 from fedcrg.protocol.results import MismatchEvidence
 
 

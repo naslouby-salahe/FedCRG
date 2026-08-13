@@ -6,8 +6,8 @@ from pathlib import Path
 
 from fedcrg.artifacts.dataset import EligibilityManifestStore
 from fedcrg.artifacts.serialization import atomic_write_json
-from fedcrg.config.models import ExperimentConfig
-from fedcrg.core.enums import DatasetFeatureContractId, ExperimentId, PolicyId
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.domain.enums import DatasetFeatureContractId, ExperimentId, PolicyId
 from fedcrg.data.datasets.diad import DiadAdapter
 from fedcrg.data.feature_sensitivity import NumericSafeFeatureContract, derive_numeric_safe_features
 

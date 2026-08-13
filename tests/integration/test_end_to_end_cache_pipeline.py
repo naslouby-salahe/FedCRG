@@ -13,17 +13,12 @@ from fedcrg.application.train import TrainDetector
 from fedcrg.artifacts.dataset import PreparedDatasetManifestStore
 from fedcrg.artifacts.hashing import sha256_file
 from fedcrg.artifacts.serialization import atomic_write_json
-from fedcrg.config.models import (
-    AutoencoderConfig,
-    DatasetConfig,
-    ExperimentConfig,
-    ProtocolConfig,
-    RandomnessConfig,
-    SplitConfig,
-    TrainingConfig,
-)
-from fedcrg.core.constants import DIAD_EXPECTED_SOURCE_CLIENTS
-from fedcrg.core.enums import (
+from fedcrg.config.dataset_config import DatasetConfig, SplitConfig
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.config.method_config import ProtocolConfig
+from fedcrg.config.training_config import AutoencoderConfig, RandomnessConfig, TrainingConfig
+from fedcrg.domain.constants import DIAD_EXPECTED_SOURCE_CLIENTS
+from fedcrg.domain.enums import (
     ComputeDeviceId,
     DataRole,
     DatasetFeatureContractId,
@@ -31,7 +26,7 @@ from fedcrg.core.enums import (
     ExperimentId,
     PolicyId,
 )
-from fedcrg.core.ids import ClientId, RowId, Sha256
+from fedcrg.domain.identifiers import ClientId, RowId, Sha256
 from fedcrg.data.manifests import ClientDatasetManifest, RoleArtifactManifest, hash_row_ids
 from fedcrg.protocol.readiness import ReadinessPlanCache
 

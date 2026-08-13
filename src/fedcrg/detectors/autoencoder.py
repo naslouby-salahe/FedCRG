@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import torch
 
-from fedcrg.config.models import AutoencoderConfig
-from fedcrg.core.enums import ActivationId
+from fedcrg.config.training_config import AutoencoderConfig
+from fedcrg.domain.enums import ActivationId
 from fedcrg.detectors.base import DetectorModel
 
 

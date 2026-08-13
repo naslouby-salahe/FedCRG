@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from fedcrg.core.enums import ExperimentCode
+from fedcrg.domain.enums import ExperimentCode
 from fedcrg.experiments.completion import ExperimentCompletionAuditor
 
 

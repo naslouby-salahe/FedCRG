@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from fedcrg.core.ids import RunId
+from fedcrg.domain.identifiers import RunId
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,8 +1,8 @@
 """Experiment-plan construction from one fully validated configuration."""
 
-from fedcrg.config.models import ExperimentConfig
-from fedcrg.core.enums import ExperimentId
-from fedcrg.core.ids import CalibrationSeed, ModelSeed, Sha256
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.domain.enums import ExperimentId
+from fedcrg.domain.identifiers import CalibrationSeed, ModelSeed, Sha256
 from fedcrg.experiments.models import ExperimentPlan
 from fedcrg.experiments.registry import ExperimentRegistry
 

@@ -17,15 +17,15 @@ from fedcrg.artifacts.training import (
     TrainingManifest,
     TrainingManifestStore,
 )
-from fedcrg.config.models import ExperimentConfig
-from fedcrg.core.constants import (
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.domain.constants import (
     DIAD_AUTOENCODER_BYTES,
     DIAD_AUTOENCODER_PARAMETERS,
     NBAIOT_AUTOENCODER_BYTES,
     NBAIOT_AUTOENCODER_PARAMETERS,
 )
-from fedcrg.core.enums import DataRole, DatasetId, DetectorId, ExperimentId, FailureCode
-from fedcrg.core.ids import ClientId, ModelSeed, Sha256
+from fedcrg.domain.enums import DataRole, DatasetId, DetectorId, ExperimentId, FailureCode
+from fedcrg.domain.identifiers import ClientId, ModelSeed, Sha256
 from fedcrg.detectors.base import DetectorModel
 from fedcrg.detectors.deep_svdd import DeepSvdd
 from fedcrg.detectors.factory import DetectorFactory

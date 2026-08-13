@@ -16,7 +16,7 @@ from fedcrg.analysis.primary import (
 from fedcrg.application.verify import VerifyOutputs
 from fedcrg.artifacts.layout import RunLayout
 from fedcrg.artifacts.verification import ArtifactVerifier
-from fedcrg.core.enums import ExperimentCode
+from fedcrg.domain.enums import ExperimentCode
 
 
 class ReportBuilder:

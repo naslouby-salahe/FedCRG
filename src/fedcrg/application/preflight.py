@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from fedcrg.application.precompute import ProtocolTablePrecomputer
-from fedcrg.config.models import ExperimentConfig
+from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.data.audit import PreparedDataAudit, PreparedDatasetAuditor
 
 

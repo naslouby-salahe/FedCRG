@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from fedcrg.core.enums import DecisionState
+from fedcrg.domain.enums import DecisionState
 
 
 @dataclass(frozen=True, slots=True)

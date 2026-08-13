@@ -1,6 +1,6 @@
 """Metrics for operating-band reliability."""
 
-from fedcrg.core.types import OperatingBand
+from fedcrg.domain.values import OperatingBand
 
 
 def band_error(fpr_value: float, band: OperatingBand) -> float:

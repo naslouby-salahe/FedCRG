@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from fedcrg.core.enums import CalibrationReadinessState, DecisionState, MismatchOutcome
+from fedcrg.domain.enums import CalibrationReadinessState, DecisionState, MismatchOutcome
 from fedcrg.protocol.results import ClientProtocolResult
 
 

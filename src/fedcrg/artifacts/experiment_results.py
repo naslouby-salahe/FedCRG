@@ -7,8 +7,8 @@ from datetime import datetime, UTC
 from pathlib import Path
 
 from fedcrg.artifacts.serialization import atomic_write_json
-from fedcrg.core.enums import ExperimentCode
-from fedcrg.core.ids import Sha256
+from fedcrg.domain.enums import ExperimentCode
+from fedcrg.domain.identifiers import Sha256
 
 
 @dataclass(frozen=True, slots=True)

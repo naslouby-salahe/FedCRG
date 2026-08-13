@@ -7,8 +7,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from fedcrg.core.enums import DataRole, DatasetId
-from fedcrg.core.ids import AttackGroupId, ClientId, ModelSeed, RowId, Sha256
+from fedcrg.domain.enums import DataRole, DatasetId
+from fedcrg.domain.identifiers import AttackGroupId, ClientId, ModelSeed, RowId, Sha256
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from fedcrg.core.ids import ClientId
+from fedcrg.domain.identifiers import ClientId
 from fedcrg.data.feature_sensitivity import derive_numeric_safe_features
 
 

@@ -7,7 +7,7 @@ from datetime import datetime, UTC
 from typing import Generic, TypeAlias, TypeVar
 from collections.abc import Callable
 
-from fedcrg.core.enums import (
+from fedcrg.domain.enums import (
     ArtifactType,
     CalibrationAssignmentMode,
     ContaminationDirection,
@@ -20,7 +20,7 @@ from fedcrg.core.enums import (
     PolicyId,
     SyntheticDistribution,
 )
-from fedcrg.core.ids import CalibrationSeed, ModelSeed, Sha256
+from fedcrg.domain.identifiers import CalibrationSeed, ModelSeed, Sha256
 
 TResult = TypeVar("TResult")
 AxisValue: TypeAlias = (

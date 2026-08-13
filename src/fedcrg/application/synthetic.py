@@ -11,8 +11,8 @@ from fedcrg.analysis.robustness import (
     temporal_dependence_stress,
 )
 from fedcrg.artifacts.serialization import atomic_write_json
-from fedcrg.config.models import ExperimentConfig
-from fedcrg.core.enums import (
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.domain.enums import (
     ContaminationDirection,
     ExperimentAxisId,
     ExperimentCode,

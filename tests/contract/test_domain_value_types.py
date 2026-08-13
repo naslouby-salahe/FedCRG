@@ -5,7 +5,7 @@ from typing import get_type_hints
 
 from fedcrg.artifacts.manifest import RunManifest
 from fedcrg.artifacts.references import CacheReference
-from fedcrg.core.ids import (
+from fedcrg.domain.identifiers import (
     CalibrationSeed,
     ClientId,
     ModelSeed,

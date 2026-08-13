@@ -2,9 +2,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fedcrg.core.enums import DataRole, DatasetId
-from fedcrg.core.exceptions import DataIntegrityError
-from fedcrg.core.ids import ClientId
+from fedcrg.domain.enums import DataRole, DatasetId
+from fedcrg.domain.errors import DataIntegrityError
+from fedcrg.domain.identifiers import ClientId
 from fedcrg.data.models import ClientSplits, RoleFrame
 from fedcrg.data.preprocessing import FederatedPreprocessor
 

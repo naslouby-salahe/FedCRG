@@ -66,11 +66,12 @@ def test_no_forbidden_implementation_shortcuts() -> None:
     assert not violations, "\n".join(violations)
 
 
-def test_core_is_dependency_free_from_outer_layers() -> None:
+def test_domain_is_dependency_free_from_outer_layers() -> None:
     forbidden_prefixes = (
         "fedcrg.application",
         "fedcrg.artifacts",
         "fedcrg.cli",
+        "fedcrg.config",
         "fedcrg.data",
         "fedcrg.detectors",
         "fedcrg.experiments",
@@ -81,7 +82,7 @@ def test_core_is_dependency_free_from_outer_layers() -> None:
         "fedcrg.scoring",
     )
     violations: list[str] = []
-    for path in _python_files(SRC / "core"):
+    for path in _python_files(SRC / "domain"):
         for imported in _imports(path):
             if imported.startswith(forbidden_prefixes):
                 violations.append(f"{path.relative_to(ROOT)} -> {imported}")

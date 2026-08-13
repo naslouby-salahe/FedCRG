@@ -2,9 +2,9 @@ import hashlib
 
 import numpy as np
 
-from fedcrg.config.models import AutoencoderConfig
-from fedcrg.core.enums import DataRole, DatasetId
-from fedcrg.core.ids import ClientId, ModelSeed, RowId, Sha256
+from fedcrg.config.training_config import AutoencoderConfig
+from fedcrg.domain.enums import DataRole, DatasetId
+from fedcrg.domain.identifiers import ClientId, ModelSeed, RowId, Sha256
 from fedcrg.detectors.autoencoder import Autoencoder
 from fedcrg.scoring.computer import ScoreComputer
 from fedcrg.scoring.models import ClientScoreInput, RoleScoreInput

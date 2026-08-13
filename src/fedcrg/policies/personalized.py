@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fedcrg.core.enums import CalibrationReadinessState, MismatchOutcome
+from fedcrg.domain.enums import CalibrationReadinessState, MismatchOutcome
 from fedcrg.policies.base import BenignPolicyEvidence, empirical_quantile
 
 

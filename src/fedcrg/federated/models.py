@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from fedcrg.core.ids import ClientId, ModelSeed, Sha256
+from fedcrg.domain.identifiers import ClientId, ModelSeed, Sha256
 
 
 @dataclass(frozen=True, slots=True)

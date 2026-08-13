@@ -4,9 +4,9 @@ import pytest
 
 from fedcrg.artifacts.layout import RunLayout
 from fedcrg.artifacts.manifest import RunManifest, RunManifestStore
-from fedcrg.core.enums import ExperimentId, ExperimentStatus, PolicyId
-from fedcrg.core.exceptions import ImmutableRunError
-from fedcrg.core.ids import CalibrationSeed, ModelSeed, RunId, Sha256
+from fedcrg.domain.enums import ExperimentId, ExperimentStatus, PolicyId
+from fedcrg.domain.errors import ImmutableRunError
+from fedcrg.domain.identifiers import CalibrationSeed, ModelSeed, RunId, Sha256
 
 
 def test_completed_run_manifest_is_immutable(tmp_path: Path) -> None:

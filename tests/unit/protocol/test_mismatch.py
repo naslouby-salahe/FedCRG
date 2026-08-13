@@ -1,7 +1,7 @@
 import numpy as np
 
-from fedcrg.core.enums import MismatchOutcome
-from fedcrg.core.types import OperatingBand
+from fedcrg.domain.enums import MismatchOutcome
+from fedcrg.domain.values import OperatingBand
 from fedcrg.protocol.mismatch import ReferenceMismatchEvaluator, minimum_bidirectional_sample_count
 
 

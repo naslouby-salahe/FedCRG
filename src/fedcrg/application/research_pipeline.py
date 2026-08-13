@@ -7,8 +7,8 @@ from pathlib import Path
 
 from fedcrg.application.pipeline import ExecuteFrozenWorkload, WorkloadExecution
 from fedcrg.application.preflight import PreflightResult, ResearchPreflight
-from fedcrg.config.models import ExperimentConfig
-from fedcrg.core.enums import ExperimentId
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.domain.enums import ExperimentId
 
 
 @dataclass(frozen=True, slots=True)

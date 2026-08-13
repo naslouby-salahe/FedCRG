@@ -7,7 +7,7 @@ from collections.abc import Mapping
 
 import numpy as np
 
-from fedcrg.core.ids import ClientId
+from fedcrg.domain.identifiers import ClientId
 from fedcrg.protocol.results import ReferenceThreshold
 
 

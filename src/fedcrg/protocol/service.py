@@ -7,8 +7,8 @@ from pathlib import Path
 
 import numpy as np
 
-from fedcrg.config.models import ProtocolConfig
-from fedcrg.core.ids import ClientId
+from fedcrg.config.method_config import ProtocolConfig
+from fedcrg.domain.identifiers import ClientId
 from fedcrg.protocol.decision import ThresholdDecisionEngine
 from fedcrg.protocol.mismatch import ReferenceMismatchEvaluator
 from fedcrg.protocol.readiness import CalibrationReadinessEvaluator, ReadinessPlanCache

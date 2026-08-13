@@ -5,9 +5,9 @@ import pandas as pd
 
 from fedcrg.application.feature_sensitivity import r14_config
 from fedcrg.artifacts.identity import RunIdentityFactory
-from fedcrg.config.resolver import ExperimentConfigResolver
-from fedcrg.core.enums import PolicyId
-from fedcrg.core.ids import ClientId
+from fedcrg.config.resolve import ExperimentConfigResolver
+from fedcrg.domain.enums import PolicyId
+from fedcrg.domain.identifiers import ClientId
 from fedcrg.data.feature_sensitivity import derive_numeric_safe_features
 
 ROOT = Path(__file__).resolve().parents[2]

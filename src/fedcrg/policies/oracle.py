@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from fedcrg.core.types import OperatingBand
+from fedcrg.domain.values import OperatingBand
 from fedcrg.metrics.classification import confusion_matrix, tpr
 from fedcrg.metrics.operating_band import band_error
 from fedcrg.policies.base import FinalTestEvidence

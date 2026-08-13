@@ -3,9 +3,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from fedcrg.core.constants import NBAIOT_CLIENT_IDS
-from fedcrg.core.enums import DatasetId
-from fedcrg.core.ids import ClientId
+from fedcrg.domain.constants import NBAIOT_CLIENT_IDS
+from fedcrg.domain.enums import DatasetId
+from fedcrg.domain.identifiers import ClientId
 from fedcrg.data.datasets.diad import DIAD_FEATURES, DiadAdapter
 from fedcrg.data.datasets.nbaiot import _CANONICAL_DEVICES, NBaiotAdapter
 

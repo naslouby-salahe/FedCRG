@@ -1,7 +1,7 @@
 """Regression coverage for defects found in the pre-refactor implementation."""
 
-from fedcrg.core.enums import CalibrationReadinessState, DecisionState, MismatchOutcome
-from fedcrg.core.types import ConfidenceInterval, OperatingBand
+from fedcrg.domain.enums import CalibrationReadinessState, DecisionState, MismatchOutcome
+from fedcrg.domain.values import ConfidenceInterval, OperatingBand
 from fedcrg.protocol.decision import ThresholdDecisionEngine
 from fedcrg.protocol.results import (
     CalibrationReadiness,

@@ -6,8 +6,8 @@ from fedcrg.analysis.communication import (
     threshold_policy_communication,
 )
 from fedcrg.analysis.stability import summarize_state_stability, summarize_threshold_stability
-from fedcrg.config.resolver import ExperimentConfigResolver
-from fedcrg.core.enums import DecisionState, PolicyId
+from fedcrg.config.resolve import ExperimentConfigResolver
+from fedcrg.domain.enums import DecisionState, PolicyId
 
 ROOT = Path(__file__).resolve().parents[3]
 

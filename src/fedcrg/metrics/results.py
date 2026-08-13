@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from fedcrg.core.enums import PolicyEvaluationStatus, PolicyId
-from fedcrg.core.ids import ClientId
-from fedcrg.core.types import ConfidenceInterval
+from fedcrg.domain.enums import PolicyEvaluationStatus, PolicyId
+from fedcrg.domain.identifiers import ClientId
+from fedcrg.domain.values import ConfidenceInterval
 from fedcrg.protocol.results import ClientProtocolResult
 
 

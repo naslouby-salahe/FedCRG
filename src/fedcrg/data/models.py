@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from fedcrg.core.enums import (
+from fedcrg.domain.enums import (
     CalibrationAssignmentMode,
     ChronologyStatus,
     DataRole,
@@ -14,7 +14,7 @@ from fedcrg.core.enums import (
     EligibilityStatus,
     FailureCode,
 )
-from fedcrg.core.ids import CalibrationSeed, ClientId, Sha256
+from fedcrg.domain.identifiers import CalibrationSeed, ClientId, Sha256
 
 
 @dataclass(frozen=True, slots=True)

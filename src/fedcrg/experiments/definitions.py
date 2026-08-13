@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fedcrg.core.enums import (
+from fedcrg.domain.enums import (
     ArtifactType,
     CalibrationAssignmentMode,
     ContaminationDirection,

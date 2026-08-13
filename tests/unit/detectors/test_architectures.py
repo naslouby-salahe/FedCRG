@@ -1,6 +1,6 @@
 import torch
 
-from fedcrg.config.models import AutoencoderConfig
+from fedcrg.config.training_config import AutoencoderConfig
 from fedcrg.detectors.autoencoder import Autoencoder
 
 

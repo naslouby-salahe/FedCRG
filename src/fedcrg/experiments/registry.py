@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fedcrg.core.enums import ExperimentCode, ExperimentId
+from fedcrg.domain.enums import ExperimentCode, ExperimentId
 from fedcrg.experiments.definitions import definitions
 from fedcrg.experiments.models import ExperimentDefinition
 

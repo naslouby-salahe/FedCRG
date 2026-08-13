@@ -1,4 +1,4 @@
-from fedcrg.core.enums import ExperimentId, ExperimentStatus
+from fedcrg.domain.enums import ExperimentId, ExperimentStatus
 from fedcrg.experiments.dependencies import DependencyResolver
 from fedcrg.experiments.registry import ExperimentRegistry
 

@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from fedcrg.application.train import TrainDetector
-from fedcrg.config.models import ExperimentConfig
-from fedcrg.core.enums import DetectorId
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.domain.enums import DetectorId
 
 
 class RunRobustness:

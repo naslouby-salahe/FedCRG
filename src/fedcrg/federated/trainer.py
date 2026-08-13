@@ -10,9 +10,9 @@ import numpy as np
 import torch
 from torch.utils.data import TensorDataset
 
-from fedcrg.config.models import TrainingConfig
-from fedcrg.core.ids import ClientId, ModelSeed, Sha256
-from fedcrg.core.logging import get_logger
+from fedcrg.config.training_config import TrainingConfig
+from fedcrg.domain.identifiers import ClientId, ModelSeed, Sha256
+from fedcrg.runtime import get_logger
 from fedcrg.detectors.base import DetectorModel
 from fedcrg.federated.client import FederatedClient
 from fedcrg.federated.models import RoundResult, TrainingResult
