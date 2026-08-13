@@ -95,7 +95,7 @@ def test_domain_is_dependency_free_from_outer_layers() -> None:
     assert not violations, "\n".join(violations)
 
 
-def test_method_does_not_depend_on_pipeline_cli_or_artifact_io() -> None:
+def test_decision_does_not_depend_on_cli_spine_reporting_or_artifact_io() -> None:
     forbidden_prefixes = (
         "fedcrg.cli",
         "fedcrg.experiments",

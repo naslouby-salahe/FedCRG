@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -14,14 +13,6 @@ from fedcrg.artifacts.integrity import ArtifactVerifier, VerificationResult
 from fedcrg.domain.enums import ExperimentStatus
 from fedcrg.experiments.completion import ExperimentCompletion, ExperimentCompletionAuditor
 from fedcrg.experiments.experiment_definition import all_experiment_definitions
-from fedcrg.decision.mismatch_detection import minimum_bidirectional_sample_count
-from fedcrg.decision.calibration_readiness import ReadinessPlanCache
-
-
-@dataclass(frozen=True, slots=True)
-class PrecomputeVerification:
-    valid: bool
-    problems: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,54 +42,6 @@ class VerifyOutputs:
         self.verifier = ArtifactVerifier()
         self.manifests = RunManifestStore()
         self.completion = ExperimentCompletionAuditor()
-
-    @staticmethod
-    def verify_protocol_precompute(outputs_root: Path) -> PrecomputeVerification:
-        """Reconcile the frozen readiness/mismatch tables against their locked formulas."""
-
-        problems: list[str] = []
-        analysis_root = outputs_root / "cache" / "analysis"
-        readiness_path = analysis_root / "readiness_plans.json"
-        mismatch_path = analysis_root / "mismatch_cutoffs.json"
-
-        if not readiness_path.is_file():
-            problems.append(f"missing readiness table: {readiness_path}")
-        else:
-            try:
-                cache = ReadinessPlanCache(readiness_path)
-                if len(cache) == 0:
-                    problems.append("readiness table is empty")
-            except (ValueError, KeyError) as exc:
-                problems.append(f"readiness table failed regeneration: {exc}")
-
-        if not mismatch_path.is_file():
-            problems.append(f"missing mismatch cutoff table: {mismatch_path}")
-        else:
-            try:
-                payload = json.loads(mismatch_path.read_text(encoding="utf-8"))
-            except json.JSONDecodeError as exc:
-                problems.append(f"mismatch cutoff table is not valid JSON: {exc}")
-            else:
-                cells = payload.get("cells")
-                if not isinstance(cells, list) or not cells:
-                    problems.append("mismatch cutoff table has no cells")
-                lower = (
-                    payload.get("band", {}).get("lower")
-                    if isinstance(payload.get("band"), dict)
-                    else None
-                )
-                confidence = payload.get("confidence")
-                expected_minimum = payload.get("minimum_bidirectional_sample_count")
-                if isinstance(lower, (int, float)) and isinstance(confidence, (int, float)):
-                    regenerated_minimum = minimum_bidirectional_sample_count(
-                        float(lower), float(confidence)
-                    )
-                    if regenerated_minimum != expected_minimum:
-                        problems.append(
-                            "mismatch cutoff table minimum sample count failed formula regeneration"
-                        )
-
-        return PrecomputeVerification(not problems, tuple(problems))
 
     def verify_run(self, run_root: Path) -> VerificationResult:
         layout = RunLayout(run_root)

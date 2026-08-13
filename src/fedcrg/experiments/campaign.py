@@ -17,8 +17,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from fedcrg.artifacts.json_io import JsonValue, atomic_write_json
 from fedcrg.configuration.resolve import load_config
-from fedcrg.domain.enums import CampaignStatusValue, ExperimentId
+from fedcrg.domain.enums import CampaignStatusValue, ExperimentId, ExperimentStatus
 from fedcrg.domain.errors import ConfigurationError
+from fedcrg.experiments.dependencies import DependencyResolver
+from fedcrg.experiments.experiment_definition import get_experiment_definition
 from fedcrg.reporting.results import ResultsBuilder
 from fedcrg.runtime.console import render_campaign_status
 from fedcrg.runtime.logging import get_logger
@@ -130,6 +132,7 @@ class CampaignRunner:
     ) -> None:
         self.store = store or CampaignStatusStore()
         self.results_builder = results_builder or ResultsBuilder()
+        self._dependency_resolver = DependencyResolver()
         self._monitor = ResourceMonitor()
 
     def run(
@@ -241,12 +244,16 @@ class CampaignRunner:
         self.store.save(current_status)
         return current_status
 
-    @staticmethod
-    def _dependency_failed(item: CampaignWorkItem, failed: list[str]) -> bool:
-        from fedcrg.experiments.experiment_definition import get_experiment_definition
-
-        dependencies = get_experiment_definition(item.experiment_id).dependencies
-        return any(dependency.value in failed for dependency in dependencies)
+    def _dependency_failed(self, item: CampaignWorkItem, failed: list[str]) -> bool:
+        statuses = {
+            experiment_id: (
+                ExperimentStatus.FAILED
+                if experiment_id.value in failed
+                else ExperimentStatus.COMPLETE
+            )
+            for experiment_id in get_experiment_definition(item.experiment_id).dependencies
+        }
+        return bool(self._dependency_resolver.blockers(item.experiment_id, statuses))
 
     def _execute_item(self, item: CampaignWorkItem) -> tuple[Path, ...]:
         """Execute one work item through the single execution spine."""

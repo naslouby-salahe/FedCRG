@@ -92,6 +92,11 @@ matrix IDs (`docs/FedCRG Audit Matrix.md`).
 - F1. ~~`experiments/execution.py` TResult generic + ExperimentRunner~~ RESOLVED
   2026-08-13: `ExperimentExecution`/`TResult`/`ExperimentRunner` removed (unused
   after the pipeline fold).
+- F5. ~~Dead functions~~ RESOLVED 2026-08-13: `verify_protocol_precompute` +
+  `PrecomputeVerification` (never called), `validate_policy_catalogue_completeness`
+  (never called, hardcoded 12), `ScoreCacheDescriptor.record_for` +
+  `ScoreCache.iter_clients` (never called) removed; campaign now uses the shared
+  `DependencyResolver` instead of inline dependency logic.
 - F2. ~~`pipeline/` duplication~~ RESOLVED 2026-08-13: pipeline folded into
   `experiments/` (b6); planning vs run_experiment separation is intentional.
 - F3. ~~`communication_cost` / `computational_benchmark` in `analysis/`~~ RESOLVED

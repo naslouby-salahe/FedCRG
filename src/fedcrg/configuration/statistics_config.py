@@ -15,7 +15,6 @@ class StatisticsConfig(BaseModel):
     bootstrap_replicates: int = Field(gt=0)
     bootstrap_seed: int
     utility_margin: float = Field(gt=0.0)
-    utility_margin_sensitivities: tuple[float, ...]
     familywise_alpha: float = Field(gt=0.0, lt=1.0)
     ranking_invariance_tolerance: float = Field(gt=0.0)
     shrinkage_n0_candidates: tuple[int, ...]

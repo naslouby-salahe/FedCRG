@@ -68,7 +68,6 @@ def primary_statistics() -> StatisticsConfig:
         bootstrap_replicates=10000,
         bootstrap_seed=424242,
         utility_margin=0.03,
-        utility_margin_sensitivities=(0.01, 0.05),
         familywise_alpha=0.05,
         ranking_invariance_tolerance=1e-12,
         shrinkage_n0_candidates=(100, 300, 1000, 3000, 10000),

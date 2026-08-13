@@ -160,7 +160,7 @@ Status vocabulary (only these values are used):
 | H03 | Production never depends on `docs/work/` | n/a | n/a | n/a | present | — | keep | rg | VERIFIED |
 | H04 | Audit matrix is a living document, updated each batch | this file | `docs/FedCRG Audit Matrix.md` | n/a | present | — | updated after every batch (b1-b10) | git history shows updates | VERIFIED |
 | H05 | License present | LICENSE | repo root | n/a | present | — | keep | — | VERIFIED |
-| H06 | No dead code / test-only production APIs | audit | `src/fedcrg/` | n/a | present | — | hostile audit removed `ExperimentExecution`/`TResult`/`ExperimentRunner` from execution.py (unused after pipeline fold); no pipeline duplication | audit clean | VERIFIED |
+| H06 | No dead code / test-only production APIs | audit | `src/fedcrg/` | n/a | present | — | hostile audit removed `ExperimentExecution`/`TResult`/`ExperimentRunner` (b10), `ClaimGateEvaluator` (maintainer), and the dead `verify_protocol_precompute`/`PrecomputeVerification`, `validate_policy_catalogue_completeness` (hardcoded 12), `ScoreCacheDescriptor.record_for`, `ScoreCache.iter_clients`; campaign now uses `DependencyResolver` (no inline dependency duplication) | audit clean | VERIFIED |
 
 ## 11. Cross-cutting completion gates
 

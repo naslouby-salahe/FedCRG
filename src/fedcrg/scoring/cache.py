@@ -71,12 +71,6 @@ class ScoreCacheDescriptor:
     client_ids: tuple[ClientId, ...]
     records: tuple[ScoreRoleCacheRecord, ...]
 
-    def record_for(self, client_id: ClientId, role: DataRole) -> ScoreRoleCacheRecord:
-        for record in self.records:
-            if record.client_id == client_id and record.role is role:
-                return record
-        raise KeyError(f"{client_id.value}/{role.value}")
-
 
 class ScoreCache:
     filename = "score_cache.parquet"
@@ -386,16 +380,6 @@ class ScoreCache:
         if scores.sha256.value != expected:
             raise ValueError(f"SCORE_CACHE_HASH_MISMATCH: {client_id.value}/{role.value}")
         return scores
-
-    def iter_clients(
-        self,
-        root: Path,
-        roles: tuple[DataRole, ...],
-    ) -> Iterable[ClientScoreSet]:
-        descriptor = self.load_descriptor(root)
-        for client_id in descriptor.client_ids:
-            score_list = tuple(self.read_role(root, client_id, role) for role in roles)
-            yield ClientScoreSet(client_id, score_list)
 
     def _read_verified_metadata(self, root: Path) -> dict[str, JsonValue]:
         metadata_path = root / self.manifest_filename

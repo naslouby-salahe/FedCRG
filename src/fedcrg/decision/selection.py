@@ -45,11 +45,6 @@ def is_deployable(policy_id: PolicyId) -> bool:
     return policy_id not in SUPERVISED_POLICIES and policy_id is not PolicyId.ORACLE_TEST
 
 
-def validate_policy_catalogue_completeness() -> None:
-    if len(set(PolicyId)) != 12:
-        raise RuntimeError("Policy catalogue must contain exactly 12 protocol policies")
-
-
 class PolicyThresholdSelector:
     """Select only requested non-oracle policies from their permitted evidence."""
 
