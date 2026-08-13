@@ -22,7 +22,7 @@ from fedcrg.artifacts.hashing import sha256_file
 from fedcrg.artifacts.serialization import atomic_write_json
 from fedcrg.core.enums import DataRole, DatasetId
 from fedcrg.core.exceptions import ImmutableRunError
-from fedcrg.core.ids import ClientId, Sha256
+from fedcrg.core.ids import AttackGroupId, ClientId, ModelSeed, RowId, Sha256
 from fedcrg.scoring.integrity import validate_score_manifest
 from fedcrg.scoring.models import ClientScoreSet, RoleScores, ScoreManifest
 
@@ -32,7 +32,7 @@ class ScoreCacheIdentity:
     """Provenance that is fixed before score serialization starts."""
 
     dataset: DatasetId
-    model_seed: int
+    model_seed: ModelSeed
     model_hash: Sha256
     data_spec_hash: Sha256
     training_spec_hash: Sha256
@@ -56,12 +56,7 @@ class ScoreCache:
     manifest_filename = "manifest.json"
 
     def save(self, manifest: ScoreManifest, root: Path) -> ScoreManifest:
-        """Persist an already-materialized manifest.
-
-        This compatibility path is useful for small unit fixtures. Real dataset scoring
-        should use :meth:`save_stream` so the complete federation is never accumulated
-        in memory merely for serialization.
-        """
+        """Persist an already-materialized manifest used by small fixtures."""
 
         validate_score_manifest(manifest)
         descriptor = self.save_stream(
@@ -187,13 +182,13 @@ class ScoreCache:
             {
                 "dataset_id": identity.dataset.value,
                 "client_id": scores.client_id.value,
-                "row_id": scores.row_ids,
+                "row_id": [row_id.value for row_id in scores.row_ids],
                 "phase": scores.role.value,
-                "model_seed": identity.model_seed,
+                "model_seed": int(identity.model_seed),
                 "score_float64": np.asarray(scores.values, dtype=np.float64),
                 "label_test_only": [label] * len(scores.values),
                 "attack_family_test_only": (
-                    list(groups)
+                    [None if group is None else group.value for group in groups]
                     if scores.role is DataRole.ATTACK_TEST
                     else [None] * len(scores.values)
                 ),
@@ -231,16 +226,16 @@ class ScoreCache:
         role_counts: dict[str, dict[str, int]],
     ) -> dict[str, object]:
         return {
-            "dataset": identity.dataset.value,
-            "model_seed": identity.model_seed,
-            "model_hash": identity.model_hash.value,
-            "data_spec_hash": identity.data_spec_hash.value,
-            "training_spec_hash": identity.training_spec_hash.value,
-            "dataset_manifest_hash": identity.dataset_manifest_hash.value,
-            "preprocessing_hash": identity.preprocessing_hash.value,
+            "dataset": identity.dataset,
+            "model_seed": int(identity.model_seed),
+            "model_hash": identity.model_hash,
+            "data_spec_hash": identity.data_spec_hash,
+            "training_spec_hash": identity.training_spec_hash,
+            "dataset_manifest_hash": identity.dataset_manifest_hash,
+            "preprocessing_hash": identity.preprocessing_hash,
             "score_cache_file": cls.filename,
-            "score_cache_sha256": cache_hash.value,
-            "client_ids": [client_id.value for client_id in client_ids],
+            "score_cache_sha256": cache_hash,
+            "client_ids": client_ids,
             "role_hashes": role_hashes,
             "role_counts": role_counts,
         }
@@ -249,7 +244,7 @@ class ScoreCache:
         metadata = self._read_verified_metadata(root)
         identity = ScoreCacheIdentity(
             dataset=DatasetId(str(metadata["dataset"])),
-            model_seed=int(metadata["model_seed"]),
+            model_seed=ModelSeed(int(metadata["model_seed"])),
             model_hash=Sha256(str(metadata["model_hash"])),
             data_spec_hash=Sha256(str(metadata["data_spec_hash"])),
             training_spec_hash=Sha256(str(metadata["training_spec_hash"])),
@@ -259,7 +254,7 @@ class ScoreCache:
         return ScoreCacheDescriptor(
             identity=identity,
             cache_sha256=Sha256(str(metadata["score_cache_sha256"])),
-            client_ids=tuple(ClientId(value) for value in metadata["client_ids"]),
+            client_ids=tuple(ClientId(str(value)) for value in metadata["client_ids"]),
             role_hashes={
                 str(client): {str(role): str(value) for role, value in roles.items()}
                 for client, roles in metadata["role_hashes"].items()
@@ -271,12 +266,7 @@ class ScoreCache:
         )
 
     def load(self, root: Path) -> ScoreManifest:
-        """Materialize the full score cache.
-
-        This remains useful for small experiments. Large real-data evaluation should
-        prefer :meth:`read_role` / :meth:`iter_clients` so final-test arrays are loaded
-        one client at a time.
-        """
+        """Materialize the full score cache for deliberately small in-memory workflows."""
 
         metadata = self._read_verified_metadata(root)
         parquet_path = root / str(metadata["score_cache_file"])
@@ -300,7 +290,7 @@ class ScoreCache:
 
         manifest = ScoreManifest(
             dataset=DatasetId(str(metadata["dataset"])),
-            model_seed=int(metadata["model_seed"]),
+            model_seed=ModelSeed(int(metadata["model_seed"])),
             model_hash=Sha256(str(metadata["model_hash"])),
             data_spec_hash=Sha256(str(metadata["data_spec_hash"])),
             training_spec_hash=Sha256(str(metadata["training_spec_hash"])),
@@ -359,11 +349,18 @@ class ScoreCache:
         group_values = frame["attack_family_test_only"]
         groups = None
         if group_values.notna().any():
-            groups = tuple(group_values.fillna("").astype(str))
+            groups = tuple(
+                AttackGroupId(str(value))
+                for value in group_values.dropna().astype(str)
+            )
+            if len(groups) != len(frame):
+                raise ValueError(
+                    f"Attack-group metadata is incomplete for {client_id.value}/{role.value}"
+                )
         return RoleScores(
             role=role,
             values=frame["score_float64"].to_numpy(dtype=np.float64),
             client_id=client_id,
-            row_ids=tuple(frame["row_id"].astype(str)),
+            row_ids=tuple(RowId(str(value)) for value in frame["row_id"].astype(str)),
             attack_groups=groups,
         )
