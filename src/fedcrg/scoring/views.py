@@ -123,7 +123,7 @@ class CalibrationScoreViewBuilder:
                 dataset_id,
                 client_id,
                 dataset,
-                int(calibration_seed),
+                calibration_seed,
                 mode,
             )
             role_views: dict[DataRole, RoleScores] = {}
@@ -198,9 +198,18 @@ class CalibrationScoreViewBuilder:
         if not isinstance(client, dict):
             raise ValueError(f"Assignment manifest is missing {client_id.value}")
         roles = client.get("roles")
-        if not isinstance(roles, dict) or not isinstance(roles.get(role.value), dict):
+        if not isinstance(roles, list):
+            raise ValueError(f"Assignment manifest roles are malformed for {client_id.value}")
+        record = next(
+            (
+                item
+                for item in roles
+                if isinstance(item, dict) and item.get("role") == role.value
+            ),
+            None,
+        )
+        if not isinstance(record, dict):
             raise ValueError(f"Assignment manifest is missing {client_id.value}/{role.value}")
-        record = roles[role.value]
         if int(record["row_count"]) != row_count or str(record["row_id_sha256"]) != row_hash:
             raise ValueError(
                 f"Calibration assignment hash mismatch for {client_id.value}/{role.value}"
