@@ -191,3 +191,48 @@ never exercised. All were fixed, not papered over:
 None of this changes the experimental-evidence status above: `fedcrg verify`
 against an empty `outputs/` still truthfully reports all S1-S6/R1-R14 workloads
 incomplete, as intended.
+
+### Continued audit (orphan-code sweep, this session)
+
+A second structural pass swept every `src/fedcrg/*` directory for symbols with
+zero references outside their own defining file, then manually verified each
+candidate (module-private helpers and same-file dataclasses are expected to
+show up this way and are not defects). Confirmed real defects and fixes:
+
+- `metrics/federation.py::utility_preserved`/`assess_utility` and
+  `application/claims.py::_reliability_claim` each independently reimplemented
+  the roadmap's locked "-3pp utility margin" comparator (Claim Gate G3/G5).
+  Extracted the single canonical `utility_margin_satisfied()` /
+  `LOCKED_UTILITY_MARGIN` and made every caller use it.
+- `analysis/decision_architecture.py::build_decision_architecture_figure` (a
+  complete, detailed Figure 1 renderer) was unwired; `analysis/publication.py`
+  was calling an inferior duplicate built earlier in `analysis/figures.py`.
+  Wired the real one, deleted the duplicate.
+- `application/evaluate.py::write_policy_artifacts` never wrote an admission
+  summary despite `metrics/admission.py::AdmissionSummary`/
+  `summarize_admission` being fully implemented; every run silently dropped
+  federation-level readiness/mismatch/decision-state rates. Now writes
+  `metrics/admission.json` per run.
+- `artifacts/dataset.py::CalibrationAssignmentManifestStore` (typed
+  load/save for the frozen calibration-assignment manifests) was unwired:
+  `application/prepare_data.py` wrote those manifests with raw
+  `atomic_write_json`, and `scoring/views.py::CalibrationScoreViewBuilder`
+  read them back with `json.loads` plus hand-rolled `dict`/`isinstance`
+  traversal — a dict-shaped application contract on a scientific-critical
+  read path, the exact pattern the no-primitive-obsession rule forbids.
+  Both now go through the typed store; `CalibrationAssignmentManifest`
+  gained a `.client()` lookup to match the existing `.role()` helper.
+- Deleted dead code with no real caller anywhere: `experiments/ledger.py`
+  (`WorkloadLedger` + three closed-form factory functions — duplicated, with
+  hardcoded magic-number arithmetic, the workload reconciliation
+  `ExperimentCompletionAuditor` already performs correctly by enumeration),
+  `data/manifests.py::SplitManifest`, `data/integrity.py::validate_numeric_frame`
+  (a cruder unused duplicate of the finite-rate checks in
+  `preprocessing.py`/`eligibility.py`/`feature_sensitivity.py`), and
+  `scoring/integrity.py::assert_same_cache_hash`.
+
+Re-verified after each fix: `pyright` 0 errors, `ruff check`/`ruff format`
+clean, `pytest -n auto` 121 passed, `python -m compileall` clean,
+`git diff --check` clean. `fedcrg doctor` and `fedcrg verify` both run
+end-to-end against a live environment; `verify` continues to truthfully
+report all S1-S6/R1-R14 workloads incomplete against an empty `outputs/`.
