@@ -11,10 +11,8 @@ import pandas as pd
 from fedcrg.core.ids import ClientId, Sha256
 from fedcrg.data.manifests import hash_row_ids
 
-# R14 excludes direct identity/label/port fields, not behavioral statistics whose names
-# happen to contain terms such as "stream" or "mac" (for example
-# ``src_ip_mac_5_count``). Broad substring filtering would incorrectly delete much of
-# the intended numeric behavior representation.
+# Exclude direct identity/label/port fields, not behavioral statistics whose names
+# happen to contain terms such as "stream" or "mac".
 _EXCLUDED_EXACT = {
     "stream",
     "device_mac",
@@ -47,26 +45,21 @@ _EXCLUDED_NAME_MARKERS = (
 
 
 @dataclass(frozen=True, slots=True)
+class ClientTrainingRowHash:
+    client_id: ClientId
+    sha256: Sha256
+
+
+@dataclass(frozen=True, slots=True)
 class NumericSafeFeatureContract:
     features: tuple[str, ...]
     dimension: int
     architecture: tuple[int, ...]
-    training_row_hashes: dict[ClientId, Sha256]
+    training_row_hashes: tuple[ClientTrainingRowHash, ...]
 
     @property
     def encoder_hidden_dims(self) -> tuple[int, ...]:
         return self.architecture[1:5]
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "features": list(self.features),
-            "dimension": self.dimension,
-            "architecture": list(self.architecture),
-            "training_row_hashes": {
-                client.value: digest.value
-                for client, digest in sorted(self.training_row_hashes.items())
-            },
-        }
 
 
 def _is_forbidden_name(column: str) -> bool:
@@ -120,16 +113,19 @@ def derive_numeric_safe_features(
         max(1, floor(0.75 * dimension)),
         dimension,
     )
-    training_hashes: dict[ClientId, Sha256] = {}
-    for client, frame in training_frames.items():
+    training_hashes: list[ClientTrainingRowHash] = []
+    for client, frame in sorted(training_frames.items()):
         if "row_id" not in frame.columns:
             raise ValueError(f"R14 training frame is missing row_id for {client.value}")
-        training_hashes[client] = Sha256(
-            hash_row_ids(frame["row_id"].astype(str).tolist())
+        training_hashes.append(
+            ClientTrainingRowHash(
+                client,
+                hash_row_ids(frame["row_id"].astype(str).tolist()),
+            )
         )
     return NumericSafeFeatureContract(
         features=tuple(selected),
         dimension=dimension,
         architecture=architecture,
-        training_row_hashes=training_hashes,
+        training_row_hashes=tuple(training_hashes),
     )
