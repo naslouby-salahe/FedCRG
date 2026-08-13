@@ -62,6 +62,8 @@ class ComputeScores:
             raise ValueError("Prepared dataset data-spec hash does not match scoring config")
         if prepared_manifest.dataset_id is not config.dataset.id:
             raise ValueError("Prepared dataset identity does not match scoring config")
+        prepared_manifest_hash = Sha256(sha256_file(manifest_path))
+        preprocessing_hash = Sha256(sha256_file(preprocessing_path))
 
         training = self.training_manifests.load(training_manifest)
         if training.training_spec_hash != Sha256(config.training_spec_hash):
@@ -72,9 +74,9 @@ class ComputeScores:
             raise ValueError("Training manifest model seed does not match scoring request")
         if training.model_file_sha256 != Sha256(sha256_file(model_path)):
             raise ValueError("Frozen model file hash does not match training manifest")
-        if training.dataset_manifest_sha256 != Sha256(sha256_file(manifest_path)):
+        if training.dataset_manifest_sha256 != prepared_manifest_hash:
             raise ValueError("Training manifest does not reference this prepared dataset manifest")
-        if training.preprocessing_sha256 != Sha256(sha256_file(preprocessing_path)):
+        if training.preprocessing_sha256 != preprocessing_hash:
             raise ValueError("Training manifest does not reference this preprocessing artifact")
 
         model = self.trainer.load_model(config, model_path)
@@ -87,8 +89,8 @@ class ComputeScores:
             model_hash=model_hash,
             data_spec_hash=Sha256(config.data_spec_hash),
             training_spec_hash=Sha256(config.training_spec_hash),
-            dataset_manifest_hash=Sha256(sha256_file(manifest_path)),
-            preprocessing_hash=Sha256(sha256_file(preprocessing_path)),
+            dataset_manifest_hash=prepared_manifest_hash,
+            preprocessing_hash=preprocessing_hash,
         )
         score_root = (
             config.outputs_root
@@ -100,7 +102,7 @@ class ComputeScores:
             / config.training_spec_hash[:16]
         )
         if score_root.exists():
-            self._validate_existing(config, seed, model_hash, score_root)
+            self._validate_existing(identity, score_root)
             return score_root
 
         self.cache.save_stream(
@@ -149,25 +151,22 @@ class ComputeScores:
                     role=role,
                     values=scores,
                     client_id=client_id,
-                    row_ids=tuple(RowId(str(value)) for value in frame["row_id"].astype(str)),
+                    row_ids=tuple(
+                        RowId(str(value))
+                        for value in frame["row_id"].astype(str)
+                    ),
                     attack_groups=groups,
                 )
                 del frame, scores
 
     def _validate_existing(
         self,
-        config: ExperimentConfig,
-        model_seed: ModelSeed,
-        model_hash: Sha256,
+        expected: ScoreCacheIdentity,
         score_root: Path,
     ) -> None:
         descriptor = self.cache.load_descriptor(score_root)
-        identity = descriptor.identity
-        if identity.model_seed != model_seed:
-            raise ValueError("Existing score cache has a different model seed")
-        if identity.data_spec_hash != Sha256(config.data_spec_hash):
-            raise ValueError("Existing score cache belongs to another data specification")
-        if identity.training_spec_hash != Sha256(config.training_spec_hash):
-            raise ValueError("Existing score cache belongs to another training specification")
-        if identity.model_hash != model_hash:
-            raise ValueError("Existing score cache belongs to another frozen model")
+        if descriptor.identity != expected:
+            raise ValueError(
+                "Existing score cache provenance does not exactly match the requested "
+                "dataset, preprocessing, training specification, seed, and frozen model"
+            )
