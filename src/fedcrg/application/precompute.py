@@ -11,11 +11,11 @@ from fedcrg.config.method_config import ProtocolConfig
 from fedcrg.domain.enums import ExperimentAxisId, ExperimentId
 from fedcrg.domain.values import OperatingBand
 from fedcrg.experiments.registry import ExperimentRegistry
-from fedcrg.protocol.mismatch import (
+from fedcrg.method.mismatch_detection import (
     clopper_pearson_interval,
     minimum_bidirectional_sample_count,
 )
-from fedcrg.protocol.readiness import (
+from fedcrg.method.calibration_readiness import (
     ReadinessPlanCache,
     familywise_readiness_assurance,
 )

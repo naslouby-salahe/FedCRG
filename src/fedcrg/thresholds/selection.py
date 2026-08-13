@@ -1,111 +1,56 @@
-"""One authoritative policy registry and information-regime-safe selector."""
+"""Explicit, typed selection of threshold-comparator results per requested policy."""
 
 from __future__ import annotations
-
-from dataclasses import dataclass
-from enum import StrEnum
 
 from fedcrg.config.method_config import ProtocolConfig
 from fedcrg.domain.enums import FailureCode, PolicyId
 from fedcrg.domain.identifiers import ClientId
-from fedcrg.policies.attack_aware import (
-    dev_local_global,
-    summary_statistic_threshold,
-    supervised_global_f1,
+from fedcrg.thresholds.comparators.development_f1 import dev_local_global
+from fedcrg.thresholds.comparators.global_quantile import global_quantile
+from fedcrg.thresholds.comparators.local_quantile import local_quantile
+from fedcrg.thresholds.comparators.mismatch_only import mismatch_only
+from fedcrg.thresholds.comparators.readiness_only import readiness_only
+from fedcrg.thresholds.comparators.reference_quantile import reference_quantile
+from fedcrg.thresholds.comparators.shrinkage import shrinkage, tune_shrinkage
+from fedcrg.thresholds.comparators.summary_statistic import summary_statistic_threshold
+from fedcrg.thresholds.comparators.supervised_f1 import supervised_global_f1
+from fedcrg.thresholds.comparators.three_sigma import three_sigma
+from fedcrg.thresholds.evidence import BenignPolicyEvidence, SupervisedDevelopmentEvidence
+from fedcrg.thresholds.results import (
+    ClientPolicyThreshold,
+    InformationRegime,
+    PolicyThresholdSet,
+    UndefinedPolicyReason,
 )
-from fedcrg.policies.base import BenignPolicyEvidence, SupervisedDevelopmentEvidence
-from fedcrg.policies.personalized import mismatch_only, readiness_only
-from fedcrg.policies.quantile import global_quantile, local_quantile, three_sigma
-from fedcrg.policies.shrinkage import shrinkage, tune_shrinkage
+
+SUPERVISED_POLICIES = frozenset(
+    {
+        PolicyId.DEV_F1_SELECT,
+        PolicyId.SUMMARY_STATISTIC_SELECT,
+        PolicyId.SUPERVISED_F1,
+    }
+)
 
 
-class InformationRegime(StrEnum):
-    BENIGN_ONLY = "benign_only"
-    SUPERVISED_DEVELOPMENT = "supervised_development"
-    FINAL_TEST_ORACLE = "final_test_oracle"
+def information_regime(policy_id: PolicyId) -> InformationRegime:
+    if policy_id is PolicyId.ORACLE_TEST:
+        return InformationRegime.FINAL_TEST_ORACLE
+    if policy_id in SUPERVISED_POLICIES:
+        return InformationRegime.SUPERVISED_DEVELOPMENT
+    return InformationRegime.BENIGN_ONLY
 
 
-@dataclass(frozen=True, slots=True)
-class PolicyDefinition:
-    id: PolicyId
-    information_regime: InformationRegime
-    deployable: bool
+def is_deployable(policy_id: PolicyId) -> bool:
+    return policy_id not in SUPERVISED_POLICIES and policy_id is not PolicyId.ORACLE_TEST
 
 
-@dataclass(frozen=True, slots=True)
-class ClientPolicyThreshold:
-    policy: PolicyId
-    client_id: ClientId
-    threshold: float | None
+def validate_policy_catalogue_completeness() -> None:
+    if len(set(PolicyId)) != 12:
+        raise RuntimeError("Policy catalogue must contain exactly 12 protocol policies")
 
 
-@dataclass(frozen=True, slots=True)
-class UndefinedPolicyReason:
-    policy: PolicyId
-    reason: FailureCode
-
-
-@dataclass(frozen=True, slots=True)
-class PolicyThresholdSet:
-    """Thresholds frozen before final-test evidence is opened."""
-
-    entries: tuple[ClientPolicyThreshold, ...]
-    undefined_reasons: tuple[UndefinedPolicyReason, ...]
-    shrinkage_n0: int | None
-
-    def for_client(self, policy: PolicyId, client_id: ClientId) -> float | None:
-        if policy is PolicyId.ORACLE_TEST:
-            raise ValueError("ORACLE-TEST is not available before final-test evidence opens")
-        for entry in self.entries:
-            if entry.policy is policy and entry.client_id == client_id:
-                return entry.threshold
-        raise KeyError(f"No threshold for {policy.value}/{client_id.value}")
-
-
-class PolicyRegistry:
-    _SUPERVISED = frozenset(
-        {
-            PolicyId.DEV_F1_SELECT,
-            PolicyId.SUMMARY_STATISTIC_SELECT,
-            PolicyId.SUPERVISED_F1,
-        }
-    )
-
-    def __init__(self) -> None:
-        self._definitions = {
-            policy: PolicyDefinition(
-                id=policy,
-                information_regime=(
-                    InformationRegime.FINAL_TEST_ORACLE
-                    if policy is PolicyId.ORACLE_TEST
-                    else InformationRegime.SUPERVISED_DEVELOPMENT
-                    if policy in self._SUPERVISED
-                    else InformationRegime.BENIGN_ONLY
-                ),
-                deployable=(policy not in self._SUPERVISED and policy is not PolicyId.ORACLE_TEST),
-            )
-            for policy in PolicyId
-        }
-
-    def get(self, policy_id: PolicyId) -> PolicyDefinition:
-        return self._definitions[policy_id]
-
-    def all_ids(self) -> tuple[PolicyId, ...]:
-        return tuple(self._definitions)
-
-    def supervised_requested(self, policies: tuple[PolicyId, ...]) -> bool:
-        return bool(set(policies) & self._SUPERVISED)
-
-    def assert_exact_protocol_registry(self) -> None:
-        if set(self._definitions) != set(PolicyId) or len(self._definitions) != 12:
-            raise RuntimeError("Policy registry must contain exactly 12 protocol policies")
-
-
-class FederationPolicySelector:
+class PolicyThresholdSelector:
     """Select only requested non-oracle policies from their permitted evidence."""
-
-    def __init__(self, registry: PolicyRegistry | None = None) -> None:
-        self.registry = registry or PolicyRegistry()
 
     def select(
         self,
@@ -126,7 +71,7 @@ class FederationPolicySelector:
         if len(set(client_ids)) != len(client_ids):
             raise ValueError("Policy selection received duplicate client identities")
 
-        supervised_needed = self.registry.supervised_requested(non_oracle)
+        supervised_needed = bool(set(non_oracle) & SUPERVISED_POLICIES)
         supervised_by_client: dict[ClientId, SupervisedDevelopmentEvidence] = {}
         if supervised_needed:
             if supervised_clients is None:
@@ -201,7 +146,7 @@ class FederationPolicySelector:
             for policy in non_oracle:
                 threshold: float | None
                 if policy is PolicyId.REFERENCE_QUANTILE:
-                    threshold = benign.protocol.reference.value
+                    threshold = reference_quantile(benign)
                 elif policy is PolicyId.GLOBAL_QUANTILE:
                     threshold = global_q
                 elif policy is PolicyId.LOCAL_QUANTILE:
@@ -229,7 +174,7 @@ class FederationPolicySelector:
                 elif policy is PolicyId.SUPERVISED_F1:
                     threshold = supervised_threshold
                 elif policy is PolicyId.FEDCRG:
-                    threshold = benign.protocol.decision.threshold
+                    threshold = benign.evaluation.decision.threshold
                 else:
                     raise RuntimeError(f"Unhandled non-oracle policy: {policy.value}")
                 entries.append(ClientPolicyThreshold(policy, client_id, threshold))
@@ -242,7 +187,7 @@ class FederationPolicySelector:
                 for policy, threshold in (
                     (PolicyId.GLOBAL_QUANTILE, global_q),
                     (PolicyId.LOCAL_QUANTILE, local_q[client_id]),
-                    (PolicyId.FEDCRG, benign.protocol.decision.threshold),
+                    (PolicyId.FEDCRG, benign.evaluation.decision.threshold),
                 ):
                     if not any(
                         item.policy is policy and item.client_id == client_id for item in entries

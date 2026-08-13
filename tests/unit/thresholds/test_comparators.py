@@ -12,26 +12,26 @@ from fedcrg.domain.enums import (
 )
 from fedcrg.domain.identifiers import ClientId
 from fedcrg.domain.values import ConfidenceInterval
-from fedcrg.policies.base import (
-    BenignPolicyEvidence,
-    SupervisedDevelopmentEvidence,
-    empirical_quantile,
-)
-from fedcrg.policies.registry import FederationPolicySelector
-from fedcrg.protocol.results import (
+from fedcrg.method.results import (
     CalibrationReadiness,
-    ClientProtocolResult,
+    ClientEvaluationResult,
     ContinuityDiagnostics,
     MismatchEvidence,
     ReadinessPlan,
     ReferenceThreshold,
     ThresholdDecision,
 )
+from fedcrg.thresholds.evidence import (
+    BenignPolicyEvidence,
+    SupervisedDevelopmentEvidence,
+    empirical_quantile,
+)
+from fedcrg.thresholds.selection import PolicyThresholdSelector
 
 _NON_ORACLE_POLICIES = tuple(policy for policy in PolicyId if policy is not PolicyId.ORACLE_TEST)
 
 
-def _protocol_result(client_id: ClientId, shift: float, mismatch: bool) -> ClientProtocolResult:
+def _protocol_result(client_id: ClientId, shift: float, mismatch: bool) -> ClientEvaluationResult:
     protocol_config = ProtocolConfig()
     reference = ReferenceThreshold(0.75, 1, 100, 2, 50)
     diagnostics = ContinuityDiagnostics(
@@ -71,7 +71,7 @@ def _protocol_result(client_id: ClientId, shift: float, mismatch: bool) -> Clien
         else DecisionReason.NO_MATERIAL_DIFFERENCE,
         tie_count=1,
     )
-    return ClientProtocolResult(client_id, reference, readiness, evidence, decision)
+    return ClientEvaluationResult(client_id, reference, readiness, evidence, decision)
 
 
 def _benign(client_id: str, shift: float = 0.0, mismatch: bool = True) -> BenignPolicyEvidence:
@@ -81,7 +81,7 @@ def _benign(client_id: str, shift: float = 0.0, mismatch: bool = True) -> Benign
         reference_scores=np.linspace(0.0, 0.7, 500),
         mismatch_scores=np.linspace(0.0, 1.0 + shift, 3000),
         calibration_scores=np.linspace(0.0, 1.0 + shift, 2000),
-        protocol=_protocol_result(typed_id, shift, mismatch),
+        evaluation=_protocol_result(typed_id, shift, mismatch),
     )
 
 
@@ -96,7 +96,7 @@ def _supervised(benign: BenignPolicyEvidence) -> SupervisedDevelopmentEvidence:
 def test_selector_returns_complete_threshold_ledger() -> None:
     benign_clients = (_benign("c1"), _benign("c2", 0.05))
     supervised_clients = tuple(_supervised(client) for client in benign_clients)
-    thresholds = FederationPolicySelector().select(
+    thresholds = PolicyThresholdSelector().select(
         benign_clients, ProtocolConfig(), _NON_ORACLE_POLICIES, supervised_clients
     )
     observed = {(entry.policy, entry.client_id) for entry in thresholds.entries}
@@ -109,7 +109,7 @@ def test_selector_returns_complete_threshold_ledger() -> None:
 
 def test_mismatch_only_uses_calibration_empirical_quantile() -> None:
     client = _benign("c1")
-    result = FederationPolicySelector().select(
+    result = PolicyThresholdSelector().select(
         (client,), ProtocolConfig(), (PolicyId.MISMATCH_ONLY,)
     )
     assert result.for_client(PolicyId.MISMATCH_ONLY, client.client_id) == empirical_quantile(
@@ -119,7 +119,7 @@ def test_mismatch_only_uses_calibration_empirical_quantile() -> None:
 
 def test_no_mismatch_ablation_retains_reference() -> None:
     client = _benign("c1", mismatch=False)
-    result = FederationPolicySelector().select(
+    result = PolicyThresholdSelector().select(
         (client,), ProtocolConfig(), (PolicyId.MISMATCH_ONLY,)
     )
     assert result.for_client(PolicyId.MISMATCH_ONLY, client.client_id) == 0.75

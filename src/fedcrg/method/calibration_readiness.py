@@ -16,7 +16,7 @@ from scipy import special
 
 from fedcrg.domain.enums import CalibrationReadinessState
 from fedcrg.domain.values import OperatingBand
-from fedcrg.protocol.results import (
+from fedcrg.method.results import (
     CalibrationReadiness,
     ContinuityDiagnostics,
     ReadinessPlan,

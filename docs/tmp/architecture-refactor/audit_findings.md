@@ -30,4 +30,28 @@ See current_state.md section 3 for full detail. Summary of findings to be fixed 
     application/*.py, experiments/models.py -- fix dependency direction, remove workaround.
     [ongoing, all phases]
 
-Status: none yet resolved -- migration not started.
+## Phase 1-4 resolutions
+
+- Finding #3 (protocol/ vs policies/ split mismatched target method/ vs thresholds/ split):
+  RESOLVED in Phase 4. Re-partitioned into method/ (FedCRG's own steps) and thresholds/
+  (comparators), see remaining_work.md Phase 4 notes.
+- Finding #4 (policies/registry.py + experiments/registry.py "registry" pattern forbidden):
+  policies/registry.py RESOLVED in Phase 4 (dissolved into thresholds/selection.py's
+  explicit functions + PolicyThresholdSelector). experiments/registry.py still pending,
+  deferred to Phase 6 (application/ -> pipeline/ collapse touches experiments/ too).
+- Finding #8 (scoring/__init__.py, data/datasets/__init__.py re-export dumping grounds):
+  RESOLVED in Phases 2-3. scoring/__init__.py emptied; data/datasets/ package deleted
+  entirely (nbaiot.py/diad.py flattened into data/ directly, no re-exporting __init__.py
+  remains).
+- Finding #9 (config/validation.py importing policies.registry, downward dependency):
+  RESOLVED in Phase 4. The only real dependency was a "policy catalogue has exactly 12
+  members" check, now inlined directly against the domain PolicyId enum -- config/validate.py
+  no longer imports thresholds/ (or any package below it) at all.
+- Findings #1 (four orchestration layers), #2 (results.py/models.py naming), #5
+  (environment.py/environment_lock.py duplication), #6 (experiments/executor.py dead code),
+  #7 (application/robustness.py thin wrapper), #10 (application/* importing analysis/*
+  backwards), #11 (function-body-local imports dodging circular imports): still open,
+  targeted for Phase 5/6.
+
+Status: 4 of 9 phases complete (domain+config, data+detectors, federation+scoring,
+method+thresholds). See remaining_work.md for per-phase detail.

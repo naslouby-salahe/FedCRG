@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from fedcrg.domain.values import OperatingBand
-from fedcrg.protocol.readiness import ReadinessPlanCache
+from fedcrg.method.calibration_readiness import ReadinessPlanCache
 
 
 def test_runtime_lookup_never_materializes_missing_readiness_plan(tmp_path: Path) -> None:

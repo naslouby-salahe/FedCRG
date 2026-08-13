@@ -5,7 +5,7 @@ Update this file as phases complete. Status values: TODO / IN_PROGRESS / DONE.
 - [x] Phase 1: domain + config          STATUS: DONE
 - [x] Phase 2: data + detectors          STATUS: DONE
 - [x] Phase 3: federation + scoring      STATUS: DONE
-- [ ] Phase 4: method + thresholds       STATUS: TODO
+- [x] Phase 4: method + thresholds       STATUS: DONE
 - [ ] Phase 5: evaluation + analysis/reporting split   STATUS: TODO
 - [ ] Phase 6: application/ removed -> pipeline/ + experiments/definitions/   STATUS: TODO
 - [ ] Phase 7: artifacts consolidation   STATUS: TODO
@@ -113,6 +113,62 @@ Do not run full pytest/mypy/ruff after every micro-edit -- only at phase complet
   errors as before (application/report.py, application/claims.py, application/
   federation_cell.py, scoring/cache.py) -- none newly introduced, none in federation/ or
   scoring/ itself; full pytest -n auto suite passes (129 tests, unchanged).
+
+## Phase 4 completion notes (method + thresholds)
+- protocol/ renamed to method/: reference.py -> reference_threshold.py, readiness.py ->
+  calibration_readiness.py, mismatch.py -> mismatch_detection.py, decision.py ->
+  threshold_decision.py, service.py -> client_evaluation.py, results.py kept.
+  FedCRGProtocol class renamed to ClientEvaluation; ClientProtocolResult renamed to
+  ClientEvaluationResult (repo-wide, ~9 files).
+- policies/ dissolved and re-partitioned into thresholds/ (comparators) since the old
+  protocol/-vs-policies/ split did not match the target method/-vs-thresholds/ split:
+  - policies/base.py -> thresholds/evidence.py (BenignPolicyEvidence's `protocol` field
+    renamed to `evaluation` -- it holds a ClientEvaluationResult, not a protocol).
+  - policies/quantile.py split into thresholds/comparators/{global_quantile,local_quantile,
+    three_sigma}.py (one file per comparator per target tree).
+  - policies/personalized.py split into thresholds/comparators/{readiness_only,
+    mismatch_only}.py.
+  - policies/attack_aware.py split into thresholds/comparators/{development_f1,
+    summary_statistic,supervised_f1}.py; the shared per-threshold-F1 helper (private
+    `_defined_f1`/`_mean_client_f1`) was made public as `f1_at_threshold`/
+    `mean_client_f1_at_threshold` in development_f1.py so the other two comparators can
+    import it directly instead of duplicating it or reaching into a private name.
+  - policies/shrinkage.py -> thresholds/comparators/shrinkage.py.
+  - policies/oracle.py -> thresholds/comparators/oracle_test.py.
+  - NEW thresholds/comparators/reference_quantile.py: the REFERENCE_QUANTILE (REF-Q99-R)
+    policy was previously inlined directly in the registry as
+    `benign.protocol.reference.value`; extracted into its own one-line comparator function
+    for consistency with every other policy having a named comparator function.
+  - policies/registry.py (PolicyRegistry + FederationPolicySelector) dissolved per
+    prompt.md's explicit "Do not create a policy registry" rule:
+    - InformationRegime enum, ClientPolicyThreshold, UndefinedPolicyReason,
+      PolicyThresholdSet moved to new thresholds/results.py.
+    - PolicyDefinition dataclass eliminated -- its two derived facts became plain functions
+      `information_regime(policy_id)` and `is_deployable(policy_id)` in new
+      thresholds/selection.py, backed by an explicit `SUPERVISED_POLICIES` frozenset
+      constant (no dynamically-built dict-of-definitions).
+      `assert_exact_protocol_registry` -> `validate_policy_catalogue_completeness()`.
+    - FederationPolicySelector renamed to PolicyThresholdSelector (same explicit typed
+      if/elif dispatch it already had; only the "registry" indirection and word are gone --
+      it now calls thresholds/comparators/* functions directly instead of going through a
+      registry-provided dict of policy definitions).
+  - policies/ package deleted entirely.
+- Resolved audit finding #9 (config/validate.py importing policies.registry, a downward
+  dependency): the only thing config/validate.py needed from the registry was a "policy
+  catalogue has exactly 12 members" check, which is now inlined as
+  `len(set(PolicyId)) != 12` directly against the domain enum -- config no longer imports
+  thresholds/ at all.
+- application/evaluate.py (EvaluatePolicies) updated: imports repointed to
+  method/thresholds/scoring's new locations, `selector.registry.supervised_requested(...)`
+  replaced with `bool(set(config.policies) & SUPERVISED_POLICIES)` (no registry object to
+  delegate to anymore).
+- tests/unit/protocol/ -> tests/unit/method/ (files renamed to match); tests/unit/policies/
+  -> tests/unit/thresholds/ (test_policies.py -> test_comparators.py, test_registry.py ->
+  test_selection.py, rewritten against information_regime()/is_deployable() instead of the
+  deleted PolicyRegistry.get()/all_ids()).
+- Validation: ruff check/format clean; mypy (py312 override) reports 0 issues across
+  method/, thresholds/, config/, and application/evaluate.py; full pytest -n auto suite
+  passes (130 tests -- one net-new test added alongside the registry-removal rewrite).
 
 ## Notes / open decisions to resolve during implementation
 - config/validate.py must not import thresholds/ (downward dependency violation in old

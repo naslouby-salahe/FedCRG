@@ -7,7 +7,7 @@ from fedcrg.domain.enums import (
     MismatchOutcome,
     ThresholdSource,
 )
-from fedcrg.protocol.results import (
+from fedcrg.method.results import (
     CalibrationReadiness,
     MismatchEvidence,
     ReferenceThreshold,

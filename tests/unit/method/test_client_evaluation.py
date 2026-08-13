@@ -2,11 +2,11 @@ import numpy as np
 from fedcrg.config.method_config import ProtocolConfig
 from fedcrg.domain.enums import DecisionState
 from fedcrg.domain.identifiers import ClientId
-from fedcrg.protocol.service import FedCRGProtocol
+from fedcrg.method.client_evaluation import ClientEvaluation
 
 
 def test_protocol_service_composes_reference_readiness_mismatch_and_decision() -> None:
-    protocol = FedCRGProtocol()
+    protocol = ClientEvaluation()
     config = ProtocolConfig()
     client_a = ClientId("a")
     reference = protocol.estimate_reference(

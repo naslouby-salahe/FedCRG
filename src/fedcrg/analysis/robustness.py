@@ -9,7 +9,7 @@ from scipy.stats import norm
 
 from fedcrg.domain.enums import ExperimentAxisId
 from fedcrg.domain.values import OperatingBand
-from fedcrg.protocol.readiness import ReadinessPlanBuilder
+from fedcrg.method.calibration_readiness import ReadinessPlanBuilder
 
 
 @dataclass(frozen=True, slots=True)

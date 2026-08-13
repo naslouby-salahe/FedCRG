@@ -8,7 +8,7 @@ from collections.abc import Mapping
 import numpy as np
 
 from fedcrg.domain.identifiers import ClientId
-from fedcrg.protocol.results import ReferenceThreshold
+from fedcrg.method.results import ReferenceThreshold
 
 
 def reference_rank(sample_count: int, alpha: float) -> int:

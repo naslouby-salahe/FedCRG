@@ -5,8 +5,8 @@ from fedcrg.domain.enums import (
     ThresholdSource,
 )
 from fedcrg.domain.values import ConfidenceInterval, OperatingBand
-from fedcrg.protocol.decision import ThresholdDecisionEngine
-from fedcrg.protocol.results import (
+from fedcrg.method.threshold_decision import ThresholdDecisionEngine
+from fedcrg.method.results import (
     CalibrationReadiness,
     ContinuityDiagnostics,
     MismatchEvidence,

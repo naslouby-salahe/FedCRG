@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from fedcrg.domain.enums import PolicyEvaluationStatus, PolicyId
 from fedcrg.domain.identifiers import ClientId
 from fedcrg.domain.values import ConfidenceInterval
-from fedcrg.protocol.results import ClientProtocolResult
+from fedcrg.method.results import ClientEvaluationResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,7 +64,7 @@ class FederationMetrics:
 class EvaluationBundle:
     clients: tuple[PolicyEvaluation, ...]
     federations: tuple[FederationMetrics, ...]
-    protocol_results: tuple[ClientProtocolResult, ...]
+    protocol_results: tuple[ClientEvaluationResult, ...]
     shrinkage_n0: int | None
 
 

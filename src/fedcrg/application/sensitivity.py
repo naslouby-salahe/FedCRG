@@ -29,13 +29,13 @@ from fedcrg.experiments.real_sensitivity import (
 )
 from fedcrg.experiments.registry import ExperimentRegistry
 from fedcrg.metrics.results import EvaluationBundle
-from fedcrg.protocol.mismatch import (
+from fedcrg.method.mismatch_detection import (
     FleetMismatchDecision,
     bonferroni_fleet_sensitivity,
     holm_directional_fleet_sensitivity,
 )
-from fedcrg.protocol.readiness import familywise_readiness_assurance
-from fedcrg.protocol.results import ClientProtocolResult
+from fedcrg.method.calibration_readiness import familywise_readiness_assurance
+from fedcrg.method.results import ClientEvaluationResult
 from fedcrg.scoring.cache import ScoreCache
 from fedcrg.scoring.calibration_scores import (
     CalibrationScoreViews,
@@ -64,7 +64,7 @@ class SensitivityEnvelope:
 @dataclass(frozen=True, slots=True)
 class MultiplicityCell:
     procedure: MultiplicityProcedure
-    readiness_results: tuple[ClientProtocolResult, ...] = ()
+    readiness_results: tuple[ClientEvaluationResult, ...] = ()
     mismatch_results: tuple[FleetMismatchDecision, ...] = ()
 
 

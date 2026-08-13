@@ -14,8 +14,8 @@ from fedcrg.artifacts.verification import ArtifactVerifier, VerificationResult
 from fedcrg.domain.enums import ExperimentStatus
 from fedcrg.experiments.completion import ExperimentCompletion, ExperimentCompletionAuditor
 from fedcrg.experiments.registry import ExperimentRegistry
-from fedcrg.protocol.mismatch import minimum_bidirectional_sample_count
-from fedcrg.protocol.readiness import ReadinessPlanCache
+from fedcrg.method.mismatch_detection import minimum_bidirectional_sample_count
+from fedcrg.method.calibration_readiness import ReadinessPlanCache
 
 
 @dataclass(frozen=True, slots=True)

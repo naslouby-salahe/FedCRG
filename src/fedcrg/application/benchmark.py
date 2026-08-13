@@ -14,10 +14,10 @@ from fedcrg.artifacts.experiment_results import ExperimentResultEnvelope
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import ExperimentCode
 from fedcrg.domain.identifiers import ClientId, Sha256
-from fedcrg.protocol.decision import ThresholdDecisionEngine
-from fedcrg.protocol.mismatch import ReferenceMismatchEvaluator
-from fedcrg.protocol.readiness import CalibrationReadinessEvaluator, ReadinessPlanCache
-from fedcrg.protocol.reference import ReferenceThresholdEstimator
+from fedcrg.method.threshold_decision import ThresholdDecisionEngine
+from fedcrg.method.mismatch_detection import ReferenceMismatchEvaluator
+from fedcrg.method.calibration_readiness import CalibrationReadinessEvaluator, ReadinessPlanCache
+from fedcrg.method.reference_threshold import ReferenceThresholdEstimator
 
 
 class RunBenchmark:

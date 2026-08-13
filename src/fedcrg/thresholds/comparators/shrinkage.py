@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from fedcrg.domain.constants import SHRINKAGE_N0_CANDIDATES
-from fedcrg.policies.base import BenignPolicyEvidence, empirical_quantile
+from fedcrg.thresholds.evidence import BenignPolicyEvidence, empirical_quantile
 
 
 def _estimated_fpr(scores: np.ndarray, threshold: float) -> float:
@@ -23,7 +23,7 @@ def tune_shrinkage(clients: tuple[BenignPolicyEvidence, ...], alpha: float) -> i
             local = empirical_quantile(client.calibration_scores, alpha)
             n_calibration = len(client.calibration_scores)
             weight = n_calibration / (n_calibration + n0)
-            threshold = weight * local + (1.0 - weight) * client.protocol.reference.value
+            threshold = weight * local + (1.0 - weight) * client.evaluation.reference.value
             errors.append(abs(_estimated_fpr(client.mismatch_scores, threshold) - alpha))
         mean_error = float(np.mean(errors))
         if mean_error < best_error or (
@@ -38,4 +38,4 @@ def shrinkage(client: BenignPolicyEvidence, alpha: float, n0: int) -> float:
     local = empirical_quantile(client.calibration_scores, alpha)
     n_calibration = len(client.calibration_scores)
     weight = n_calibration / (n_calibration + n0)
-    return weight * local + (1.0 - weight) * client.protocol.reference.value
+    return weight * local + (1.0 - weight) * client.evaluation.reference.value

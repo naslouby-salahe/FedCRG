@@ -76,7 +76,7 @@ class ThresholdDecision:
 
 
 @dataclass(frozen=True, slots=True)
-class ClientProtocolResult:
+class ClientEvaluationResult:
     client_id: ClientId
     reference: ReferenceThreshold
     readiness: CalibrationReadiness

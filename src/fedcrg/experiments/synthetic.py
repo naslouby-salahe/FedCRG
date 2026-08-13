@@ -14,8 +14,8 @@ from fedcrg.domain.enums import (
     SyntheticDistribution,
 )
 from fedcrg.domain.values import OperatingBand
-from fedcrg.protocol.mismatch import clopper_pearson_interval
-from fedcrg.protocol.readiness import ReadinessPlanBuilder
+from fedcrg.method.mismatch_detection import clopper_pearson_interval
+from fedcrg.method.calibration_readiness import ReadinessPlanBuilder
 
 
 @dataclass(frozen=True, slots=True)

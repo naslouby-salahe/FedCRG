@@ -28,7 +28,7 @@ from fedcrg.domain.enums import (
 )
 from fedcrg.domain.identifiers import ClientId, RowId, Sha256
 from fedcrg.data.prepare import ClientDatasetManifest, RoleArtifactManifest, hash_row_ids
-from fedcrg.protocol.readiness import ReadinessPlanCache
+from fedcrg.method.calibration_readiness import ReadinessPlanCache
 
 _FEATURES = ("f1", "f2", "f3", "f4")
 _ROLE_ROWS = {

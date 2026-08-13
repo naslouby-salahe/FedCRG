@@ -7,7 +7,7 @@ import numpy as np
 from fedcrg.domain.values import OperatingBand
 from fedcrg.metrics.classification import confusion_matrix, tpr
 from fedcrg.metrics.operating_band import band_error
-from fedcrg.policies.base import FinalTestEvidence
+from fedcrg.thresholds.evidence import FinalTestEvidence
 
 
 def oracle_choice(

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from fedcrg.domain.enums import CalibrationReadinessState, DecisionState, MismatchOutcome
-from fedcrg.protocol.results import ClientProtocolResult
+from fedcrg.method.results import ClientEvaluationResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,7 +20,7 @@ class AdmissionSummary:
     assumption_violation_rate: float
 
 
-def summarize_admission(results: tuple[ClientProtocolResult, ...]) -> AdmissionSummary:
+def summarize_admission(results: tuple[ClientEvaluationResult, ...]) -> AdmissionSummary:
     if not results:
         raise ValueError("Admission summary requires clients")
     n = len(results)

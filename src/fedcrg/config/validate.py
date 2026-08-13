@@ -10,14 +10,13 @@ from fedcrg.domain.enums import (
     PolicyId,
 )
 from fedcrg.domain.errors import ConfigurationError
-from fedcrg.policies.registry import PolicyRegistry
 
 
 def validate_experiment_config(config: ExperimentConfig) -> None:
-    """Validate frozen cross-registry and training-profile invariants.
+    """Validate frozen cross-model and training-profile invariants.
 
     Dataset-schema invariants are owned by ``DatasetConfig``. This function only
-    checks relationships spanning detector/training/randomness/policy registries.
+    checks relationships spanning detector/training/randomness/policy identity.
     """
 
     if config.dataset.id is not DatasetId.SYNTHETIC and config.training.rounds != 30:
@@ -54,4 +53,5 @@ def validate_experiment_config(config: ExperimentConfig) -> None:
     registered = set(PolicyId)
     if any(policy not in registered for policy in config.policies):
         raise ConfigurationError("Experiment contains an unregistered policy")
-    PolicyRegistry().assert_exact_protocol_registry()
+    if len(registered) != 12:
+        raise ConfigurationError("Policy catalogue must contain exactly 12 protocol policies")

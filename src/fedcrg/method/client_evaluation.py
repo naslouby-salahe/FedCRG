@@ -9,14 +9,14 @@ import numpy as np
 
 from fedcrg.config.method_config import ProtocolConfig
 from fedcrg.domain.identifiers import ClientId
-from fedcrg.protocol.decision import ThresholdDecisionEngine
-from fedcrg.protocol.mismatch import ReferenceMismatchEvaluator
-from fedcrg.protocol.readiness import CalibrationReadinessEvaluator, ReadinessPlanCache
-from fedcrg.protocol.reference import ReferenceThresholdEstimator
-from fedcrg.protocol.results import ClientProtocolResult, ReadinessPlan, ReferenceThreshold
+from fedcrg.method.threshold_decision import ThresholdDecisionEngine
+from fedcrg.method.mismatch_detection import ReferenceMismatchEvaluator
+from fedcrg.method.calibration_readiness import CalibrationReadinessEvaluator, ReadinessPlanCache
+from fedcrg.method.reference_threshold import ReferenceThresholdEstimator
+from fedcrg.method.results import ClientEvaluationResult, ReadinessPlan, ReferenceThreshold
 
 
-class FedCRGProtocol:
+class ClientEvaluation:
     def __init__(
         self,
         reference_estimator: ReferenceThresholdEstimator | None = None,
@@ -32,7 +32,7 @@ class FedCRGProtocol:
         self.readiness_cache = readiness_cache or ReadinessPlanCache()
 
     @classmethod
-    def with_persistent_readiness_cache(cls, path: Path) -> FedCRGProtocol:
+    def with_persistent_readiness_cache(cls, path: Path) -> ClientEvaluation:
         return cls(readiness_cache=ReadinessPlanCache(path))
 
     def estimate_reference(
@@ -76,7 +76,7 @@ class FedCRGProtocol:
         mismatch_scores: np.ndarray,
         config: ProtocolConfig,
         readiness_plan: ReadinessPlan | None = None,
-    ) -> ClientProtocolResult:
+    ) -> ClientEvaluationResult:
         plan = readiness_plan or self.require_readiness(
             len(calibration_scores),
             config,
@@ -94,7 +94,7 @@ class FedCRGProtocol:
             mismatch=mismatch,
             reject_calibration_ties=config.reject_calibration_ties,
         )
-        return ClientProtocolResult(
+        return ClientEvaluationResult(
             client_id=client_id,
             reference=reference,
             readiness=readiness,

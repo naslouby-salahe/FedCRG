@@ -12,7 +12,7 @@ from scipy.stats import binom
 from fedcrg.domain.enums import MismatchOutcome
 from fedcrg.domain.identifiers import ClientId
 from fedcrg.domain.values import ConfidenceInterval, OperatingBand
-from fedcrg.protocol.results import MismatchEvidence
+from fedcrg.method.results import MismatchEvidence
 
 
 def clopper_pearson_interval(x: int, n: int, confidence: float) -> ConfidenceInterval:

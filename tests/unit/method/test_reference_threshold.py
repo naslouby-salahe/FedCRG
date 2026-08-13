@@ -1,7 +1,7 @@
 import numpy as np
 
 from fedcrg.domain.identifiers import ClientId
-from fedcrg.protocol.reference import ReferenceThresholdEstimator, reference_rank
+from fedcrg.method.reference_threshold import ReferenceThresholdEstimator, reference_rank
 
 
 def test_reference_rank_exact_primary_value() -> None:

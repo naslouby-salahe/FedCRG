@@ -77,8 +77,8 @@ def test_domain_is_dependency_free_from_outer_layers() -> None:
         "fedcrg.experiments",
         "fedcrg.federation",
         "fedcrg.metrics",
-        "fedcrg.policies",
-        "fedcrg.protocol",
+        "fedcrg.method",
+        "fedcrg.thresholds",
         "fedcrg.scoring",
     )
     violations: list[str] = []
@@ -89,14 +89,14 @@ def test_domain_is_dependency_free_from_outer_layers() -> None:
     assert not violations, "\n".join(violations)
 
 
-def test_protocol_does_not_depend_on_application_cli_or_artifact_io() -> None:
+def test_method_does_not_depend_on_application_cli_or_artifact_io() -> None:
     forbidden_prefixes = (
         "fedcrg.application",
         "fedcrg.cli",
         "fedcrg.experiments",
     )
     violations: list[str] = []
-    for path in _python_files(SRC / "protocol"):
+    for path in _python_files(SRC / "method"):
         for imported in _imports(path):
             if imported.startswith(forbidden_prefixes):
                 violations.append(f"{path.relative_to(ROOT)} -> {imported}")
@@ -105,10 +105,10 @@ def test_protocol_does_not_depend_on_application_cli_or_artifact_io() -> None:
 
 def test_cli_never_imports_statistical_or_training_implementation_directly() -> None:
     forbidden_prefixes = (
-        "fedcrg.protocol",
+        "fedcrg.method",
         "fedcrg.federation",
         "fedcrg.detectors",
-        "fedcrg.policies",
+        "fedcrg.thresholds",
         "fedcrg.metrics",
     )
     violations: list[str] = []

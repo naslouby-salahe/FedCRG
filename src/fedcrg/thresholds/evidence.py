@@ -1,4 +1,4 @@
-"""Typed policy evidence views and the shared finite-sample quantile rule."""
+"""Typed threshold-comparator evidence views and the shared finite-sample quantile rule."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from fedcrg.domain.identifiers import AttackGroupId, ClientId
-from fedcrg.protocol.results import ClientProtocolResult
+from fedcrg.method.results import ClientEvaluationResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,7 +16,7 @@ class BenignPolicyEvidence:
     reference_scores: np.ndarray
     mismatch_scores: np.ndarray
     calibration_scores: np.ndarray
-    protocol: ClientProtocolResult
+    evaluation: ClientEvaluationResult
 
     def __post_init__(self) -> None:
         for name in ("reference_scores", "mismatch_scores", "calibration_scores"):

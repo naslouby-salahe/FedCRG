@@ -1,7 +1,7 @@
 import numpy as np
 from fedcrg.domain.enums import CalibrationReadinessState
 from fedcrg.domain.values import OperatingBand
-from fedcrg.protocol.readiness import CalibrationReadinessEvaluator, ReadinessPlanBuilder
+from fedcrg.method.calibration_readiness import CalibrationReadinessEvaluator, ReadinessPlanBuilder
 
 
 def test_primary_readiness_exact_values() -> None:

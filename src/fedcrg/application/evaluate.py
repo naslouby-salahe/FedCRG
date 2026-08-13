@@ -36,18 +36,19 @@ from fedcrg.metrics.operating_band import (
 )
 from fedcrg.metrics.ranking import auprc, auroc
 from fedcrg.metrics.results import ClientMetrics, EvaluationBundle, PolicyEvaluation
-from fedcrg.policies.base import (
+from fedcrg.method.client_evaluation import ClientEvaluation
+from fedcrg.method.mismatch_detection import clopper_pearson_interval
+from fedcrg.method.results import ClientEvaluationResult
+from fedcrg.scoring.cache import ScoreCache, ScoreCacheDescriptor
+from fedcrg.scoring.calibration_scores import CalibrationScoreViewBuilder, CalibrationScoreViews
+from fedcrg.thresholds.comparators.oracle_test import oracle_choice
+from fedcrg.thresholds.evidence import (
     BenignPolicyEvidence,
     FinalTestEvidence,
     SupervisedDevelopmentEvidence,
 )
-from fedcrg.policies.oracle import oracle_choice
-from fedcrg.policies.registry import FederationPolicySelector, PolicyThresholdSet
-from fedcrg.protocol.mismatch import clopper_pearson_interval
-from fedcrg.protocol.results import ClientProtocolResult
-from fedcrg.protocol.service import FedCRGProtocol
-from fedcrg.scoring.cache import ScoreCache, ScoreCacheDescriptor
-from fedcrg.scoring.calibration_scores import CalibrationScoreViewBuilder, CalibrationScoreViews
+from fedcrg.thresholds.results import PolicyThresholdSet
+from fedcrg.thresholds.selection import SUPERVISED_POLICIES, PolicyThresholdSelector
 
 
 class EvaluatePolicies:
@@ -60,18 +61,18 @@ class EvaluatePolicies:
 
     def __init__(
         self,
-        selector: FederationPolicySelector | None = None,
+        selector: PolicyThresholdSelector | None = None,
         views: CalibrationScoreViewBuilder | None = None,
         score_cache: ScoreCache | None = None,
     ) -> None:
-        self.selector = selector or FederationPolicySelector()
+        self.selector = selector or PolicyThresholdSelector()
         self.views = views or CalibrationScoreViewBuilder()
         self.score_cache = score_cache or ScoreCache()
 
     @staticmethod
-    def _protocol(config: ExperimentConfig) -> FedCRGProtocol:
+    def _protocol(config: ExperimentConfig) -> ClientEvaluation:
         cache_path = config.outputs_root / "cache" / "precomputed" / "readiness_plans.json"
-        return FedCRGProtocol.with_persistent_readiness_cache(cache_path)
+        return ClientEvaluation.with_persistent_readiness_cache(cache_path)
 
     @staticmethod
     def _validate_score_identity(
@@ -114,7 +115,7 @@ class EvaluatePolicies:
         self,
         config: ExperimentConfig,
         calibration_views: CalibrationScoreViews,
-    ) -> dict[ClientId, ClientProtocolResult]:
+    ) -> dict[ClientId, ClientEvaluationResult]:
         protocol = self._protocol(config)
         reference_by_client = {
             client_id: calibration_views.get(client_id, DataRole.REFERENCE).values
@@ -149,7 +150,7 @@ class EvaluatePolicies:
     @staticmethod
     def _benign_inputs(
         views: CalibrationScoreViews,
-        protocol_results: dict[ClientId, ClientProtocolResult],
+        protocol_results: dict[ClientId, ClientEvaluationResult],
     ) -> tuple[BenignPolicyEvidence, ...]:
         return tuple(
             BenignPolicyEvidence(
@@ -157,7 +158,7 @@ class EvaluatePolicies:
                 reference_scores=views.get(client_id, DataRole.REFERENCE).values,
                 mismatch_scores=views.get(client_id, DataRole.MISMATCH).values,
                 calibration_scores=views.get(client_id, DataRole.CALIBRATION).values,
-                protocol=protocol_results[client_id],
+                evaluation=protocol_results[client_id],
             )
             for client_id in views.client_ids
         )
@@ -225,7 +226,7 @@ class EvaluatePolicies:
         benign_inputs = self._benign_inputs(views, protocol_results)
         supervised_inputs = (
             self._supervised_inputs(score_root, views, benign_inputs)
-            if self.selector.registry.supervised_requested(config.policies)
+            if bool(set(config.policies) & SUPERVISED_POLICIES)
             else None
         )
         thresholds = self.selector.select(

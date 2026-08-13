@@ -2,7 +2,10 @@ import numpy as np
 
 from fedcrg.domain.enums import MismatchOutcome
 from fedcrg.domain.values import OperatingBand
-from fedcrg.protocol.mismatch import ReferenceMismatchEvaluator, minimum_bidirectional_sample_count
+from fedcrg.method.mismatch_detection import (
+    ReferenceMismatchEvaluator,
+    minimum_bidirectional_sample_count,
+)
 
 
 def _scores(n: int, x: int) -> np.ndarray:
