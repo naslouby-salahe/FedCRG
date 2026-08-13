@@ -1,0 +1,9 @@
+{
+  "as_of": "2026-08-13T00:00:00Z",
+  "verifications": [
+    {"id": "VER001", "check": "pytest full suite", "result": "pass", "detail": "148 tests collected and passed at baseline", "when": "2026-08-13T00:00:00Z"},
+    {"id": "VER002", "check": "ruff check src tests", "result": "pass", "detail": "All checks passed at baseline", "when": "2026-08-13T00:00:00Z"},
+    {"id": "VER003", "check": "ruff format --check src tests", "result": "fail", "detail": "2 files would be reformatted: analysis/policy_contrasts.py, reporting/tables.py", "when": "2026-08-13T00:00:00Z"},
+    {"id": "VER004", "check": "pyright src/fedcrg", "result": "fail", "detail": "4 errors: experiment_runner.py:70 calibration_seed int vs CalibrationSeed", "when": "2026-08-13T00:00:00Z"}
+  ]
+}

@@ -1,0 +1,116 @@
+# FedCRG study-level scientific configuration.
+# Owns every study-wide locked value: protocol, statistics, randomness,
+# detector/training profiles, and the policy registry.
+# Dataset contracts and the experiment catalogue live in the sibling files.
+
+protocol:
+  id: fedcrg
+  version: "2.0"
+  alpha: 0.01
+  rho: 0.50
+  readiness_assurance: 0.95
+  mismatch_confidence: 0.95
+  strict_exceedance: true
+  reject_calibration_ties: true
+
+statistics:
+  bootstrap_replicates: 10000
+  bootstrap_seed: 424242
+  utility_margin: 0.03
+  familywise_alpha: 0.05
+  ranking_invariance_tolerance: 0.000000000001
+  shrinkage_n0_candidates: [100, 300, 1000, 3000, 10000]
+  supervised_threshold_candidates: 1000
+
+randomness:
+  model_seeds: [11, 22, 33, 44, 55]
+  attack_split_seed: 9001
+  synthetic_seed: 123456
+
+detector_profiles:
+  nbaiot_autoencoder:
+    id: autoencoder
+    hidden_dims: [86, 57, 38, 29]
+    activation: tanh
+    xavier_tanh_gain: 1.6666666666666667
+    zero_bias: true
+  diad_autoencoder:
+    id: autoencoder
+    hidden_dims: [64, 43, 28, 21]
+    activation: tanh
+    xavier_tanh_gain: 1.6666666666666667
+    zero_bias: true
+  nbaiot_deep_svdd:
+    id: deep_svdd
+    hidden_dims: [64]
+    embedding_dim: 32
+    activation: tanh
+    bias: false
+    center_mode: equal_mean_of_client_initial_embeddings
+
+training_profiles:
+  nbaiot_autoencoder:
+    rounds: 30
+    local_epochs: 120
+    batch_size: 64
+    optimizer: adam
+    learning_rate_initial: 0.001
+    learning_rate_final: 0.00001
+    adam_betas: [0.9, 0.999]
+    adam_epsilon: 0.00000001
+    weight_decay: 0.0
+    client_fraction: 1.0
+    aggregation: equal_client_mean
+    mixed_precision: false
+    early_stopping: false
+    deterministic_algorithms: true
+    record_round20_score_correlation: false
+    device: cuda
+  diad_autoencoder:
+    rounds: 30
+    local_epochs: 20
+    batch_size: 64
+    optimizer: adam
+    learning_rate_initial: 0.001
+    learning_rate_final: 0.00001
+    adam_betas: [0.9, 0.999]
+    adam_epsilon: 0.00000001
+    weight_decay: 0.0
+    client_fraction: 1.0
+    aggregation: equal_client_mean
+    mixed_precision: false
+    early_stopping: false
+    deterministic_algorithms: true
+    record_round20_score_correlation: true
+    device: cuda
+  nbaiot_deep_svdd:
+    rounds: 30
+    local_epochs: 20
+    batch_size: 64
+    optimizer: adam
+    learning_rate_initial: 0.001
+    learning_rate_final: 0.00001
+    adam_betas: [0.9, 0.999]
+    adam_epsilon: 0.00000001
+    weight_decay: 0.0
+    client_fraction: 1.0
+    aggregation: equal_client_mean
+    mixed_precision: false
+    early_stopping: false
+    deterministic_algorithms: true
+    record_round20_score_correlation: false
+    device: cuda
+
+policies:
+  - reference_quantile
+  - global_quantile
+  - local_quantile
+  - readiness_only
+  - mismatch_only
+  - shrinkage
+  - three_sigma
+  - development_f1_selection
+  - summary_statistic
+  - supervised_f1
+  - oracle_test
+  - fedcrg

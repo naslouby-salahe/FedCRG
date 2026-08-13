@@ -1,0 +1,23 @@
+{
+  "goal": "FedCRG architecture simplification and full implementation (prompt.md)",
+  "cycle": 1,
+  "updated_at": "2026-08-13T00:00:00Z",
+  "baseline": {
+    "pytest": "148 passed",
+    "ruff_check": "pass",
+    "ruff_format": "2 files need formatting",
+    "pyright": "4 errors"
+  },
+  "milestones": {
+    "m0_tracking": {"status": "in_progress", "note": "docs/FedCRG Audit Matrix.md + docs/work/ JSON state created"},
+    "m1_config": {"status": "pending", "note": "config/{study,datasets,experiments}.yaml + src/fedcrg/config.py; delete configs/"},
+    "m2_catalogue": {"status": "pending", "note": "experiment catalogue to experiments.yaml; delete experiments/definitions/"},
+    "m3_source": {"status": "pending", "note": "restructure src/fedcrg to target tree"},
+    "m4_tests": {"status": "pending", "note": "migrate tests, rewrite architecture contract tests, add primitive-leak/drift/canonical tests"},
+    "m5_reuse_tests": {"status": "pending", "note": "preprocessing/cache/publication/runtime reuse tests"},
+    "m6_outputs_results": {"status": "pending", "note": "outputs restructure + results bundles + CLI"},
+    "m7_tooling": {"status": "pending", "note": "CLI surface, Makefile, noxfile, pyproject, README"},
+    "m8_quality": {"status": "pending", "note": "full quality gate + hostile audit loop"}
+  },
+  "current_focus": "m0_tracking"
+}

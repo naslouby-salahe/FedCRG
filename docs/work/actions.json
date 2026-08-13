@@ -1,0 +1,18 @@
+{
+  "as_of": "2026-08-13T00:00:00Z",
+  "actions": [
+    {"id": "A001", "milestone": "m1", "description": "Author config/study.yaml (protocol, training, deep_svdd, randomness, policies) from configs/method, configs/training, configs/randomness, configs/statistics, configs/detectors", "status": "pending"},
+    {"id": "A002", "milestone": "m1", "description": "Author config/datasets.yaml (nbaiot + diad contracts) from configs/datasets/*.yaml", "status": "pending"},
+    {"id": "A003", "milestone": "m1", "description": "Author config/experiments.yaml with full S1-S6/R1-R14 catalogue (axes, coupled cells, dependencies, policies, workload, confirmatory)", "status": "pending"},
+    {"id": "A004", "milestone": "m1", "description": "Implement src/fedcrg/config.py: typed StudyConfig/DatasetConfig/ExperimentSpec Pydantic models, no extends/deep-merge", "status": "pending"},
+    {"id": "A005", "milestone": "m1", "description": "Delete configs/ tree and src/fedcrg/configuration/ package; update all importers", "status": "pending"},
+    {"id": "A006", "milestone": "m2", "description": "Delete experiments/definitions/ and experiment_definition.py; catalogue loads from experiments.yaml", "status": "pending"},
+    {"id": "A007", "milestone": "m3", "description": "Build target src tree: types.py, config.py, data/, learning/, thresholding/, experiments/, evidence/, reporting.py, runtime.py, cli.py", "status": "pending"},
+    {"id": "A008", "milestone": "m3", "description": "Merge decision/policies/* into thresholding/policies.py; evaluation/ into thresholding/metrics.py; detectors/ into learning/detectors.py; federation/ into learning/federated.py; scoring/ into learning/scores.py; datasets/ into data/; artifacts/+domain into types.py+evidence/; analysis/+reporting into reporting.py+experiments/analyses.py; runtime/ into runtime.py; cli/ into cli.py", "status": "pending"},
+    {"id": "A009", "milestone": "m4", "description": "Migrate tests to new module paths; rewrite architecture contract tests for target tree; add AST primitive-leak, config-drift, canonical-term, roadmap-reference tests", "status": "pending"},
+    {"id": "A010", "milestone": "m5", "description": "Add preprocessing reuse tests (10 scenarios), cache reuse tests, publication bundle tests, runtime/console tests", "status": "pending"},
+    {"id": "A011", "milestone": "m6", "description": "Restructure outputs/ roots; implement results/<campaign-id>/ bundles and results build/verify CLI", "status": "pending"},
+    {"id": "A012", "milestone": "m7", "description": "CLI surface per target; Makefile, noxfile, pyproject (ruff full, pyright strict), README", "status": "pending"},
+    {"id": "A013", "milestone": "m8", "description": "Full quality gate: ruff format+check, pyright strict, pytest, nox -s quality, CLI smoke; iterate hostile audit until clean", "status": "pending"}
+  ]
+}

@@ -1,0 +1,230 @@
+# FedCRG experiment catalogue (single source of truth for the S1-S6 / R1-R14
+# registry). Each entry declares the experiment id, category, dataset,
+# detector/training profile, policies, independent axes, coupled cells,
+# dependencies, required evidence, expected workload, and confirmatory status.
+# Python executes typed ExperimentSpec values derived from this file; it does
+# not redefine the catalogue.
+
+experiments:
+  - id: readiness_theorem
+    category: synthetic
+    dataset: synthetic
+    axes:
+      distribution: [normal, lognormal, gamma2, normal_mixture]
+      calibration_n: [500, 1000, 1400, 1415, 1416, 1500, 2000, 3000]
+      repetitions: [10000]
+    workload: {monte_carlo_trials: 320000}
+    confirmatory: true
+    description: IID finite-sample readiness theorem validation
+
+  - id: target_fpr_synthetic
+    category: synthetic
+    dataset: synthetic
+    axes:
+      distribution: [normal, lognormal, gamma2, normal_mixture]
+      repetitions: [10000]
+    coupled_cells:
+      - {alpha: 0.005, calibration_n: 2860}
+      - {alpha: 0.005, calibration_n: 2861}
+      - {alpha: 0.005, calibration_n: 5722}
+      - {alpha: 0.02, calibration_n: 693}
+      - {alpha: 0.02, calibration_n: 694}
+      - {alpha: 0.02, calibration_n: 1388}
+      - {alpha: 0.05, calibration_n: 269}
+      - {alpha: 0.05, calibration_n: 270}
+      - {alpha: 0.05, calibration_n: 540}
+    workload: {monte_carlo_trials: 360000}
+    description: Target-FPR readiness sensitivity
+
+  - id: temporal_dependence
+    category: robustness
+    dataset: synthetic
+    axes:
+      phi: [0.0, 0.3, 0.6, 0.9]
+      calibration_n: [1416, 2000, 3000]
+      repetitions: [10000]
+    workload: {monte_carlo_trials: 120000}
+    description: AR(1) dependence stress for readiness coverage
+
+  - id: calibration_shift
+    category: robustness
+    dataset: synthetic
+    axes:
+      mean_shift: [0.0, 0.1, 0.25, 0.5, 1.0]
+      repetitions: [10000]
+    workload: {monte_carlo_trials: 50000}
+    description: Calibration-to-deployment mean-shift stress
+
+  - id: calibration_contamination
+    category: robustness
+    dataset: synthetic
+    axes:
+      fraction: [0.0, 0.001, 0.005, 0.01, 0.02, 0.05]
+      direction: [high, low]
+      repetitions: [10000]
+    workload: {monte_carlo_trials: 120000}
+    description: High-tail and low-tail calibration contamination stress
+
+  - id: mismatch_power
+    category: synthetic
+    dataset: synthetic
+    axes:
+      mismatch_n: [736, 1000, 1500, 2000, 3000]
+      true_fpr: [0.0025, 0.005, 0.0075, 0.01, 0.0125, 0.015, 0.02, 0.025, 0.03]
+    workload: {exact_cells: 45}
+    confirmatory: true
+    description: Exact binomial mismatch-declaration power
+
+  - id: primary_nbaiot
+    category: primary
+    dataset: nbaiot
+    detector: nbaiot_autoencoder
+    training: nbaiot_autoencoder
+    policies: [reference_quantile, global_quantile, local_quantile, readiness_only, mismatch_only, shrinkage, three_sigma, development_f1_selection, summary_statistic, supervised_f1, oracle_test, fedcrg]
+    required_evidence: [resolved_config, dataset_manifest, preprocessing_manifest, training_manifest, model, score_manifest, threshold_records, metrics, verification]
+    workload: {detector_trainings: 5}
+    confirmatory: true
+    description: N-BaIoT primary natural-client experiment
+
+  - id: readiness_sample_size
+    category: sensitivity
+    dataset: nbaiot
+    detector: nbaiot_autoencoder
+    training: nbaiot_autoencoder
+    axes:
+      calibration_n: [500, 1000, 1400, 1415, 1416, 1500, 2000]
+    dependencies: [primary_nbaiot]
+    policies: [reference_quantile, global_quantile, local_quantile, readiness_only, mismatch_only, shrinkage, three_sigma, development_f1_selection, summary_statistic, supervised_f1, oracle_test, fedcrg]
+    description: Readiness evidence-budget sweep
+
+  - id: mismatch_sample_size
+    category: sensitivity
+    dataset: nbaiot
+    detector: nbaiot_autoencoder
+    training: nbaiot_autoencoder
+    axes:
+      mismatch_n: [736, 1000, 1500, 2000, 3000]
+    dependencies: [primary_nbaiot]
+    policies: [reference_quantile, global_quantile, local_quantile, readiness_only, mismatch_only, shrinkage, three_sigma, development_f1_selection, summary_statistic, supervised_f1, oracle_test, fedcrg]
+    description: Reference-mismatch evidence-budget sweep
+
+  - id: tolerance_sensitivity
+    category: sensitivity
+    dataset: nbaiot
+    detector: nbaiot_autoencoder
+    training: nbaiot_autoencoder
+    axes:
+      rho: [0.25, 0.5, 1.0]
+    dependencies: [primary_nbaiot]
+    policies: [reference_quantile, global_quantile, local_quantile, readiness_only, mismatch_only, shrinkage, three_sigma, development_f1_selection, summary_statistic, supervised_f1, oracle_test, fedcrg]
+    description: Operating-band tolerance sensitivity
+
+  - id: target_fpr_real
+    category: sensitivity
+    dataset: nbaiot
+    detector: nbaiot_autoencoder
+    training: nbaiot_autoencoder
+    axes:
+      alpha: [0.005, 0.01, 0.02, 0.05]
+    dependencies: [primary_nbaiot]
+    policies: [reference_quantile, global_quantile, local_quantile, readiness_only, mismatch_only, shrinkage, three_sigma, development_f1_selection, summary_statistic, supervised_f1, oracle_test, fedcrg]
+    description: Real-score target-FPR sensitivity
+
+  - id: assurance_sensitivity
+    category: sensitivity
+    dataset: nbaiot
+    detector: nbaiot_autoencoder
+    training: nbaiot_autoencoder
+    axes:
+      readiness_assurance: [0.9, 0.95, 0.99]
+    dependencies: [primary_nbaiot]
+    policies: [reference_quantile, global_quantile, local_quantile, readiness_only, mismatch_only, shrinkage, three_sigma, development_f1_selection, summary_statistic, supervised_f1, oracle_test, fedcrg]
+    description: Readiness-assurance sensitivity
+
+  - id: multiplicity_sensitivity
+    category: sensitivity
+    dataset: nbaiot
+    detector: nbaiot_autoencoder
+    training: nbaiot_autoencoder
+    axes:
+      procedure: [bonferroni_readiness, bonferroni_mismatch, holm_directional]
+    dependencies: [primary_nbaiot]
+    policies: [fedcrg]
+    description: Familywise readiness and mismatch sensitivities
+
+  - id: source_order_test
+    category: robustness
+    dataset: nbaiot
+    detector: nbaiot_autoencoder
+    training: nbaiot_autoencoder
+    axes:
+      blocks: [5]
+    dependencies: [primary_nbaiot]
+    policies: [reference_quantile, global_quantile, local_quantile, readiness_only, mismatch_only, shrinkage, three_sigma, development_f1_selection, summary_statistic, supervised_f1, oracle_test, fedcrg]
+    description: Five-block source-order final-benign evaluation
+
+  - id: real_contamination
+    category: robustness
+    dataset: nbaiot
+    detector: nbaiot_autoencoder
+    training: nbaiot_autoencoder
+    axes:
+      fraction: [0.001, 0.005, 0.01, 0.02, 0.05]
+    dependencies: [primary_nbaiot]
+    policies: [fedcrg]
+    description: Real-score calibration contamination sensitivity
+
+  - id: external_diad
+    category: external_validation
+    dataset: diad
+    detector: diad_autoencoder
+    training: diad_autoencoder
+    policies: [reference_quantile, global_quantile, local_quantile, readiness_only, mismatch_only, shrinkage, three_sigma, development_f1_selection, summary_statistic, supervised_f1, oracle_test, fedcrg]
+    required_evidence: [resolved_config, dataset_manifest, preprocessing_manifest, training_manifest, model, score_manifest, threshold_records, metrics, verification]
+    workload: {detector_trainings: 5}
+    dependencies: [primary_nbaiot]
+    confirmatory: true
+    description: CIC IoT-DIAD natural-client external replication
+
+  - id: second_detector
+    category: robustness
+    dataset: nbaiot
+    detector: nbaiot_deep_svdd
+    training: nbaiot_deep_svdd
+    model_seeds: [11, 22, 33]
+    policies: [global_quantile, local_quantile, shrinkage, readiness_only, fedcrg]
+    workload: {detector_trainings: 3}
+    dependencies: [primary_nbaiot]
+    description: Mandatory Deep-SVDD second-score-generator check
+
+  - id: source_order_calibration
+    category: robustness
+    datasets: [nbaiot, diad]
+    detector: nbaiot_autoencoder
+    training: nbaiot_autoencoder
+    axes:
+      assignment: [source_order]
+    dependencies: [primary_nbaiot]
+    policies: [reference_quantile, global_quantile, local_quantile, readiness_only, mismatch_only, shrinkage, three_sigma, development_f1_selection, summary_statistic, supervised_f1, oracle_test, fedcrg]
+    description: Calibration-role source-order sensitivity
+
+  - id: computational_benchmark
+    category: benchmark
+    dataset: nbaiot
+    detector: nbaiot_autoencoder
+    training: nbaiot_autoencoder
+    axes:
+      warmups: [100]
+      repetitions: [1000]
+    dependencies: [primary_nbaiot]
+    description: CPU primitive runtime and memory benchmark
+
+  - id: diad_feature_sensitivity
+    category: sensitivity
+    dataset: diad
+    detector: diad_autoencoder
+    training: diad_autoencoder
+    dependencies: [external_diad]
+    policies: [global_quantile, local_quantile, shrinkage, fedcrg]
+    workload: {detector_trainings: 5}
+    description: Training-schema-derived DIAD numeric-safe feature sensitivity

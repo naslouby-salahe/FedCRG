@@ -1,0 +1,16 @@
+{
+  "as_of": "2026-08-13T00:00:00Z",
+  "violations": [
+    {"id": "V001", "area": "config", "severity": "high", "description": "configs/ hierarchy uses extends chains and Python deep-merge; target is config/{study,datasets,experiments}.yaml without inheritance", "status": "open"},
+    {"id": "V002", "area": "catalogue", "severity": "high", "description": "Experiment catalogue defined in Python (experiments/definitions/, experiment_definition.py) instead of experiments.yaml; Python must execute a typed ExperimentSpec only", "status": "open"},
+    {"id": "V003", "area": "architecture", "severity": "high", "description": "src/fedcrg has 14 packages vs target ~10 modules; decision/policies/ has one file per policy; experiments/ has 18 files", "status": "open"},
+    {"id": "V004", "area": "outputs", "severity": "medium", "description": "outputs/cache/datasets and outputs/cache/precomputed exist; target is cache/{models,scores,analysis}; reports/{latest,publication} should be reports/", "status": "open"},
+    {"id": "V005", "area": "cli", "severity": "medium", "description": "CLI surface (data preprocess, experiment execute-grid, config validate) differs from target (validate, preprocess, plan, run, campaign, status, monitor, report, results)", "status": "open"},
+    {"id": "V006", "area": "pyright", "severity": "medium", "description": "4 pyright errors in experiment_runner.py", "status": "open"},
+    {"id": "V007", "area": "tests", "severity": "medium", "description": "Architecture contract tests assert old layout; primitive-leak AST tests, config-drift tests, canonical-term test, preprocessing reuse tests missing", "status": "open"},
+    {"id": "V008", "area": "types", "severity": "medium", "description": "Primitive leakage audit not yet run; allowlist-based AST tests to be added", "status": "open"},
+    {"id": "V009", "area": "results", "severity": "medium", "description": "No results/<campaign-id>/ publication bundle capability verified; results build/verify CLI missing", "status": "open"},
+    {"id": "V010", "area": "quality", "severity": "low", "description": "ruff select minimal (E,F,UP,B); pyright standard; target stricter", "status": "open"}
+  ],
+  "resolved": []
+}
