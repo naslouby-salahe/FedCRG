@@ -8,15 +8,15 @@ from dataclasses import dataclass
 import numpy as np
 
 from fedcrg.core.enums import DataRole, DatasetId
-from fedcrg.core.ids import ClientId, Sha256
+from fedcrg.core.ids import AttackGroupId, ClientId, ModelSeed, RowId, Sha256
 
 
 @dataclass(frozen=True, slots=True)
 class RoleScoreInput:
     role: DataRole
     values: np.ndarray
-    row_ids: tuple[str, ...]
-    attack_groups: tuple[str, ...] | None = None
+    row_ids: tuple[RowId, ...]
+    attack_groups: tuple[AttackGroupId, ...] | None = None
 
     def __post_init__(self) -> None:
         values = np.asarray(self.values)
@@ -40,8 +40,8 @@ class RoleScores:
     role: DataRole
     values: np.ndarray
     client_id: ClientId
-    row_ids: tuple[str, ...]
-    attack_groups: tuple[str, ...] | None = None
+    row_ids: tuple[RowId, ...]
+    attack_groups: tuple[AttackGroupId, ...] | None = None
 
     def __post_init__(self) -> None:
         values = np.asarray(self.values, dtype=np.float64)
@@ -61,11 +61,11 @@ class RoleScores:
         digest.update(self.role.value.encode("utf-8"))
         digest.update(self.client_id.value.encode("utf-8"))
         for row_id, value in zip(self.row_ids, self.values, strict=True):
-            digest.update(row_id.encode("ascii"))
+            digest.update(row_id.value.encode("ascii"))
             digest.update(np.float64(value).tobytes())
         if self.attack_groups is not None:
             for group in self.attack_groups:
-                digest.update(group.encode("utf-8"))
+                digest.update(group.value.encode("utf-8"))
         return Sha256(digest.hexdigest())
 
 
@@ -78,7 +78,7 @@ class ClientScoreSet:
 @dataclass(frozen=True, slots=True)
 class ScoreManifest:
     dataset: DatasetId
-    model_seed: int
+    model_seed: ModelSeed
     model_hash: Sha256
     data_spec_hash: Sha256
     training_spec_hash: Sha256
