@@ -391,7 +391,7 @@ class ScoreCache:
 
     def _read_verified_metadata(self, root: Path) -> dict[str, object]:
         metadata_path = root / self.manifest_filename
-        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        metadata = as_json_dict(json.loads(metadata_path.read_text(encoding="utf-8")))
         parquet_path = root / str(metadata["score_cache_file"])
         expected_hash = Sha256(str(metadata["score_cache_sha256"]))
         actual_hash = Sha256(sha256_file(parquet_path))

@@ -11,7 +11,7 @@ import pandas as pd
 from fedcrg.analysis.policy_contrasts import confirmatory_contrasts, load_federation_results
 from fedcrg.artifacts.paths import RunLayout
 from fedcrg.config.experiment_config import ExperimentConfig
-from fedcrg.domain.enums import PolicyId
+from fedcrg.domain.enums import ExperimentId, PolicyId
 
 
 class PublicationTableBuilder:
@@ -78,7 +78,7 @@ class PublicationTableBuilder:
 
     def ablations(self, run_dirs: tuple[Path, ...], output: Path) -> Path:
         records = load_federation_results(run_dirs)
-        primary = tuple(row for row in records if row.experiment_id == "primary_nbaiot")
+        primary = tuple(row for row in records if row.experiment_id is ExperimentId.PRIMARY_NBAIOT)
         contrasts = confirmatory_contrasts(primary, named_calibration_seed=1000)
         rows = [
             {
@@ -97,10 +97,19 @@ class PublicationTableBuilder:
         return self._write(pd.DataFrame.from_records(rows), output)
 
     def sensitivity(self, experiments_root: Path, output: Path) -> Path:
-        """R2-R7 each write one SensitivityEnvelope/MultiplicityEnvelope per cells/*.json file."""
+        """Each real-score sensitivity writes one SensitivityEnvelope/MultiplicityEnvelope
+        per cells/*.json file."""
         rows: list[dict[str, object]] = []
-        for code in ("R2", "R3", "R4", "R5", "R6", "R7"):
-            cells_root = experiments_root / code / "cells"
+        experiments = (
+            ExperimentId.READINESS_SAMPLE_SIZE,
+            ExperimentId.MISMATCH_SAMPLE_SIZE,
+            ExperimentId.TOLERANCE_SENSITIVITY,
+            ExperimentId.TARGET_FPR_REAL,
+            ExperimentId.ASSURANCE_SENSITIVITY,
+            ExperimentId.MULTIPLICITY_SENSITIVITY,
+        )
+        for experiment_id in experiments:
+            cells_root = experiments_root / experiment_id.value / "cells"
             if not cells_root.is_dir():
                 continue
             for path in sorted(cells_root.glob("*.json")):
@@ -109,7 +118,7 @@ class PublicationTableBuilder:
                     if isinstance(cell, dict):
                         rows.append(
                             {
-                                "protocol_code": code,
+                                "experiment_id": experiment_id.value,
                                 "model_seed": payload.get("model_seed"),
                                 "calibration_seed": payload.get("calibration_seed"),
                                 **cell,

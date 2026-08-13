@@ -298,23 +298,27 @@ class FederationCellMaterializer:
         )
         run_dirs: list[PolicyRunDirectory] = []
         for policy in selected:
+
+            def materialize_policy(
+                _plan: object, run_layout: RunLayout, policy: PolicyId = policy
+            ) -> FederationMetrics | None:
+                return self.policy_cells.materialize_precomputed(
+                    config,
+                    policy,
+                    run_layout,
+                    caches,
+                    typed_calibration_seed,
+                    bundle,
+                    assignment_mode,
+                )
+
             _, layout = self.run_experiment.execute(
                 experiment_id=experiment_id,
                 config=config,
                 model_seed=int(typed_model_seed),
                 calibration_seed=int(typed_calibration_seed),
                 policy=policy,
-                runner=lambda _plan, run_layout, p=policy: (
-                    self.policy_cells.materialize_precomputed(
-                        config,
-                        p,
-                        run_layout,
-                        caches,
-                        typed_calibration_seed,
-                        bundle,
-                        assignment_mode,
-                    )
-                ),
+                runner=materialize_policy,
             )
             run_dirs.append(PolicyRunDirectory(policy, layout.root))
         return FederationCellResult(

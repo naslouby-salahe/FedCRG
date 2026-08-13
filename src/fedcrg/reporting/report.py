@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from dataclasses import asdict
 from pathlib import Path
 
@@ -13,7 +14,7 @@ from fedcrg.analysis.split_stability import split_sensitivity
 from fedcrg.pipeline.verify_outputs import VerifyOutputs
 from fedcrg.artifacts.paths import RunLayout
 from fedcrg.artifacts.integrity import ArtifactVerifier
-from fedcrg.domain.enums import ExperimentCode
+from fedcrg.domain.enums import ExperimentId, ExperimentStatus
 
 
 class ReportBuilder:
@@ -76,7 +77,7 @@ class ReportBuilder:
         )
         federation_records = load_federation_results(run_dirs)
         primary_records = tuple(
-            row for row in federation_records if row.experiment_id == "primary_nbaiot"
+            row for row in federation_records if row.experiment_id is ExperimentId.PRIMARY_NBAIOT
         )
         verification = VerifyOutputs().verify_repository(
             outputs_root,
@@ -86,7 +87,7 @@ class ReportBuilder:
             (
                 item
                 for item in verification.experiment_completion
-                if item.protocol_code is ExperimentCode.R1
+                if item.experiment_id is ExperimentId.PRIMARY_NBAIOT
             ),
             None,
         )
@@ -119,7 +120,7 @@ class ReportBuilder:
         )
         experiment_rows = [
             {
-                "experiment": item.protocol_code,
+                "experiment": item.experiment_id.value,
                 "complete": item.complete,
                 "expected_cells": item.expected_cells,
                 "observed_cells": item.observed_cells,
@@ -148,7 +149,7 @@ class ReportBuilder:
             status = "COMPLETE" if item.complete else "INCOMPLETE"
             detail = ", ".join(item.problems) if item.problems else "ledger reconciled"
             lines.append(
-                f"- **{item.protocol_code}** — {status}, observed={item.observed_cells}, {detail}"
+                f"- **{item.experiment_id.value}** — {status}, observed={item.observed_cells}, {detail}"
             )
         lines.extend(
             [
@@ -187,7 +188,7 @@ class ReportBuilder:
         return output
 
     @staticmethod
-    def _completed_run_dirs(runs_root: Path):
+    def _completed_run_dirs(runs_root: Path) -> Iterator[Path]:
         if not runs_root.exists():
             return
         for path in sorted(item for item in runs_root.iterdir() if item.is_dir()):
@@ -195,7 +196,7 @@ class ReportBuilder:
             if not manifest_path.is_file():
                 continue
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            if manifest.get("status") == "complete":
+            if manifest.get("status") == ExperimentStatus.COMPLETE.value:
                 yield path
 
     @staticmethod

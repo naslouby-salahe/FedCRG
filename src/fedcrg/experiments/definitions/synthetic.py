@@ -14,7 +14,6 @@ from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import (
     ContaminationDirection,
     ExperimentAxisId,
-    ExperimentCode,
     ExperimentId,
     SyntheticDistribution,
 )
@@ -28,7 +27,7 @@ from fedcrg.method.mismatch_detection import clopper_pearson_interval
 
 @dataclass(frozen=True, slots=True)
 class SyntheticCoverageResult:
-    experiment: ExperimentCode
+    experiment: ExperimentId
     condition: SyntheticDistribution | ContaminationDirection
     sample_count: int
     exact_probability: float
@@ -93,7 +92,7 @@ def distribution_cdf(
 
 
 def iid_readiness_validation(
-    experiment: ExperimentCode,
+    experiment: ExperimentId,
     distribution: SyntheticDistribution,
     sample_count: int,
     repetitions: int,
@@ -167,7 +166,7 @@ def contamination_validation(
         future_fpr = 1.0 - float(norm.cdf(threshold))
         inside += int(band.lower <= future_fpr <= band.upper)
     return SyntheticCoverageResult(
-        experiment=ExperimentCode.S5,
+        experiment=ExperimentId.CALIBRATION_CONTAMINATION,
         condition=direction,
         sample_count=sample_count,
         exact_probability=plan.coverage_probability,
@@ -265,7 +264,6 @@ SyntheticCell = SyntheticCoverageResult | RobustnessCell | MismatchPowerResult
 @dataclass(frozen=True, slots=True)
 class SyntheticExperimentEnvelope:
     experiment_id: ExperimentId
-    protocol_code: ExperimentCode
     expected_monte_carlo_trials: int
     expected_exact_cells: int
     actual_monte_carlo_trials: int
@@ -278,7 +276,7 @@ class RunSyntheticExperiments:
     def _int_values(definition: ExperimentDefinition, axis: ExperimentAxisId) -> tuple[int, ...]:
         values = definition.axis(axis).values
         if not all(isinstance(value, int) and not isinstance(value, bool) for value in values):
-            raise TypeError(f"{definition.protocol_code.value}/{axis.value} must contain integers")
+            raise TypeError(f"{definition.id.value}/{axis.value} must contain integers")
         return tuple(int(value) for value in values)
 
     @staticmethod
@@ -289,21 +287,21 @@ class RunSyntheticExperiments:
         if not all(
             isinstance(value, (int, float)) and not isinstance(value, bool) for value in values
         ):
-            raise TypeError(f"{definition.protocol_code.value}/{axis.value} must contain numbers")
+            raise TypeError(f"{definition.id.value}/{axis.value} must contain numbers")
         return tuple(float(value) for value in values)
 
     @staticmethod
     def _distributions(definition: ExperimentDefinition) -> tuple[SyntheticDistribution, ...]:
         values = definition.axis(ExperimentAxisId.DISTRIBUTION).values
         if not all(isinstance(value, SyntheticDistribution) for value in values):
-            raise TypeError(f"{definition.protocol_code.value} distribution axis is malformed")
+            raise TypeError(f"{definition.id.value} distribution axis is malformed")
         return tuple(value for value in values if isinstance(value, SyntheticDistribution))
 
     @staticmethod
     def _directions(definition: ExperimentDefinition) -> tuple[ContaminationDirection, ...]:
         values = definition.axis(ExperimentAxisId.DIRECTION).values
         if not all(isinstance(value, ContaminationDirection) for value in values):
-            raise TypeError(f"{definition.protocol_code.value} direction axis is malformed")
+            raise TypeError(f"{definition.id.value} direction axis is malformed")
         return tuple(value for value in values if isinstance(value, ContaminationDirection))
 
     @staticmethod
@@ -315,7 +313,6 @@ class RunSyntheticExperiments:
     ) -> Path:
         envelope = SyntheticExperimentEnvelope(
             experiment_id=definition.id,
-            protocol_code=definition.protocol_code,
             expected_monte_carlo_trials=definition.workload.monte_carlo_trials,
             expected_exact_cells=definition.workload.exact_cells,
             actual_monte_carlo_trials=actual_trials,
@@ -326,12 +323,12 @@ class RunSyntheticExperiments:
             actual_trials != definition.workload.monte_carlo_trials
         ):
             raise RuntimeError(
-                f"{definition.protocol_code.value} trial ledger mismatch: "
+                f"{definition.id.value} trial ledger mismatch: "
                 f"{actual_trials} != {definition.workload.monte_carlo_trials}"
             )
         if definition.workload.exact_cells and (len(cells) != definition.workload.exact_cells):
             raise RuntimeError(
-                f"{definition.protocol_code.value} exact-cell ledger mismatch: "
+                f"{definition.id.value} exact-cell ledger mismatch: "
                 f"{len(cells)} != {definition.workload.exact_cells}"
             )
         atomic_write_json(output, envelope)
@@ -342,7 +339,7 @@ class RunSyntheticExperiments:
         repetitions = self._int_values(definition, ExperimentAxisId.REPETITIONS)[0]
         cells = tuple(
             iid_readiness_validation(
-                ExperimentCode.S1,
+                ExperimentId.READINESS_THEOREM,
                 distribution,
                 sample_count,
                 repetitions,
@@ -367,7 +364,7 @@ class RunSyntheticExperiments:
             for distribution in distributions:
                 rows.append(
                     iid_readiness_validation(
-                        ExperimentCode.S2,
+                        ExperimentId.TARGET_FPR_SYNTHETIC,
                         distribution,
                         sample_count,
                         repetitions,

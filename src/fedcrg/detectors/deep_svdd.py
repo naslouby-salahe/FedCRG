@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal, cast
+
 import torch
 
 from fedcrg.config.training_config import DeepSvddConfig
@@ -23,7 +25,7 @@ class DeepSvdd(DetectorModel):
                 layers.append(activation())
         self.encoder = torch.nn.Sequential(*layers)
         self.register_buffer("center", torch.zeros(config.embedding_dim))
-        gain = torch.nn.init.calculate_gain(config.activation.value)
+        gain = torch.nn.init.calculate_gain(cast(Literal["tanh"], config.activation.value))
         for module in self.modules():
             if isinstance(module, torch.nn.Linear):
                 torch.nn.init.xavier_uniform_(module.weight, gain=gain)
@@ -31,7 +33,7 @@ class DeepSvdd(DetectorModel):
                     torch.nn.init.zeros_(module.bias)
 
     def forward(self, batch: torch.Tensor) -> torch.Tensor:
-        return self.encoder(batch)
+        return cast(torch.Tensor, self.encoder(batch))
 
     def initialize_center(self, batches: list[torch.Tensor]) -> None:
         if not batches:

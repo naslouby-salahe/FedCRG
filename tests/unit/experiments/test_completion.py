@@ -1,26 +1,28 @@
 import json
 from pathlib import Path
 
-from fedcrg.domain.enums import ExperimentCode
+from fedcrg.domain.enums import ExperimentId
 from fedcrg.experiments.completion import ExperimentCompletionAuditor
 
 
-def _write_cell(root: Path, code: ExperimentCode, name: str, payload: dict[str, object]) -> None:
-    cells_root = root / "experiments" / code.value / "cells"
+def _write_cell(
+    root: Path, experiment_id: ExperimentId, name: str, payload: dict[str, object]
+) -> None:
+    cells_root = root / "experiments" / experiment_id.value / "cells"
     cells_root.mkdir(parents=True, exist_ok=True)
     (cells_root / name).write_text(json.dumps(payload), encoding="utf-8")
 
 
 def test_real_sensitivity_workload_reads_sensitivity_envelope_schema(tmp_path: Path) -> None:
-    """R2-R6/R9 write SensitivityEnvelope(protocol_code, model_seed, calibration_seed, cells)."""
+    """Real-score sensitivities write SensitivityEnvelope(experiment_id, model_seed,
+    calibration_seed, cells)."""
     for model_seed in (11, 22, 33, 44, 55):
         _write_cell(
             tmp_path,
-            ExperimentCode.R2,
+            ExperimentId.READINESS_SAMPLE_SIZE,
             f"{model_seed}.json",
             {
                 "experiment_id": "readiness_sample_size",
-                "protocol_code": "R2",
                 "model_seed": model_seed,
                 "calibration_seed": 1000,
                 "cells": [{"settings": [], "config_hash": "x", "evaluation": {}}],
@@ -28,7 +30,7 @@ def test_real_sensitivity_workload_reads_sensitivity_envelope_schema(tmp_path: P
         )
     result = ExperimentCompletionAuditor._real_sensitivity_workload(
         tmp_path,
-        ExperimentCode.R2,
+        ExperimentId.READINESS_SAMPLE_SIZE,
         expected_model_seeds=(11, 22, 33, 44, 55),
         expected_calibration_seed=1000,
     )
@@ -40,10 +42,10 @@ def test_real_sensitivity_workload_reads_sensitivity_envelope_schema(tmp_path: P
 def test_real_sensitivity_workload_detects_missing_model_seed(tmp_path: Path) -> None:
     _write_cell(
         tmp_path,
-        ExperimentCode.R2,
+        ExperimentId.READINESS_SAMPLE_SIZE,
         "11.json",
         {
-            "protocol_code": "R2",
+            "experiment_id": "readiness_sample_size",
             "model_seed": 11,
             "calibration_seed": 1000,
             "cells": [{"settings": []}],
@@ -51,7 +53,7 @@ def test_real_sensitivity_workload_detects_missing_model_seed(tmp_path: Path) ->
     )
     result = ExperimentCompletionAuditor._real_sensitivity_workload(
         tmp_path,
-        ExperimentCode.R2,
+        ExperimentId.READINESS_SAMPLE_SIZE,
         expected_model_seeds=(11, 22, 33, 44, 55),
         expected_calibration_seed=1000,
     )
@@ -62,21 +64,20 @@ def test_real_sensitivity_workload_detects_missing_model_seed(tmp_path: Path) ->
 def test_single_seed_sensitivity_workload_reads_multiplicity_envelope_schema(
     tmp_path: Path,
 ) -> None:
-    """R7/R8 write MultiplicityEnvelope/SourceOrderEnvelope with no model-seed axis."""
+    """MultiplicityEnvelope/SourceOrderEnvelope writers have no model-seed axis."""
     _write_cell(
         tmp_path,
-        ExperimentCode.R7,
+        ExperimentId.MULTIPLICITY_SENSITIVITY,
         "1000.json",
         {
             "experiment_id": "multiplicity_sensitivity",
-            "protocol_code": "R7",
             "calibration_seed": 1000,
             "cells": [{"procedure": "bonferroni_readiness"}],
         },
     )
     result = ExperimentCompletionAuditor._single_seed_sensitivity_workload(
         tmp_path,
-        ExperimentCode.R7,
+        ExperimentId.MULTIPLICITY_SENSITIVITY,
         expected_calibration_seed=1000,
     )
     assert result.complete
@@ -84,17 +85,18 @@ def test_single_seed_sensitivity_workload_reads_multiplicity_envelope_schema(
 
 
 def test_source_order_workload_reads_run_source_order_calibration_schema(tmp_path: Path) -> None:
-    """R12's real producer (application/source_order.py) writes this exact schema."""
+    """SOURCE_ORDER_CALIBRATION's real producer (RunSourceOrderCalibration) writes this
+    exact schema."""
     for dataset, model_seed in [("nbaiot", model_seed) for model_seed in (11, 22, 33, 44, 55)] + [
         ("diad", model_seed) for model_seed in (11, 22, 33, 44, 55)
     ]:
         calibration_seed = 1000 if dataset == "nbaiot" else 2000
         _write_cell(
             tmp_path,
-            ExperimentCode.R12,
+            ExperimentId.SOURCE_ORDER_CALIBRATION,
             f"{dataset}_{model_seed}.json",
             {
-                "experiment": "R12",
+                "experiment": "source_order_calibration",
                 "complete": True,
                 "dataset_id": dataset,
                 "model_seed": model_seed,

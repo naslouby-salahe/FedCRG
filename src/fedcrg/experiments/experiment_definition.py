@@ -15,7 +15,6 @@ from fedcrg.domain.enums import (
     CalibrationAssignmentMode,
     ContaminationDirection,
     ExperimentAxisId,
-    ExperimentCode,
     ExperimentId,
     ExperimentType,
     MultiplicityProcedure,
@@ -87,7 +86,6 @@ class WorkloadExpectation:
 @dataclass(frozen=True, slots=True)
 class ExperimentDefinition:
     id: ExperimentId
-    protocol_code: ExperimentCode
     type: ExperimentType
     axes: tuple[ParameterAxis, ...] = ()
     coupled_cells: tuple[ParameterCell, ...] = ()
@@ -101,21 +99,19 @@ class ExperimentDefinition:
     def __post_init__(self) -> None:
         independent_axes = tuple(axis.id for axis in self.axes)
         if len(set(independent_axes)) != len(independent_axes):
-            raise ValueError(f"Duplicate axis in {self.protocol_code.value}")
+            raise ValueError(f"Duplicate axis in {self.id.value}")
         if len(set(self.dependencies)) != len(self.dependencies):
-            raise ValueError(f"Duplicate dependency in {self.protocol_code.value}")
+            raise ValueError(f"Duplicate dependency in {self.id.value}")
         if self.id in self.dependencies:
-            raise ValueError(f"Experiment {self.protocol_code.value} cannot depend on itself")
+            raise ValueError(f"Experiment {self.id.value} cannot depend on itself")
         if len(set(self.policies)) != len(self.policies):
-            raise ValueError(f"Duplicate policy in {self.protocol_code.value}")
+            raise ValueError(f"Duplicate policy in {self.id.value}")
 
     def axis(self, axis_id: ExperimentAxisId) -> ParameterAxis:
         for item in self.axes:
             if item.id is axis_id:
                 return item
-        raise KeyError(
-            f"Experiment {self.protocol_code.value} has no independent {axis_id.value} axis"
-        )
+        raise KeyError(f"Experiment {self.id.value} has no independent {axis_id.value} axis")
 
 
 ALL_POLICIES = tuple(PolicyId)
@@ -162,7 +158,6 @@ def _catalogue() -> tuple[ExperimentDefinition, ...]:
     return (
         ExperimentDefinition(
             id=ExperimentId.READINESS_THEOREM,
-            protocol_code=ExperimentCode.S1,
             type=ExperimentType.SYNTHETIC,
             axes=(
                 axis(
@@ -191,7 +186,6 @@ def _catalogue() -> tuple[ExperimentDefinition, ...]:
         ),
         ExperimentDefinition(
             id=ExperimentId.TARGET_FPR_SYNTHETIC,
-            protocol_code=ExperimentCode.S2,
             type=ExperimentType.SYNTHETIC,
             axes=(
                 axis(
@@ -219,7 +213,6 @@ def _catalogue() -> tuple[ExperimentDefinition, ...]:
         ),
         ExperimentDefinition(
             id=ExperimentId.TEMPORAL_DEPENDENCE,
-            protocol_code=ExperimentCode.S3,
             type=ExperimentType.ROBUSTNESS,
             axes=(
                 axis(ExperimentAxisId.PHI, 0.0, 0.3, 0.6, 0.9),
@@ -231,7 +224,6 @@ def _catalogue() -> tuple[ExperimentDefinition, ...]:
         ),
         ExperimentDefinition(
             id=ExperimentId.CALIBRATION_SHIFT,
-            protocol_code=ExperimentCode.S4,
             type=ExperimentType.ROBUSTNESS,
             axes=(
                 axis(ExperimentAxisId.MEAN_SHIFT, 0.0, 0.10, 0.25, 0.50, 1.0),
@@ -242,7 +234,6 @@ def _catalogue() -> tuple[ExperimentDefinition, ...]:
         ),
         ExperimentDefinition(
             id=ExperimentId.CALIBRATION_CONTAMINATION,
-            protocol_code=ExperimentCode.S5,
             type=ExperimentType.ROBUSTNESS,
             axes=(
                 axis(
@@ -266,7 +257,6 @@ def _catalogue() -> tuple[ExperimentDefinition, ...]:
         ),
         ExperimentDefinition(
             id=ExperimentId.MISMATCH_POWER,
-            protocol_code=ExperimentCode.S6,
             type=ExperimentType.SYNTHETIC,
             axes=(
                 axis(
@@ -296,7 +286,6 @@ def _catalogue() -> tuple[ExperimentDefinition, ...]:
         ),
         ExperimentDefinition(
             id=primary,
-            protocol_code=ExperimentCode.R1,
             type=ExperimentType.PRIMARY,
             policies=ALL_POLICIES,
             required_artifacts=PRIMARY_REQUIRED,
@@ -306,7 +295,6 @@ def _catalogue() -> tuple[ExperimentDefinition, ...]:
         ),
         ExperimentDefinition(
             id=ExperimentId.READINESS_SAMPLE_SIZE,
-            protocol_code=ExperimentCode.R2,
             type=ExperimentType.SENSITIVITY,
             axes=(
                 axis(
@@ -326,7 +314,6 @@ def _catalogue() -> tuple[ExperimentDefinition, ...]:
         ),
         ExperimentDefinition(
             id=ExperimentId.MISMATCH_SAMPLE_SIZE,
-            protocol_code=ExperimentCode.R3,
             type=ExperimentType.SENSITIVITY,
             axes=(
                 axis(
@@ -344,7 +331,6 @@ def _catalogue() -> tuple[ExperimentDefinition, ...]:
         ),
         ExperimentDefinition(
             id=ExperimentId.TOLERANCE_SENSITIVITY,
-            protocol_code=ExperimentCode.R4,
             type=ExperimentType.SENSITIVITY,
             axes=(axis(ExperimentAxisId.RHO, 0.25, 0.50, 1.0),),
             dependencies=(primary,),
@@ -353,7 +339,6 @@ def _catalogue() -> tuple[ExperimentDefinition, ...]:
         ),
         ExperimentDefinition(
             id=ExperimentId.TARGET_FPR_REAL,
-            protocol_code=ExperimentCode.R5,
             type=ExperimentType.SENSITIVITY,
             axes=(axis(ExperimentAxisId.ALPHA, 0.005, 0.01, 0.02, 0.05),),
             dependencies=(primary,),
@@ -362,7 +347,6 @@ def _catalogue() -> tuple[ExperimentDefinition, ...]:
         ),
         ExperimentDefinition(
             id=ExperimentId.ASSURANCE_SENSITIVITY,
-            protocol_code=ExperimentCode.R6,
             type=ExperimentType.SENSITIVITY,
             axes=(axis(ExperimentAxisId.READINESS_ASSURANCE, 0.90, 0.95, 0.99),),
             dependencies=(primary,),
@@ -371,7 +355,6 @@ def _catalogue() -> tuple[ExperimentDefinition, ...]:
         ),
         ExperimentDefinition(
             id=ExperimentId.MULTIPLICITY_SENSITIVITY,
-            protocol_code=ExperimentCode.R7,
             type=ExperimentType.SENSITIVITY,
             axes=(
                 axis(
@@ -387,7 +370,6 @@ def _catalogue() -> tuple[ExperimentDefinition, ...]:
         ),
         ExperimentDefinition(
             id=ExperimentId.SOURCE_ORDER_TEST,
-            protocol_code=ExperimentCode.R8,
             type=ExperimentType.ROBUSTNESS,
             axes=(axis(ExperimentAxisId.BLOCKS, 5),),
             dependencies=(primary,),
@@ -396,7 +378,6 @@ def _catalogue() -> tuple[ExperimentDefinition, ...]:
         ),
         ExperimentDefinition(
             id=ExperimentId.REAL_CONTAMINATION,
-            protocol_code=ExperimentCode.R9,
             type=ExperimentType.ROBUSTNESS,
             axes=(axis(ExperimentAxisId.FRACTION, 0.001, 0.005, 0.01, 0.02, 0.05),),
             dependencies=(primary,),
@@ -405,7 +386,6 @@ def _catalogue() -> tuple[ExperimentDefinition, ...]:
         ),
         ExperimentDefinition(
             id=external,
-            protocol_code=ExperimentCode.R10,
             type=ExperimentType.EXTERNAL_VALIDATION,
             dependencies=(primary,),
             policies=ALL_POLICIES,
@@ -416,7 +396,6 @@ def _catalogue() -> tuple[ExperimentDefinition, ...]:
         ),
         ExperimentDefinition(
             id=ExperimentId.SECOND_DETECTOR,
-            protocol_code=ExperimentCode.R11,
             type=ExperimentType.ROBUSTNESS,
             dependencies=(primary,),
             policies=SECOND_DETECTOR_POLICIES,
@@ -425,7 +404,6 @@ def _catalogue() -> tuple[ExperimentDefinition, ...]:
         ),
         ExperimentDefinition(
             id=ExperimentId.SOURCE_ORDER_CALIBRATION,
-            protocol_code=ExperimentCode.R12,
             type=ExperimentType.ROBUSTNESS,
             axes=(
                 axis(
@@ -439,7 +417,6 @@ def _catalogue() -> tuple[ExperimentDefinition, ...]:
         ),
         ExperimentDefinition(
             id=ExperimentId.COMPUTATIONAL_BENCHMARK,
-            protocol_code=ExperimentCode.R13,
             type=ExperimentType.BENCHMARK,
             axes=(
                 axis(ExperimentAxisId.WARMUPS, 100),
@@ -450,7 +427,6 @@ def _catalogue() -> tuple[ExperimentDefinition, ...]:
         ),
         ExperimentDefinition(
             id=ExperimentId.DIAD_FEATURE_SENSITIVITY,
-            protocol_code=ExperimentCode.R14,
             type=ExperimentType.SENSITIVITY,
             dependencies=(external,),
             policies=(
@@ -466,10 +442,8 @@ def _catalogue() -> tuple[ExperimentDefinition, ...]:
 
 
 _CATALOGUE: dict[ExperimentId, ExperimentDefinition] = {row.id: row for row in _catalogue()}
-if len(_CATALOGUE) != len(ExperimentCode) or {
-    row.protocol_code for row in _CATALOGUE.values()
-} != set(ExperimentCode):
-    raise RuntimeError("The experiment catalogue must contain exactly S1-S6 and R1-R14")
+if len(_CATALOGUE) != len(ExperimentId) or set(_CATALOGUE) != set(ExperimentId):
+    raise RuntimeError("The experiment catalogue must contain exactly one entry per ExperimentId")
 
 
 def get_experiment_definition(experiment_id: ExperimentId) -> ExperimentDefinition:

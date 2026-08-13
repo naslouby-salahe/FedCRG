@@ -27,6 +27,7 @@ dependencies = [
 dev = [
   "pytest>=8.0",
   "pytest-cov>=5.0",
+  "pytest-xdist>=3.5",
   "ruff>=0.6",
   "mypy>=1.11",
 ]
@@ -61,7 +62,7 @@ select = ["E", "F", "UP", "B"]
 ignore = ["E501"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 packages = ["fedcrg"]
 ignore_missing_imports = true
 disallow_untyped_defs = true

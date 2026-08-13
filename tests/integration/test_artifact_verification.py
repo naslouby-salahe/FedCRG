@@ -4,7 +4,6 @@ from fedcrg.artifacts.manifests import RunManifest, RunManifestStore
 from fedcrg.artifacts.json_io import atomic_write_json, atomic_write_text
 from fedcrg.artifacts.integrity import ArtifactVerifier
 from fedcrg.domain.enums import (
-    ExperimentCode,
     ExperimentId,
     ExperimentStatus,
     ExperimentType,
@@ -35,7 +34,6 @@ def test_artifact_verifier_hashes_run_files(tmp_path: Path) -> None:
     verifier = ArtifactVerifier()
     definition = ExperimentDefinition(
         id=ExperimentId.PRIMARY_NBAIOT,
-        protocol_code=ExperimentCode.R1,
         type=ExperimentType.PRIMARY,
     )
     recorded = verifier.record(layout, definition)

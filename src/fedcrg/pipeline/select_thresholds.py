@@ -8,7 +8,7 @@ from pathlib import Path
 from fedcrg.artifacts.json_io import atomic_write_json
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.config.method_config import ProtocolConfig
-from fedcrg.domain.enums import ExperimentAxisId, ExperimentId
+from fedcrg.domain.enums import DatasetId, ExperimentAxisId, ExperimentId
 from fedcrg.domain.values import OperatingBand
 from fedcrg.experiments.experiment_definition import get_experiment_definition
 from fedcrg.method.mismatch_detection import (
@@ -164,7 +164,7 @@ class ProtocolTablePrecomputer:
             ),
         )
 
-        if config.dataset.id.value == "nbaiot":
+        if config.dataset.id is DatasetId.NBAIOT:
             add(
                 1500,
                 alpha=config.protocol.alpha,

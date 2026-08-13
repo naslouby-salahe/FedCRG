@@ -8,16 +8,18 @@ from pathlib import Path
 
 from fedcrg.analysis.descriptive_statistics import DescriptiveSummary, describe
 from fedcrg.analysis.paired_bootstrap import PairedBootstrapInterval, paired_model_seed_bootstrap
-from fedcrg.domain.enums import PolicyId
+from fedcrg.domain.constants import PRIMARY_MODEL_SEEDS
+from fedcrg.domain.enums import DatasetId, ExperimentId, ExperimentStatus, PolicyId
+from fedcrg.domain.identifiers import CalibrationSeed, ModelSeed, RunId
 
 
 @dataclass(frozen=True, slots=True)
 class FederationResultRecord:
-    run_id: str
-    experiment_id: str
-    dataset_id: str
-    model_seed: int
-    calibration_seed: int
+    run_id: RunId
+    experiment_id: ExperimentId
+    dataset_id: DatasetId
+    model_seed: ModelSeed
+    calibration_seed: CalibrationSeed
     policy: PolicyId
     mebe: float
     high_excess: float
@@ -55,15 +57,15 @@ def load_federation_results(run_dirs: tuple[Path, ...]) -> tuple[FederationResul
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         federation = json.loads(federation_path.read_text(encoding="utf-8"))
         config = json.loads(config_path.read_text(encoding="utf-8"))
-        if manifest.get("status") != "complete":
+        if manifest.get("status") != ExperimentStatus.COMPLETE.value:
             continue
         rows.append(
             FederationResultRecord(
-                run_id=str(manifest["run_id"]),
-                experiment_id=str(manifest["experiment_id"]),
-                dataset_id=str(config["parameters"]["dataset"]["id"]),
-                model_seed=int(manifest["model_seed"]),
-                calibration_seed=int(manifest["calibration_seed"]),
+                run_id=RunId(str(manifest["run_id"])),
+                experiment_id=ExperimentId(str(manifest["experiment_id"])),
+                dataset_id=DatasetId(str(config["parameters"]["dataset"]["id"])),
+                model_seed=ModelSeed(int(manifest["model_seed"])),
+                calibration_seed=CalibrationSeed(int(manifest["calibration_seed"])),
                 policy=PolicyId(str(manifest["policy_id"])),
                 mebe=float(federation["mebe"]),
                 high_excess=float(federation["high_excess"]),
@@ -93,8 +95,8 @@ def confirmatory_contrasts(
         PolicyId.READINESS_ONLY,
         PolicyId.SHRINKAGE,
     )
-    selected = tuple(row for row in records if row.calibration_seed == named_calibration_seed)
-    expected_seeds = {11, 22, 33, 44, 55}
+    selected = tuple(row for row in records if int(row.calibration_seed) == named_calibration_seed)
+    expected_seeds = {ModelSeed(seed) for seed in PRIMARY_MODEL_SEEDS}
     observed_method_seeds = {row.model_seed for row in selected if row.policy is PolicyId.FEDCRG}
     if observed_method_seeds != expected_seeds:
         raise ValueError(

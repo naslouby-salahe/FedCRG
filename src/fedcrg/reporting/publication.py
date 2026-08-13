@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 
 import pandas as pd
 
@@ -21,7 +21,7 @@ from fedcrg.reporting.figures import (
 )
 from fedcrg.reporting.tables import PublicationTableBuilder
 from fedcrg.config.experiment_config import ExperimentConfig
-from fedcrg.domain.enums import PolicyId
+from fedcrg.domain.enums import ExperimentStatus, PolicyId
 
 
 @dataclass(frozen=True, slots=True)
@@ -294,7 +294,7 @@ class PublicationPackageBuilder:
         return cls._figure(name, lambda: build(frame))
 
     @staticmethod
-    def _completed_runs(root: Path):
+    def _completed_runs(root: Path) -> Iterator[Path]:
         if not root.exists():
             return
         for path in sorted(item for item in root.iterdir() if item.is_dir()):
@@ -302,7 +302,7 @@ class PublicationPackageBuilder:
             if not manifest.is_file():
                 continue
             payload = json.loads(manifest.read_text(encoding="utf-8"))
-            if payload.get("status") == "complete":
+            if payload.get("status") == ExperimentStatus.COMPLETE.value:
                 yield path
 
     @staticmethod

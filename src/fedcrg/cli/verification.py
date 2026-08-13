@@ -33,7 +33,7 @@ def verify_command(outputs: Path, repository_root: Path, skip_tests: bool) -> No
         },
         "experiments": [
             {
-                "protocol_code": item.protocol_code,
+                "experiment_id": item.experiment_id.value,
                 "complete": item.complete,
                 "expected_cells": item.expected_cells,
                 "observed_cells": item.observed_cells,

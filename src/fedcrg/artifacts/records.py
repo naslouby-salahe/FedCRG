@@ -13,7 +13,7 @@ from fedcrg.artifacts.json_io import atomic_write_json, to_json_value
 from fedcrg.domain.enums import (
     DecisionReason,
     DecisionState,
-    ExperimentCode,
+    ExperimentId,
     PolicyId,
     ThresholdSource,
 )
@@ -122,7 +122,7 @@ class CacheReferenceStore:
 class ExperimentResultEnvelope:
     """Self-describing aggregate evidence for one pre-registered S/R experiment."""
 
-    protocol_code: ExperimentCode
+    experiment_id: ExperimentId
     config_hash: Sha256
     master_seed: int | None
     expected_cells: int | None
@@ -161,7 +161,7 @@ class ExperimentResultEnvelope:
     def to_dict(self) -> dict[str, object]:
         return {
             "schema_version": 1,
-            "experiment": self.protocol_code,
+            "experiment": self.experiment_id.value,
             "config_hash": self.config_hash.value,
             "master_seed": self.master_seed,
             "expected_cells": self.expected_cells,

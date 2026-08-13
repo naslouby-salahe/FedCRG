@@ -16,7 +16,7 @@ import numpy as np
 from fedcrg.artifacts.environment import capture_environment
 from fedcrg.artifacts.records import ExperimentResultEnvelope
 from fedcrg.config.experiment_config import ExperimentConfig
-from fedcrg.domain.enums import ExperimentCode
+from fedcrg.domain.enums import ExperimentId
 from fedcrg.domain.identifiers import ClientId, Sha256
 from fedcrg.method.calibration_readiness import CalibrationReadinessEvaluator, ReadinessPlanCache
 from fedcrg.method.mismatch_detection import ReferenceMismatchEvaluator
@@ -182,7 +182,7 @@ class RunBenchmark:
             "Runtime values are empirical machine-specific evidence, not mathematical constants.",
         )
         return ExperimentResultEnvelope(
-            protocol_code=ExperimentCode.R13,
+            experiment_id=ExperimentId.COMPUTATIONAL_BENCHMARK,
             config_hash=Sha256(config.config_hash),
             master_seed=config.randomness.synthetic_seed,
             expected_cells=4,

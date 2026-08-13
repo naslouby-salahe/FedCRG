@@ -7,9 +7,9 @@ from dataclasses import dataclass
 from itertools import product
 from pathlib import Path
 
-from fedcrg.artifacts.paths import RunLayout
 from fedcrg.artifacts.manifests import RunManifest, RunManifestStore
-from fedcrg.domain.enums import ExperimentCode, ExperimentId, ExperimentStatus, PolicyId
+from fedcrg.artifacts.paths import RunLayout
+from fedcrg.domain.enums import DatasetId, ExperimentId, ExperimentStatus, PolicyId
 from fedcrg.experiments.experiment_definition import (
     SECOND_DETECTOR_POLICIES,
     all_experiment_definitions,
@@ -21,10 +21,50 @@ _DIAD_CALIBRATION_SEEDS = tuple(range(2000, 2020))
 _SECOND_DETECTOR_MODEL_SEEDS = (11, 22, 33)
 _SECOND_DETECTOR_CALIBRATION_SEEDS = tuple(range(1000, 1010))
 
+_AGGREGATE_WORKLOAD_EXPERIMENTS = (
+    ExperimentId.READINESS_THEOREM,
+    ExperimentId.TARGET_FPR_SYNTHETIC,
+    ExperimentId.TEMPORAL_DEPENDENCE,
+    ExperimentId.CALIBRATION_SHIFT,
+    ExperimentId.CALIBRATION_CONTAMINATION,
+    ExperimentId.MISMATCH_POWER,
+    ExperimentId.COMPUTATIONAL_BENCHMARK,
+)
+_REAL_SENSITIVITY_EXPERIMENTS = (
+    ExperimentId.READINESS_SAMPLE_SIZE,
+    ExperimentId.MISMATCH_SAMPLE_SIZE,
+    ExperimentId.TOLERANCE_SENSITIVITY,
+    ExperimentId.TARGET_FPR_REAL,
+    ExperimentId.ASSURANCE_SENSITIVITY,
+    ExperimentId.REAL_CONTAMINATION,
+)
+_SINGLE_SEED_SENSITIVITY_EXPERIMENTS = (
+    ExperimentId.MULTIPLICITY_SENSITIVITY,
+    ExperimentId.SOURCE_ORDER_TEST,
+)
+_EXPECTED_CELLS_BY_EXPERIMENT = {
+    ExperimentId.READINESS_THEOREM: 32,
+    ExperimentId.TARGET_FPR_SYNTHETIC: 36,
+    ExperimentId.TEMPORAL_DEPENDENCE: 12,
+    ExperimentId.CALIBRATION_SHIFT: 5,
+    ExperimentId.CALIBRATION_CONTAMINATION: 12,
+    ExperimentId.MISMATCH_POWER: 45,
+    ExperimentId.COMPUTATIONAL_BENCHMARK: 4,
+}
+_EXPECTED_MONTE_CARLO_TRIALS_BY_EXPERIMENT = {
+    ExperimentId.READINESS_THEOREM: 320_000,
+    ExperimentId.TARGET_FPR_SYNTHETIC: 360_000,
+    ExperimentId.TEMPORAL_DEPENDENCE: 120_000,
+    ExperimentId.CALIBRATION_SHIFT: 50_000,
+    ExperimentId.CALIBRATION_CONTAMINATION: 120_000,
+    ExperimentId.MISMATCH_POWER: 0,
+    ExperimentId.COMPUTATIONAL_BENCHMARK: 0,
+}
+
 
 @dataclass(frozen=True, slots=True)
 class ExperimentCompletion:
-    protocol_code: ExperimentCode
+    experiment_id: ExperimentId
     complete: bool
     expected_cells: int | None
     observed_cells: int
@@ -42,11 +82,9 @@ class ExperimentCompletionAuditor:
         rows: list[ExperimentCompletion] = []
         for definition in all_experiment_definitions():
             experiment_id = definition.id
-            code = definition.protocol_code
             if experiment_id is ExperimentId.PRIMARY_NBAIOT:
                 rows.append(
                     self._policy_run_workload(
-                        code,
                         experiment_id,
                         runs,
                         _PRIMARY_MODEL_SEEDS,
@@ -58,7 +96,6 @@ class ExperimentCompletionAuditor:
             elif experiment_id is ExperimentId.EXTERNAL_DIAD:
                 rows.append(
                     self._external_policy_workload(
-                        code,
                         experiment_id,
                         runs,
                         _PRIMARY_MODEL_SEEDS,
@@ -69,7 +106,6 @@ class ExperimentCompletionAuditor:
             elif experiment_id is ExperimentId.SECOND_DETECTOR:
                 rows.append(
                     self._policy_run_workload(
-                        code,
                         experiment_id,
                         runs,
                         _SECOND_DETECTOR_MODEL_SEEDS,
@@ -81,7 +117,6 @@ class ExperimentCompletionAuditor:
             elif experiment_id is ExperimentId.DIAD_FEATURE_SENSITIVITY:
                 rows.append(
                     self._external_policy_workload(
-                        code,
                         experiment_id,
                         runs,
                         _PRIMARY_MODEL_SEEDS,
@@ -89,46 +124,31 @@ class ExperimentCompletionAuditor:
                         definition.policies,
                     )
                 )
-            elif code in {
-                ExperimentCode.S1,
-                ExperimentCode.S2,
-                ExperimentCode.S3,
-                ExperimentCode.S4,
-                ExperimentCode.S5,
-                ExperimentCode.S6,
-                ExperimentCode.R13,
-            }:
-                rows.append(self._aggregate_experiment_workload(outputs_root, code))
-            elif code in {
-                ExperimentCode.R2,
-                ExperimentCode.R3,
-                ExperimentCode.R4,
-                ExperimentCode.R5,
-                ExperimentCode.R6,
-                ExperimentCode.R9,
-            }:
+            elif experiment_id in _AGGREGATE_WORKLOAD_EXPERIMENTS:
+                rows.append(self._aggregate_experiment_workload(outputs_root, experiment_id))
+            elif experiment_id in _REAL_SENSITIVITY_EXPERIMENTS:
                 rows.append(
                     self._real_sensitivity_workload(
                         outputs_root,
-                        code,
+                        experiment_id,
                         expected_model_seeds=_PRIMARY_MODEL_SEEDS,
                         expected_calibration_seed=1000,
                     )
                 )
-            elif code in {ExperimentCode.R7, ExperimentCode.R8}:
+            elif experiment_id in _SINGLE_SEED_SENSITIVITY_EXPERIMENTS:
                 rows.append(
                     self._single_seed_sensitivity_workload(
                         outputs_root,
-                        code,
+                        experiment_id,
                         expected_calibration_seed=1000,
                     )
                 )
-            elif code is ExperimentCode.R12:
+            elif experiment_id is ExperimentId.SOURCE_ORDER_CALIBRATION:
                 rows.append(self._source_order_workload(outputs_root))
             else:
                 rows.append(
                     ExperimentCompletion(
-                        protocol_code=code,
+                        experiment_id=experiment_id,
                         complete=False,
                         expected_cells=None,
                         observed_cells=0,
@@ -152,7 +172,6 @@ class ExperimentCompletionAuditor:
 
     def _policy_run_workload(
         self,
-        code: ExperimentCode,
         experiment_id: ExperimentId,
         runs: tuple[tuple[RunManifest, Path], ...],
         model_seeds: tuple[int, ...],
@@ -172,7 +191,7 @@ class ExperimentCompletionAuditor:
         for manifest, root in selected:
             problems.extend(self._validate_metric_rows(manifest, root, expected_clients))
         return ExperimentCompletion(
-            protocol_code=code,
+            experiment_id=experiment_id,
             complete=not problems,
             expected_cells=len(expected_identities),
             observed_cells=len(selected),
@@ -181,7 +200,6 @@ class ExperimentCompletionAuditor:
 
     def _external_policy_workload(
         self,
-        code: ExperimentCode,
         experiment_id: ExperimentId,
         runs: tuple[tuple[RunManifest, Path], ...],
         model_seeds: tuple[int, ...],
@@ -212,7 +230,7 @@ class ExperimentCompletionAuditor:
         if len(client_counts) > 1:
             problems.append("eligible client count changes across policy cells")
         return ExperimentCompletion(
-            protocol_code=code,
+            experiment_id=experiment_id,
             complete=not problems,
             expected_cells=len(expected_identities),
             observed_cells=len(selected),
@@ -250,46 +268,34 @@ class ExperimentCompletionAuditor:
     @staticmethod
     def _aggregate_experiment_workload(
         outputs_root: Path,
-        code: ExperimentCode,
+        experiment_id: ExperimentId,
     ) -> ExperimentCompletion:
-        result_path = outputs_root / "experiments" / code / "results.json"
+        result_path = outputs_root / "experiments" / experiment_id.value / "results.json"
         if not result_path.is_file():
-            return ExperimentCompletion(code, False, None, 0, ("experiment evidence missing",))
+            return ExperimentCompletion(
+                experiment_id, False, None, 0, ("experiment evidence missing",)
+            )
         payload = json.loads(result_path.read_text(encoding="utf-8"))
         problems: list[str] = []
-        if payload.get("experiment") != code:
-            problems.append("experiment code mismatch")
+        if payload.get("experiment") != experiment_id.value:
+            problems.append("experiment identity mismatch")
         if payload.get("complete") is not True:
             problems.append("experiment result envelope is not complete")
         observed = int(payload.get("observed_cells", 0))
         expected = payload.get("expected_cells")
         expected_int = int(expected) if isinstance(expected, int) else None
-        expected_by_code = {
-            ExperimentCode.S1: 32,
-            ExperimentCode.S2: 36,
-            ExperimentCode.S3: 12,
-            ExperimentCode.S4: 5,
-            ExperimentCode.S5: 12,
-            ExperimentCode.S6: 45,
-            ExperimentCode.R13: 4,
-        }[code]
-        if expected_int != expected_by_code or observed != expected_by_code:
-            problems.append(f"cell ledger {observed}/{expected_int} != roadmap {expected_by_code}")
-        expected_trials = {
-            ExperimentCode.S1: 320_000,
-            ExperimentCode.S2: 360_000,
-            ExperimentCode.S3: 120_000,
-            ExperimentCode.S4: 50_000,
-            ExperimentCode.S5: 120_000,
-            ExperimentCode.S6: 0,
-            ExperimentCode.R13: 0,
-        }[code]
+        expected_by_experiment = _EXPECTED_CELLS_BY_EXPERIMENT[experiment_id]
+        if expected_int != expected_by_experiment or observed != expected_by_experiment:
+            problems.append(
+                f"cell ledger {observed}/{expected_int} != roadmap {expected_by_experiment}"
+            )
+        expected_trials = _EXPECTED_MONTE_CARLO_TRIALS_BY_EXPERIMENT[experiment_id]
         if int(payload.get("observed_monte_carlo_trials", 0)) != expected_trials:
             problems.append("Monte-Carlo trial ledger does not match the roadmap")
         return ExperimentCompletion(
-            protocol_code=code,
+            experiment_id=experiment_id,
             complete=not problems,
-            expected_cells=expected_by_code,
+            expected_cells=expected_by_experiment,
             observed_cells=observed,
             problems=tuple(problems),
         )
@@ -297,19 +303,19 @@ class ExperimentCompletionAuditor:
     @staticmethod
     def _real_sensitivity_workload(
         outputs_root: Path,
-        code: ExperimentCode,
+        experiment_id: ExperimentId,
         expected_model_seeds: tuple[int, ...],
         expected_calibration_seed: int,
     ) -> ExperimentCompletion:
-        """R2-R6/R9 write a SensitivityEnvelope (protocol_code/model_seed/calibration_seed/cells)."""
-        cells_root = outputs_root / "experiments" / code / "cells"
+        """Reconcile a SensitivityEnvelope (experiment_id/model_seed/calibration_seed/cells)."""
+        cells_root = outputs_root / "experiments" / experiment_id.value / "cells"
         files = tuple(sorted(cells_root.glob("*.json"))) if cells_root.exists() else ()
         problems: list[str] = []
         identities: set[tuple[int, int]] = set()
         for path in files:
             payload = json.loads(path.read_text(encoding="utf-8"))
-            if payload.get("protocol_code") != code:
-                problems.append(f"{path.name}: experiment code mismatch")
+            if payload.get("experiment_id") != experiment_id.value:
+                problems.append(f"{path.name}: experiment identity mismatch")
                 continue
             cells = payload.get("cells")
             if not isinstance(cells, list) or not cells:
@@ -326,7 +332,7 @@ class ExperimentCompletionAuditor:
         if unexpected:
             problems.append(f"unexpected sensitivity model cells: {len(unexpected)}")
         return ExperimentCompletion(
-            protocol_code=code,
+            experiment_id=experiment_id,
             complete=not problems,
             expected_cells=len(expected),
             observed_cells=len(files),
@@ -336,18 +342,18 @@ class ExperimentCompletionAuditor:
     @staticmethod
     def _single_seed_sensitivity_workload(
         outputs_root: Path,
-        code: ExperimentCode,
+        experiment_id: ExperimentId,
         expected_calibration_seed: int,
     ) -> ExperimentCompletion:
-        """R7/R8 write a MultiplicityEnvelope/SourceOrderEnvelope: no model-seed axis."""
-        cells_root = outputs_root / "experiments" / code / "cells"
+        """Reconcile a MultiplicityEnvelope/SourceOrderEnvelope: no model-seed axis."""
+        cells_root = outputs_root / "experiments" / experiment_id.value / "cells"
         files = tuple(sorted(cells_root.glob("*.json"))) if cells_root.exists() else ()
         problems: list[str] = []
         identities: set[int] = set()
         for path in files:
             payload = json.loads(path.read_text(encoding="utf-8"))
-            if payload.get("protocol_code") != code:
-                problems.append(f"{path.name}: experiment code mismatch")
+            if payload.get("experiment_id") != experiment_id.value:
+                problems.append(f"{path.name}: experiment identity mismatch")
                 continue
             cells = payload.get("cells")
             if not isinstance(cells, list) or not cells:
@@ -362,7 +368,7 @@ class ExperimentCompletionAuditor:
         if unexpected:
             problems.append(f"unexpected sensitivity calibration seeds: {len(unexpected)}")
         return ExperimentCompletion(
-            protocol_code=code,
+            experiment_id=experiment_id,
             complete=not problems,
             expected_cells=len(expected),
             observed_cells=len(files),
@@ -371,14 +377,15 @@ class ExperimentCompletionAuditor:
 
     @staticmethod
     def _source_order_workload(outputs_root: Path) -> ExperimentCompletion:
-        cells_root = outputs_root / "experiments" / ExperimentCode.R12 / "cells"
+        experiment_id = ExperimentId.SOURCE_ORDER_CALIBRATION
+        cells_root = outputs_root / "experiments" / experiment_id.value / "cells"
         files = tuple(sorted(cells_root.glob("*.json"))) if cells_root.exists() else ()
         problems: list[str] = []
         identities: set[tuple[str, int, int]] = set()
         for path in files:
             payload = json.loads(path.read_text(encoding="utf-8"))
-            if payload.get("experiment") != ExperimentCode.R12:
-                problems.append(f"{path.name}: experiment code mismatch")
+            if payload.get("experiment") != experiment_id.value:
+                problems.append(f"{path.name}: experiment identity mismatch")
                 continue
             if payload.get("complete") is not True:
                 problems.append(f"{path.name}: source-order evidence incomplete")
@@ -390,8 +397,8 @@ class ExperimentCompletionAuditor:
                 )
             )
         expected = {
-            *(("nbaiot", model_seed, 1000) for model_seed in _PRIMARY_MODEL_SEEDS),
-            *(("diad", model_seed, 2000) for model_seed in _PRIMARY_MODEL_SEEDS),
+            *((DatasetId.NBAIOT.value, model_seed, 1000) for model_seed in _PRIMARY_MODEL_SEEDS),
+            *((DatasetId.DIAD.value, model_seed, 2000) for model_seed in _PRIMARY_MODEL_SEEDS),
         }
         missing = expected - identities
         unexpected = identities - expected
@@ -400,7 +407,7 @@ class ExperimentCompletionAuditor:
         if unexpected:
             problems.append(f"unexpected source-order model cells: {len(unexpected)}")
         return ExperimentCompletion(
-            protocol_code=ExperimentCode.R12,
+            experiment_id=experiment_id,
             complete=not problems,
             expected_cells=len(expected),
             observed_cells=len(files),

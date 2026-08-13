@@ -1,1 +1,1 @@
-"""Statistical analysis, robustness, tables, figures, and benchmarking."""
+"""Cross-run statistical analysis of completed experimental evidence."""

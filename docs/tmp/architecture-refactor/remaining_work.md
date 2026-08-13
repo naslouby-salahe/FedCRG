@@ -10,7 +10,7 @@ Update this file as phases complete. Status values: TODO / IN_PROGRESS / DONE.
 - [x] Phase 6: application/ removed -> pipeline/ + experiments/definitions/   STATUS: DONE
 - [x] Phase 7: artifacts consolidation   STATUS: DONE
 - [x] Phase 8: reporting + cli           STATUS: DONE
-- [ ] Phase 9: final hostile audit + full validation suite   STATUS: TODO
+- [x] Phase 9: final hostile audit + full validation suite   STATUS: DONE
 
 Each phase, when started, must:
 1. Move/merge/rewrite the modules per migration_map.md.
@@ -387,6 +387,81 @@ Consolidated 14 files down to the 6 prompt.md names:
 - Validation: ruff check/format clean; mypy (py312 override) shows the same 10 pre-existing
   errors (2 of them simply relocated from cli/research.py to cli/experiments.py, same
   underlying issue, not new); full pytest -n auto suite passes (125 tests, unchanged).
+
+## Phase 9 completion notes (final hostile audit + full validation)
+See docs/tmp/architecture-refactor/audit_findings.md for the complete final audit report
+(structural checks, dependency-direction scan, deviation documentation). Summary of fixes
+made during this phase:
+- Fixed 10 pre-existing mypy errors that predated the migration (return-type annotations
+  on three generator helpers, a Literal-typed torch API argument, two Any-returning
+  nn.Module.__call__ results, an unnarrowed json.loads result, an uninferable lambda
+  default-argument, and a heterogeneous-signature method dict in cli/experiments.py) --
+  fixed with precise types/casts, no Any or ignores added.
+- Corrected pyproject.toml's `[tool.mypy] python_version` from "3.11" to "3.12" to match
+  the actual development environment (requires-python floor unchanged at ">=3.11"); this
+  had been silently breaking `mypy` (run via the project's own config) since it choked on
+  the environment's Python-3.12-only numpy stub syntax before checking any project code.
+- Added src/fedcrg/py.typed (PEP 561 marker), required for `mypy` to run in the package
+  mode pyproject.toml already declared.
+- Added the already-installed-but-undeclared pytest-xdist to `[project.optional-
+  dependencies].dev`.
+- Fixed analysis/__init__.py's stale docstring (still described tables/figures/benchmarking
+  content that moved to reporting/ and pipeline/ in Phases 5-6).
+- Verified via automated AST scan: zero dependency-direction violations against every
+  explicit rule in prompt.md's "Dependency Direction" section.
+- Verified via `python -m fedcrg --help`: CLI command surface unchanged after all
+  reorganization.
+- Final validation: ruff check/format clean, mypy clean (0 errors, project's own config),
+  pyright clean (0 errors/warnings/informations, installed via npm for this check),
+  pytest -n auto: 125 passed.
+
+## Post-Phase-9 findings (user-directed): primitive leakage cleanup
+After the nine phases and final audit, the user flagged remaining primitive leakage found
+by inspection: the terse "R1".."R14"/"S1".."S6" pre-registration codes were still primitive
+string literals scattered through CLI choices, dict keys, and comparisons instead of going
+through a domain enum, and the domain already had a fully-readable `ExperimentId` enum
+(e.g. `READINESS_SAMPLE_SIZE`) duplicating the same 20 experiments as the terser
+`ExperimentCode` enum. Per explicit user direction, **`ExperimentCode` was deleted
+entirely** and every consumer switched to `ExperimentId`, including on-disk artifact paths
+(`outputs/experiments/{code}/...` -> `outputs/experiments/{experiment_id}/...` -- safe
+because no real experiment output data exists yet in this checkout, only empty `.gitkeep`
+scaffolding).
+
+Files changed: domain/enums.py (enum deleted), experiments/experiment_definition.py
+(`protocol_code` field removed from `ExperimentDefinition`, catalogue validation now checks
+against `ExperimentId` directly), experiments/completion.py (fully rewritten to key
+workload-reconciliation dispatch and on-disk paths by `ExperimentId`, with named tuples/
+dicts replacing the old `ExperimentCode`-keyed sets), experiments/definitions/synthetic.py
+and sensitivity.py (envelope dataclasses already carried a redundant `experiment_id` field
+alongside `protocol_code` -- dropped `protocol_code`, kept `experiment_id`),
+artifacts/records.py (`ExperimentResultEnvelope.protocol_code` -> `experiment_id`),
+analysis/claim_gates.py and analysis/computational_benchmark.py, reporting/report.py and
+reporting/tables.py, cli/experiments.py (CLI `--experiment` choices for `synthetic run` and
+`sensitivity run` now list readable names instead of R2/S1-style codes).
+
+Also fixed while auditing for the same class of issue (raw strings/ints used where a domain
+enum/value type already existed, per prompt.md's explicit "No primitive leakage" rule):
+- analysis/policy_contrasts.py's `FederationResultRecord`: `run_id`/`experiment_id`/
+  `dataset_id`/`model_seed`/`calibration_seed` were typed as bare `str`/`int` despite
+  `RunId`/`ExperimentId`/`DatasetId`/`ModelSeed`/`CalibrationSeed` all already existing;
+  retyped the dataclass and its one constructor, and switched consumers
+  (reporting/tables.py, reporting/report.py, analysis/claim_gates.py) from
+  `row.experiment_id == "primary_nbaiot"`-style string comparisons to
+  `row.experiment_id is ExperimentId.PRIMARY_NBAIOT` enum identity comparisons. Also
+  replaced a hardcoded `{11, 22, 33, 44, 55}` seed-set literal with the existing
+  `PRIMARY_MODEL_SEEDS` domain constant.
+- pipeline/select_thresholds.py: `config.dataset.id.value == "nbaiot"` ->
+  `config.dataset.id is DatasetId.NBAIOT`.
+- experiments/completion.py: a `("nbaiot", ...)/("diad", ...)` expected-identity set built
+  from raw strings -> `DatasetId.NBAIOT.value`/`DatasetId.DIAD.value`.
+- Three `payload.get("status") == "complete"` / `manifest.get("status") != "complete"`
+  raw-string comparisons (reporting/publication.py, reporting/report.py,
+  analysis/policy_contrasts.py) -> `== ExperimentStatus.COMPLETE.value`.
+
+Validation after this cleanup: ruff check/format clean, mypy clean (0 errors), pyright
+clean (0 errors/warnings), full pytest -n auto suite passes (125 tests). Verified via
+`python -m fedcrg synthetic run --help` and `sensitivity run --help` that the CLI now
+lists readable experiment names instead of terse codes.
 
 ## Notes / open decisions to resolve during implementation
 - config/validate.py must not import thresholds/ (downward dependency violation in old

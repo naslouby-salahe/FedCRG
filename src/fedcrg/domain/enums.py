@@ -179,29 +179,6 @@ class ExperimentId(StrEnum):
     DIAD_FEATURE_SENSITIVITY = "diad_feature_sensitivity"
 
 
-class ExperimentCode(StrEnum):
-    S1 = "S1"
-    S2 = "S2"
-    S3 = "S3"
-    S4 = "S4"
-    S5 = "S5"
-    S6 = "S6"
-    R1 = "R1"
-    R2 = "R2"
-    R3 = "R3"
-    R4 = "R4"
-    R5 = "R5"
-    R6 = "R6"
-    R7 = "R7"
-    R8 = "R8"
-    R9 = "R9"
-    R10 = "R10"
-    R11 = "R11"
-    R12 = "R12"
-    R13 = "R13"
-    R14 = "R14"
-
-
 class ExperimentAxisId(StrEnum):
     DISTRIBUTION = "distribution"
     CALIBRATION_N = "calibration_n"

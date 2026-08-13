@@ -39,7 +39,9 @@ class RepositoryVerification:
 
     @property
     def incomplete_experiments(self) -> tuple[str, ...]:
-        return tuple(row.protocol_code for row in self.experiment_completion if not row.complete)
+        return tuple(
+            row.experiment_id.value for row in self.experiment_completion if not row.complete
+        )
 
 
 class VerifyOutputs:

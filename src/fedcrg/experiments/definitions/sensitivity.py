@@ -24,7 +24,6 @@ from fedcrg.domain.enums import (
     DataRole,
     DatasetFeatureContractId,
     ExperimentAxisId,
-    ExperimentCode,
     ExperimentId,
     MultiplicityProcedure,
     PolicyEvaluationStatus,
@@ -233,7 +232,6 @@ class SensitivityCell:
 @dataclass(frozen=True, slots=True)
 class SensitivityEnvelope:
     experiment_id: ExperimentId
-    protocol_code: ExperimentCode
     model_seed: int
     calibration_seed: CalibrationSeed
     cells: tuple[SensitivityCell, ...]
@@ -249,7 +247,6 @@ class MultiplicityCell:
 @dataclass(frozen=True, slots=True)
 class MultiplicityEnvelope:
     experiment_id: ExperimentId
-    protocol_code: ExperimentCode
     calibration_seed: CalibrationSeed
     cells: tuple[MultiplicityCell, ...]
 
@@ -267,7 +264,6 @@ class SourceOrderBlockCell:
 @dataclass(frozen=True, slots=True)
 class SourceOrderEnvelope:
     experiment_id: ExperimentId
-    protocol_code: ExperimentCode
     calibration_seed: CalibrationSeed
     cells: tuple[SourceOrderBlockCell, ...]
 
@@ -388,7 +384,7 @@ class RunRealSensitivities:
         cells: list[SensitivityCell] = []
         for raw_value in definition.axis(axis_id).values:
             if not isinstance(raw_value, (int, float)) or isinstance(raw_value, bool):
-                raise TypeError(f"{definition.protocol_code.value}/{axis_id.value} must be numeric")
+                raise TypeError(f"{definition.id.value}/{axis_id.value} must be numeric")
             value = float(raw_value)
             if axis_id is ExperimentAxisId.RHO:
                 variant = self.variants.protocol_variant(
@@ -427,7 +423,6 @@ class RunRealSensitivities:
             output,
             SensitivityEnvelope(
                 experiment_id,
-                definition.protocol_code,
                 model_seed,
                 calibration_seed,
                 tuple(cells),
@@ -470,7 +465,6 @@ class RunRealSensitivities:
             output,
             SensitivityEnvelope(
                 ExperimentId.READINESS_SAMPLE_SIZE,
-                definition.protocol_code,
                 model_seed,
                 seed,
                 cells,
@@ -513,7 +507,6 @@ class RunRealSensitivities:
             output,
             SensitivityEnvelope(
                 ExperimentId.MISMATCH_SAMPLE_SIZE,
-                definition.protocol_code,
                 model_seed,
                 seed,
                 cells,
@@ -643,7 +636,6 @@ class RunRealSensitivities:
             output,
             MultiplicityEnvelope(
                 ExperimentId.MULTIPLICITY_SENSITIVITY,
-                definition.protocol_code,
                 seed,
                 tuple(cells),
             ),
@@ -701,7 +693,6 @@ class RunRealSensitivities:
             output,
             SourceOrderEnvelope(
                 ExperimentId.SOURCE_ORDER_TEST,
-                definition.protocol_code,
                 seed,
                 tuple(rows),
             ),
@@ -765,7 +756,6 @@ class RunRealSensitivities:
             output,
             SensitivityEnvelope(
                 ExperimentId.REAL_CONTAMINATION,
-                definition.protocol_code,
                 int(self.score_cache.load_descriptor(score_root).identity.model_seed),
                 seed,
                 tuple(cells),
@@ -795,7 +785,7 @@ class RunSourceOrderCalibration:
         atomic_write_json(
             output,
             {
-                "experiment": ExperimentCode.R12.value,
+                "experiment": ExperimentId.SOURCE_ORDER_CALIBRATION.value,
                 "complete": True,
                 "dataset_id": config.dataset.id.value,
                 "model_seed": int(descriptor.identity.model_seed),

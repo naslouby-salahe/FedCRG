@@ -187,6 +187,16 @@ def execute_grid(
     )
 
 
+_SYNTHETIC_EXPERIMENTS = (
+    ExperimentId.READINESS_THEOREM,
+    ExperimentId.TARGET_FPR_SYNTHETIC,
+    ExperimentId.TEMPORAL_DEPENDENCE,
+    ExperimentId.CALIBRATION_SHIFT,
+    ExperimentId.CALIBRATION_CONTAMINATION,
+    ExperimentId.MISMATCH_POWER,
+)
+
+
 @click.group(name="synthetic")
 def synthetic_group() -> None:
     """Run pre-registered synthetic validation cells."""
@@ -197,21 +207,24 @@ def synthetic_group() -> None:
     "--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True
 )
 @click.option(
-    "--experiment", type=click.Choice(["S1", "S2", "S3", "S4", "S5", "S6"]), required=True
+    "--experiment",
+    type=click.Choice([item.value for item in _SYNTHETIC_EXPERIMENTS]),
+    required=True,
 )
 @click.option("--output", type=click.Path(path_type=Path), required=True)
 def synthetic_run(config_path: Path, experiment: str, output: Path) -> None:
     config = load_config(config_path)
+    experiment_id = ExperimentId(experiment)
     runner = RunSyntheticExperiments()
-    if experiment == "S1":
+    if experiment_id is ExperimentId.READINESS_THEOREM:
         path = runner.run_s1(config, output)
-    elif experiment == "S2":
+    elif experiment_id is ExperimentId.TARGET_FPR_SYNTHETIC:
         path = runner.run_s2(config, output)
-    elif experiment == "S3":
+    elif experiment_id is ExperimentId.TEMPORAL_DEPENDENCE:
         path = runner.run_s3(config, output)
-    elif experiment == "S4":
+    elif experiment_id is ExperimentId.CALIBRATION_SHIFT:
         path = runner.run_s4(config, output)
-    elif experiment == "S5":
+    elif experiment_id is ExperimentId.CALIBRATION_CONTAMINATION:
         path = runner.run_s5(config, output)
     else:
         path = runner.run_s6(output)
@@ -238,12 +251,28 @@ def train_deep_svdd(config_path: Path, prepared_root: Path, model_seed: int) -> 
     click.echo(f"model={model}\nmanifest={manifest}")
 
 
+_MODEL_SEED_SENSITIVITY_EXPERIMENTS = (
+    ExperimentId.READINESS_SAMPLE_SIZE,
+    ExperimentId.MISMATCH_SAMPLE_SIZE,
+    ExperimentId.TOLERANCE_SENSITIVITY,
+    ExperimentId.TARGET_FPR_REAL,
+    ExperimentId.ASSURANCE_SENSITIVITY,
+)
+_SINGLE_SEED_SENSITIVITY_EXPERIMENTS = (
+    ExperimentId.MULTIPLICITY_SENSITIVITY,
+    ExperimentId.SOURCE_ORDER_TEST,
+    ExperimentId.REAL_CONTAMINATION,
+)
+_SENSITIVITY_EXPERIMENTS = (
+    *_MODEL_SEED_SENSITIVITY_EXPERIMENTS,
+    *_SINGLE_SEED_SENSITIVITY_EXPERIMENTS,
+    ExperimentId.SOURCE_ORDER_CALIBRATION,
+)
+
+
 @click.group(name="sensitivity")
 def sensitivity_group() -> None:
     """Run pre-registered real-score sensitivities on a frozen score cache."""
-
-
-_MODEL_SEED_SENSITIVITIES = frozenset({"R2", "R3", "R4", "R5", "R6"})
 
 
 @sensitivity_group.command(name="run")
@@ -254,7 +283,7 @@ _MODEL_SEED_SENSITIVITIES = frozenset({"R2", "R3", "R4", "R5", "R6"})
 @click.option("--prepared-root", type=click.Path(path_type=Path, exists=True), required=True)
 @click.option(
     "--experiment",
-    type=click.Choice(["R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R12"]),
+    type=click.Choice([item.value for item in _SENSITIVITY_EXPERIMENTS]),
     required=True,
 )
 @click.option("--model-seed", type=int, default=None)
@@ -269,35 +298,41 @@ def sensitivity_run(
     calibration_seed: int | None,
     output: Path,
 ) -> None:
-    """Run one pre-registered R2-R9/R12 real-score sensitivity on a frozen score cache."""
+    """Run one pre-registered real-score sensitivity on a frozen score cache."""
     from fedcrg.experiments.definitions.sensitivity import (
         RunRealSensitivities,
         RunSourceOrderCalibration,
     )
 
     config = load_config(config_path)
+    experiment_id = ExperimentId(experiment)
 
-    if experiment == "R12":
+    if experiment_id is ExperimentId.SOURCE_ORDER_CALIBRATION:
         path = RunSourceOrderCalibration().run(config, prepared_root, score_root, output)
         click.echo(str(path))
         return
 
     runner = RunRealSensitivities()
-    methods = {
-        "R2": runner.run_r2,
-        "R3": runner.run_r3,
-        "R4": runner.run_r4,
-        "R5": runner.run_r5,
-        "R6": runner.run_r6,
-        "R7": runner.run_r7,
-        "R8": runner.run_r8,
-        "R9": runner.run_r9,
+    model_seed_methods = {
+        ExperimentId.READINESS_SAMPLE_SIZE: runner.run_r2,
+        ExperimentId.MISMATCH_SAMPLE_SIZE: runner.run_r3,
+        ExperimentId.TOLERANCE_SENSITIVITY: runner.run_r4,
+        ExperimentId.TARGET_FPR_REAL: runner.run_r5,
+        ExperimentId.ASSURANCE_SENSITIVITY: runner.run_r6,
     }
-    method = methods[experiment]
-    if experiment in _MODEL_SEED_SENSITIVITIES:
+    single_seed_methods = {
+        ExperimentId.MULTIPLICITY_SENSITIVITY: runner.run_r7,
+        ExperimentId.SOURCE_ORDER_TEST: runner.run_r8,
+        ExperimentId.REAL_CONTAMINATION: runner.run_r9,
+    }
+    if experiment_id in model_seed_methods:
         if model_seed is None:
             raise click.UsageError(f"{experiment} requires --model-seed")
-        path = method(config, score_root, prepared_root, model_seed, output, calibration_seed)
+        path = model_seed_methods[experiment_id](
+            config, score_root, prepared_root, model_seed, output, calibration_seed
+        )
     else:
-        path = method(config, score_root, prepared_root, output, calibration_seed)
+        path = single_seed_methods[experiment_id](
+            config, score_root, prepared_root, output, calibration_seed
+        )
     click.echo(str(path))

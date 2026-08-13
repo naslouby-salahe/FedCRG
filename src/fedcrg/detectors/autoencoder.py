@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import torch
 
 from fedcrg.config.training_config import AutoencoderConfig
@@ -51,7 +53,7 @@ class Autoencoder(DetectorModel):
                 torch.nn.init.zeros_(module.bias)
 
     def forward(self, batch: torch.Tensor) -> torch.Tensor:
-        return self.network(batch)
+        return cast(torch.Tensor, self.network(batch))
 
     def anomaly_score(self, batch: torch.Tensor) -> torch.Tensor:
         reconstruction = self.forward(batch)

@@ -4,6 +4,7 @@ derivation from frozen experiment evidence."""
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,7 +18,6 @@ from fedcrg.artifacts.json_io import atomic_write_json
 from fedcrg.artifacts.integrity import ArtifactVerifier
 from fedcrg.domain.enums import (
     ClaimLevel,
-    ExperimentCode,
     ExperimentId,
     ExperimentStatus,
     PolicyId,
@@ -127,7 +127,7 @@ class ClaimGateEvaluator:
         novelty_log: Path | None = None,
         repository_certified: bool = False,
     ) -> ClaimGateReport:
-        completion = {row.protocol_code: row for row in self.completion.audit(outputs_root)}
+        completion = {row.experiment_id: row for row in self.completion.audit(outputs_root)}
         run_dirs = tuple(self._completed_run_dirs(outputs_root / "runs"))
         records = load_federation_results(run_dirs)
         diagnostics: dict[str, str] = {}
@@ -182,12 +182,12 @@ class ClaimGateEvaluator:
         )
 
         required_stress = (
-            ExperimentCode.S3,
-            ExperimentCode.S4,
-            ExperimentCode.S5,
-            ExperimentCode.R8,
-            ExperimentCode.R9,
-            ExperimentCode.R12,
+            ExperimentId.TEMPORAL_DEPENDENCE,
+            ExperimentId.CALIBRATION_SHIFT,
+            ExperimentId.CALIBRATION_CONTAMINATION,
+            ExperimentId.SOURCE_ORDER_TEST,
+            ExperimentId.REAL_CONTAMINATION,
+            ExperimentId.SOURCE_ORDER_CALIBRATION,
         )
         g7 = all(
             completion.get(code) is not None and completion[code].complete
@@ -267,13 +267,13 @@ class ClaimGateEvaluator:
     def _statistical_core_integrity(
         self,
         outputs_root: Path,
-        completion: dict[ExperimentCode, ExperimentCompletion],
+        completion: dict[ExperimentId, ExperimentCompletion],
     ) -> bool:
         precompute = VerifyOutputs.verify_protocol_precompute(outputs_root)
-        s1 = completion.get(ExperimentCode.S1)
+        s1 = completion.get(ExperimentId.READINESS_THEOREM)
         if not precompute.valid or s1 is None or not s1.complete:
             return False
-        path = outputs_root / "experiments" / ExperimentCode.S1 / "results.json"
+        path = outputs_root / "experiments" / ExperimentId.READINESS_THEOREM.value / "results.json"
         if not path.is_file():
             return False
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -286,10 +286,10 @@ class ClaimGateEvaluator:
 
     def _data_integrity(
         self,
-        completion: dict[ExperimentCode, ExperimentCompletion],
+        completion: dict[ExperimentId, ExperimentCompletion],
         run_dirs: tuple[Path, ...],
     ) -> bool:
-        r1 = completion.get(ExperimentCode.R1)
+        r1 = completion.get(ExperimentId.PRIMARY_NBAIOT)
         if r1 is None or not r1.complete:
             return False
         primary = [
@@ -412,9 +412,9 @@ class ClaimGateEvaluator:
     def _external_replication(
         cls,
         records: tuple[FederationResultRecord, ...],
-        completion: dict[ExperimentCode, ExperimentCompletion],
+        completion: dict[ExperimentId, ExperimentCompletion],
     ) -> bool:
-        r10 = completion.get(ExperimentCode.R10)
+        r10 = completion.get(ExperimentId.EXTERNAL_DIAD)
         return bool(
             r10 is not None
             and r10.complete
@@ -425,9 +425,9 @@ class ClaimGateEvaluator:
     def _detector_robustness(
         cls,
         records: tuple[FederationResultRecord, ...],
-        completion: dict[ExperimentCode, ExperimentCompletion],
+        completion: dict[ExperimentId, ExperimentCompletion],
     ) -> bool:
-        r11 = completion.get(ExperimentCode.R11)
+        r11 = completion.get(ExperimentId.SECOND_DETECTOR)
         if r11 is None or not r11.complete:
             return False
         selected = cls._cell_records(records, ExperimentId.SECOND_DETECTOR, 1000)
@@ -445,7 +445,7 @@ class ClaimGateEvaluator:
             and any(values and np.mean(method) < np.mean(values) for values in anchors.values())
         )
 
-    def _completed_run_dirs(self, root: Path):
+    def _completed_run_dirs(self, root: Path) -> Iterator[Path]:
         if not root.exists():
             return
         for path in sorted(item for item in root.iterdir() if item.is_dir()):
