@@ -113,7 +113,7 @@ _MODEL_SEED_SENSITIVITIES = frozenset({"R2", "R3", "R4", "R5", "R6"})
 @click.option("--prepared-root", type=click.Path(path_type=Path, exists=True), required=True)
 @click.option(
     "--experiment",
-    type=click.Choice(["R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9"]),
+    type=click.Choice(["R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R12"]),
     required=True,
 )
 @click.option("--model-seed", type=int, default=None)
@@ -128,10 +128,17 @@ def sensitivity_run(
     calibration_seed: int | None,
     output: Path,
 ) -> None:
-    """Run one pre-registered R2-R9 real-score sensitivity on a frozen score cache."""
+    """Run one pre-registered R2-R9/R12 real-score sensitivity on a frozen score cache."""
     from fedcrg.application.sensitivity import RunRealSensitivities
+    from fedcrg.application.source_order import RunSourceOrderCalibration
 
     config = load_config(config_path)
+
+    if experiment == "R12":
+        path = RunSourceOrderCalibration().run(config, prepared_root, score_root, output)
+        click.echo(str(path))
+        return
+
     runner = RunRealSensitivities()
     methods = {
         "R2": runner.run_r2,

@@ -358,7 +358,7 @@ class PublicationPackageBuilder:
         if not rows:
             return pd.DataFrame()
         frame = pd.DataFrame.from_records(rows)
-        return frame.groupby(["client_id", "policy"], as_index=False)["fpr"].mean()
+        return frame.groupby(["client_id", "policy"], as_index=False)[["fpr"]].mean()
 
     @classmethod
     def _reliability_utility_frame(cls, runs: tuple[Path, ...]) -> pd.DataFrame:
@@ -424,7 +424,7 @@ class PublicationPackageBuilder:
             return pd.DataFrame()
         return (
             pd.DataFrame.from_records(rows)
-            .groupby(["evidence", "sample_count"], as_index=False)["admission_rate"]
+            .groupby(["evidence", "sample_count"], as_index=False)[["admission_rate"]]
             .mean()
         )
 
@@ -467,4 +467,4 @@ class PublicationPackageBuilder:
         if not rows:
             return pd.DataFrame()
         frame = pd.DataFrame.from_records(rows)
-        return frame.groupby(["client_id", "policy"], as_index=False)["fpr"].mean()
+        return frame.groupby(["client_id", "policy"], as_index=False)[["fpr"]].mean()

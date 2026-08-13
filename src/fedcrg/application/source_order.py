@@ -21,10 +21,10 @@ class RunSourceOrderCalibration:
         score_root: Path,
         output: Path,
     ) -> Path:
-        scores = ScoreCache().load(score_root)
-        bundle = EvaluatePolicies().evaluate(
+        descriptor = ScoreCache().load_descriptor(score_root)
+        bundle = EvaluatePolicies().evaluate_from_cache(
             config,
-            scores,
+            score_root,
             calibration_seed=config.dataset.primary_calibration_seed,
             mode=CalibrationAssignmentMode.SOURCE_ORDER,
             prepared_root=prepared_root,
@@ -35,7 +35,7 @@ class RunSourceOrderCalibration:
                 "experiment": "R12",
                 "dataset": config.dataset.id.value,
                 "calibration_assignment": CalibrationAssignmentMode.SOURCE_ORDER.value,
-                "score_cache_sha256": scores.cache_sha256.value if scores.cache_sha256 else None,
+                "score_cache_sha256": descriptor.cache_sha256.value,
                 "evaluation": EvaluatePolicies.to_serializable(bundle),
             },
         )

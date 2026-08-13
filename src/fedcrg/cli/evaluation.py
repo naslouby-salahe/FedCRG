@@ -10,7 +10,6 @@ from fedcrg.application.evaluate import EvaluatePolicies
 from fedcrg.application.report import ReportBuilder
 from fedcrg.artifacts.serialization import atomic_write_json
 from fedcrg.cli.shared import load_config
-from fedcrg.scoring.cache import ScoreCache
 
 
 @click.command(name="evaluate")
@@ -18,11 +17,14 @@ from fedcrg.scoring.cache import ScoreCache
     "--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True
 )
 @click.option("--score-root", type=click.Path(path_type=Path, exists=True), required=True)
+@click.option("--calibration-seed", type=int, default=None)
 @click.option("--output", type=click.Path(path_type=Path), default=Path("outputs/evaluation.json"))
-def evaluate_command(config_path: Path, score_root: Path, output: Path) -> None:
+def evaluate_command(
+    config_path: Path, score_root: Path, calibration_seed: int | None, output: Path
+) -> None:
     config = load_config(config_path)
     service = EvaluatePolicies()
-    bundle = service.evaluate(config, ScoreCache().load(score_root))
+    bundle = service.evaluate_from_cache(config, score_root, calibration_seed=calibration_seed)
     atomic_write_json(output, service.to_serializable(bundle))
     click.echo(str(output))
 
