@@ -1,0 +1,3 @@
+id: autoencoder
+hidden_dims: [86, 57, 38, 29]
+activation: tanh

@@ -1,0 +1,2 @@
+extends: ../primary/nbaiot.yaml
+id: target_fpr_real
