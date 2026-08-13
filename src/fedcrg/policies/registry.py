@@ -13,8 +13,7 @@ from fedcrg.policies.attack_aware import (
     summary_statistic_threshold,
     supervised_global_f1,
 )
-from fedcrg.policies.base import ClientPolicyInputs
-from fedcrg.policies.oracle import oracle_choice
+from fedcrg.policies.base import PolicySelectionInputs
 from fedcrg.policies.personalized import mismatch_only, readiness_only
 from fedcrg.policies.quantile import global_quantile, local_quantile, three_sigma
 from fedcrg.policies.shrinkage import shrinkage, tune_shrinkage
@@ -34,13 +33,37 @@ class PolicyDefinition:
 
 
 @dataclass(frozen=True, slots=True)
+class ClientPolicyThreshold:
+    policy: PolicyId
+    client_id: ClientId
+    threshold: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class UndefinedPolicyReason:
+    policy: PolicyId
+    reason: FailureCode
+
+
+@dataclass(frozen=True, slots=True)
 class PolicyThresholdSet:
-    values: dict[PolicyId, dict[ClientId, float | None]]
-    undefined_reasons: dict[PolicyId, FailureCode]
+    """Thresholds frozen before final-test evidence is opened.
+
+    ``ORACLE-TEST`` is intentionally absent. Its diagnostic threshold can only be
+    computed at the final-test evaluation boundary.
+    """
+
+    entries: tuple[ClientPolicyThreshold, ...]
+    undefined_reasons: tuple[UndefinedPolicyReason, ...]
     shrinkage_n0: int
 
     def for_client(self, policy: PolicyId, client_id: ClientId) -> float | None:
-        return self.values[policy][client_id]
+        if policy is PolicyId.ORACLE_TEST:
+            raise ValueError("ORACLE-TEST is not available before final-test evidence opens")
+        for entry in self.entries:
+            if entry.policy is policy and entry.client_id == client_id:
+                return entry.threshold
+        raise KeyError(f"No threshold for {policy.value}/{client_id.value}")
 
 
 class PolicyRegistry:
@@ -77,9 +100,11 @@ class PolicyRegistry:
 
 
 class FederationPolicySelector:
+    """Select every non-oracle threshold without receiving final-test evidence."""
+
     def select(
         self,
-        clients: tuple[ClientPolicyInputs, ...],
+        clients: tuple[PolicySelectionInputs, ...],
         protocol: ProtocolConfig,
     ) -> PolicyThresholdSet:
         if not clients:
@@ -97,43 +122,48 @@ class FederationPolicySelector:
         summary_threshold = summary_statistic_threshold(supervised_clients)
         supervised_threshold = supervised_global_f1(supervised_clients)
 
-        values: dict[PolicyId, dict[ClientId, float | None]] = {
-            policy: {} for policy in PolicyId
-        }
-        undefined: dict[PolicyId, FailureCode] = {}
+        entries: list[ClientPolicyThreshold] = []
+        undefined: list[UndefinedPolicyReason] = []
         if summary_threshold is None:
-            undefined[PolicyId.SUMMARY_STATISTIC_SELECT] = (
-                FailureCode.SUMMARY_STATISTIC_COMPARATOR_UNDEFINED
+            undefined.append(
+                UndefinedPolicyReason(
+                    PolicyId.SUMMARY_STATISTIC_SELECT,
+                    FailureCode.SUMMARY_STATISTIC_COMPARATOR_UNDEFINED,
+                )
             )
 
         for client in clients:
             cid = client.client_id
             reference = client.benign.protocol.reference.value
-            fedcrg = client.benign.protocol.decision.threshold
-            values[PolicyId.REFERENCE_QUANTILE][cid] = reference
-            values[PolicyId.GLOBAL_QUANTILE][cid] = global_q
-            values[PolicyId.LOCAL_QUANTILE][cid] = local_q[cid]
-            values[PolicyId.READINESS_ONLY][cid] = readiness_only(client.benign)
-            values[PolicyId.MISMATCH_ONLY][cid] = mismatch_only(
-                client.benign, protocol.alpha
+            method_threshold = client.benign.protocol.decision.threshold
+            thresholds = (
+                (PolicyId.REFERENCE_QUANTILE, reference),
+                (PolicyId.GLOBAL_QUANTILE, global_q),
+                (PolicyId.LOCAL_QUANTILE, local_q[cid]),
+                (PolicyId.READINESS_ONLY, readiness_only(client.benign)),
+                (PolicyId.MISMATCH_ONLY, mismatch_only(client.benign, protocol.alpha)),
+                (PolicyId.SHRINKAGE, shrinkage(client.benign, protocol.alpha, shrinkage_n0)),
+                (PolicyId.THREE_SIGMA, three_sigma_threshold),
+                (
+                    PolicyId.DEV_F1_SELECT,
+                    dev_local_global(client.supervised, global_q, local_q[cid]),
+                ),
+                (PolicyId.SUMMARY_STATISTIC_SELECT, summary_threshold),
+                (PolicyId.SUPERVISED_F1, supervised_threshold),
+                (PolicyId.FEDCRG, method_threshold),
             )
-            values[PolicyId.SHRINKAGE][cid] = shrinkage(
-                client.benign, protocol.alpha, shrinkage_n0
+            entries.extend(
+                ClientPolicyThreshold(policy, cid, threshold)
+                for policy, threshold in thresholds
             )
-            values[PolicyId.THREE_SIGMA][cid] = three_sigma_threshold
-            values[PolicyId.DEV_F1_SELECT][cid] = dev_local_global(
-                client.supervised, global_q, local_q[cid]
-            )
-            values[PolicyId.SUMMARY_STATISTIC_SELECT][cid] = summary_threshold
-            values[PolicyId.SUPERVISED_F1][cid] = supervised_threshold
-            values[PolicyId.ORACLE_TEST][cid] = oracle_choice(
-                client.final_test,
-                (global_q, local_q[cid], fedcrg),
-                protocol.band,
-            )
-            values[PolicyId.FEDCRG][cid] = fedcrg
 
-        ids = {client.client_id for client in clients}
-        if not all(set(mapping) == ids for mapping in values.values()):
-            raise RuntimeError("Policy selection did not produce one cell per client")
-        return PolicyThresholdSet(values, undefined, shrinkage_n0)
+        expected = {
+            (policy, client.client_id)
+            for policy in PolicyId
+            if policy is not PolicyId.ORACLE_TEST
+            for client in clients
+        }
+        observed = {(entry.policy, entry.client_id) for entry in entries}
+        if observed != expected:
+            raise RuntimeError("Policy selection did not produce one non-oracle cell per client")
+        return PolicyThresholdSet(tuple(entries), tuple(undefined), shrinkage_n0)
