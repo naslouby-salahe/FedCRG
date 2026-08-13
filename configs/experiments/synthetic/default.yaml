@@ -2,6 +2,7 @@ id: readiness_theorem
 protocol: ../../protocol/default.yaml
 dataset:
   id: synthetic
+  feature_contract: synthetic
   source_version: "generated-v2"
   parser_version: "1"
   feature_count: 1
