@@ -145,3 +145,49 @@ This ledger maps the normative `docs/roadmap.md` contract to executable reposito
 ## Experiments not claimed as completed
 
 The repository must not mark S1-S6 or R1-R14 complete merely because their code exists. Real dataset acquisition, five-seed federated training, 970,000 locked Monte-Carlo trials, DIAD eligibility evaluation, Deep-SVDD training, R13 benchmarking, and final publication tables/figures require execution in the intended environment. `fedcrg verify` is designed to remain failing/incomplete until those evidence ledgers reconcile.
+
+## Post-merge implementation audit (this session)
+
+PR #1 was merged into `main` and then audited end to end. The merge left several
+CLI/application call sites broken (calling renamed or nonexistent methods) and
+a handful of real scientific/typing defects that the merged test suite had
+never exercised. All were fixed, not papered over:
+
+- `fedcrg evaluate`, R12 source-order sensitivity, and R14 config derivation
+  were calling nonexistent or unsafe APIs (`EvaluatePolicies.evaluate`,
+  `model_copy(update=...)` bypassing full config revalidation). Fixed to use
+  `evaluate_from_cache` and a full-payload `model_validate` rebuild.
+- `PrepareData` called a nonexistent `DatasetAdapter.iter_clients`; `fedcrg data
+  prepare` could not run for either dataset before this fix.
+- `capture_environment()`'s dict keys didn't match what `run_experiment.py`
+  read, so every `RunExperiment.execute()` call raised `KeyError`.
+- The score cache's Parquet schema drifted across roles because the
+  label/attack-family columns lacked stable dtypes; fixed with explicit
+  nullable dtypes so streaming multi-role writes are schema-consistent.
+- `PublicationTableBuilder` was missing 6 of its ~10 table builders
+  (`literature_boundary`, `primary_policy_results`, `admission_states_from_runs`,
+  `ablations`, `sensitivity`, `external_replication`); Tables 1/4/5/6/7/8 always
+  silently reported "unavailable" regardless of evidence. Implemented all six.
+- Consolidated the duplicate R14/DIAD-feature-sensitivity implementation
+  (`application/r14.py` + `data/r14_feature_contract.py` deleted; canonical
+  path is `data/feature_sensitivity.py` + `application/feature_sensitivity.py`).
+- Deleted dead code: `application/research_pipeline.py`'s preflight gate was
+  unwired — instead of deleting it, it is now the real `execute-grid` path
+  (`ExecuteResearchPipeline` audits prepared data and precomputes readiness/
+  mismatch tables before every frozen-workload execution); `artifacts/
+  experiment_layout.py` was genuinely dead and removed.
+- Wired the previously dead `EnvironmentLocker` behind `fedcrg environment
+  freeze`, and implemented `VerifyOutputs.verify_protocol_precompute` (the G1
+  claim-gate dependency referenced but never implemented).
+- Renamed `robustness second-detector` to `robustness deep-svdd` to match the
+  roadmap-required command name and the actual algorithm name.
+- Replaced dict-shaped frozen-dataclass fields with typed tuple-of-record
+  models plus lookup helpers across `scoring/`, `data/`, `artifacts/`, and
+  `analysis/`, per the no-dict-domain-model rule.
+- `pyright`: 0 errors (down from 89 once the merge's actual state was measured).
+  `ruff check`/`ruff format`: clean across the whole tree, which had never been
+  formatted since the refactor. Full suite: 121 passed, 0 failed.
+
+None of this changes the experimental-evidence status above: `fedcrg verify`
+against an empty `outputs/` still truthfully reports all S1-S6/R1-R14 workloads
+incomplete, as intended.
