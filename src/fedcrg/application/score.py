@@ -2,18 +2,19 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Iterator
 from pathlib import Path
 
 import pandas as pd
 
 from fedcrg.application.train import TrainDetector, feature_columns
+from fedcrg.artifacts.dataset import PreparedDatasetManifestStore
 from fedcrg.artifacts.hashing import sha256_file
 from fedcrg.artifacts.training import TrainingManifestStore
 from fedcrg.config.models import ExperimentConfig
 from fedcrg.core.enums import DataRole
 from fedcrg.core.ids import AttackGroupId, ClientId, ModelSeed, RowId, Sha256
+from fedcrg.data.manifests import PreparedDatasetManifest
 from fedcrg.detectors.base import DetectorModel
 from fedcrg.scoring.cache import ScoreCache, ScoreCacheIdentity
 from fedcrg.scoring.computer import ScoreComputer
@@ -29,12 +30,7 @@ _BASE_SCORE_ROLES = (
 
 
 class ComputeScores:
-    """Score seed-independent base roles using bounded memory.
-
-    A typed training manifest is mandatory: scoring an arbitrary model file without
-    proving its training specification would break the frozen-detector provenance
-    contract.
-    """
+    """Score seed-independent base roles using bounded memory and frozen provenance."""
 
     def __init__(
         self,
@@ -42,11 +38,13 @@ class ComputeScores:
         trainer: TrainDetector | None = None,
         cache: ScoreCache | None = None,
         training_manifests: TrainingManifestStore | None = None,
+        dataset_manifests: PreparedDatasetManifestStore | None = None,
     ) -> None:
         self.computer = computer or ScoreComputer()
         self.trainer = trainer or TrainDetector()
         self.cache = cache or ScoreCache()
         self.training_manifests = training_manifests or TrainingManifestStore()
+        self.dataset_manifests = dataset_manifests or PreparedDatasetManifestStore()
 
     def score_from_cache(
         self,
@@ -59,9 +57,11 @@ class ComputeScores:
         seed = ModelSeed(int(model_seed))
         manifest_path = prepared_root / "manifest.json"
         preprocessing_path = prepared_root / "preprocessing.json"
-        prepared_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        if prepared_manifest.get("data_spec_hash") != config.data_spec_hash:
+        prepared_manifest = self.dataset_manifests.load(manifest_path)
+        if prepared_manifest.data_spec_hash != Sha256(config.data_spec_hash):
             raise ValueError("Prepared dataset data-spec hash does not match scoring config")
+        if prepared_manifest.dataset_id is not config.dataset.id:
+            raise ValueError("Prepared dataset identity does not match scoring config")
 
         training = self.training_manifests.load(training_manifest)
         if training.training_spec_hash != Sha256(config.training_spec_hash):
@@ -114,20 +114,24 @@ class ComputeScores:
         self,
         config: ExperimentConfig,
         prepared_root: Path,
-        prepared_manifest: dict[str, object],
+        prepared_manifest: PreparedDatasetManifest,
         model: DetectorModel,
     ) -> Iterator[RoleScores]:
-        clients = prepared_manifest.get("clients")
-        if not isinstance(clients, dict):
-            raise ValueError("Prepared dataset manifest has no client ledger")
-        for client_value in sorted(clients):
-            client_id = ClientId(str(client_value))
+        for client_manifest in prepared_manifest.clients:
+            client_id = client_manifest.client_id
             for role in _BASE_SCORE_ROLES:
-                path = prepared_root / "clients" / client_id.value / f"{role.value}.csv.gz"
+                role_manifest = client_manifest.role(role)
+                path = prepared_root / Path(role_manifest.relative_path)
                 if not path.is_file():
                     raise FileNotFoundError(f"Missing prepared base role: {path}")
+                if Sha256(sha256_file(path)) != role_manifest.file_sha256:
+                    raise ValueError(
+                        f"Prepared role hash mismatch: {client_id.value}/{role.value}"
+                    )
                 frame = pd.read_csv(path)
                 columns = feature_columns(frame, config.dataset.feature_count)
+                if tuple(columns) != prepared_manifest.feature_names:
+                    raise ValueError("Score feature order differs from frozen dataset manifest")
                 scores = self.computer.compute(
                     model,
                     frame[columns].to_numpy(dtype="float32"),
