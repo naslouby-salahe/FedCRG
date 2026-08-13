@@ -236,3 +236,52 @@ clean, `pytest -n auto` 121 passed, `python -m compileall` clean,
 `git diff --check` clean. `fedcrg doctor` and `fedcrg verify` both run
 end-to-end against a live environment; `verify` continues to truthfully
 report all S1-S6/R1-R14 workloads incomplete against an empty `outputs/`.
+
+### Scientific-contract drift found by full CLI execution (this session, continued)
+
+Running `fedcrg verify` end-to-end (not just reading the code) surfaced a real
+defect the orphan-symbol sweep could not catch, because both sides of the
+broken contract were individually "referenced": `ExperimentCompletionAuditor`
+(the reader behind `fedcrg verify`'s workload reconciliation) was parsing a
+JSON schema for R2-R9/R12 evidence (`"experiment"`, `"complete"`,
+`"dataset_id"` keys) that none of the real producers in
+`application/sensitivity.py` or `application/source_order.py` ever wrote.
+R2-R6/R9 write a `SensitivityEnvelope`
+(`protocol_code`/`model_seed`/`calibration_seed`/`cells`); R7/R8 write
+`MultiplicityEnvelope`/`SourceOrderEnvelope`, which have no model-seed axis
+at all; R12's real producer wrote `"dataset"` (not `"dataset_id"`), never
+wrote `"complete"`, and never recorded which model seed the frozen score
+cache belonged to. Net effect: `fedcrg verify` could never have reported
+R2-R9/R12 complete even given full real evidence on disk — a direct
+violation of the "scientific contracts must not drift" requirement, since
+completeness is exactly the claim this command exists to make truthfully.
+
+Also found and fixed as part of tracing this: `analysis/tables.py`'s Table 5
+(`sensitivity()`) builder read `experiments/{code}/results.json`, a path none
+of the real R2-R7 producers write either (same drift class); a completely
+dead, never-constructed `ExperimentCellEnvelope` class in
+`artifacts/experiment_results.py` whose schema is what the auditor was
+apparently originally written against, superseded by the real typed
+envelopes and deleted; and `ExperimentCompletion.protocol_code` (and several
+call sites: `application/claims.py`'s completion-gate lookups, several
+`getattr(x, "complete", False)` defensive-programming smells) was typed
+`str` with raw string literals used for lookups against what is, upstream in
+`experiments/models.py`, already the canonical `ExperimentCode` enum.
+
+Fixed: `application/source_order.py::RunSourceOrderCalibration.run()` now
+writes a schema-consistent payload (model seed derived from the score
+cache's own identity, no new CLI parameter needed);
+`experiments/completion.py` now has separate, schema-correct readers for
+the model-seed-swept (`_real_sensitivity_workload`) and single-seed
+(`_single_seed_sensitivity_workload`) R2-R9 shapes; `ExperimentCode` is now
+threaded end to end through `ExperimentCompletion`, `ClaimGateEvaluator`,
+and `ExperimentResultEnvelope`. Added
+`tests/unit/experiments/test_completion.py` and
+`tests/unit/analysis/test_tables_sensitivity.py`, which pin the reader
+schemas against literal JSON matching each real producer, specifically so
+this class of drift cannot recur silently.
+
+Re-verified: `pyright` 0 errors, `ruff check`/`ruff format` clean,
+`pytest -n auto` 126 passed, `fedcrg verify` runs end-to-end and now
+produces correct, schema-consistent "missing evidence" reasons for every
+S1-S6/R1-R14 workload against an empty `outputs/`.
