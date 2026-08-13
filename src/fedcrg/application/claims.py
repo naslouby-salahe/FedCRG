@@ -17,6 +17,7 @@ from fedcrg.artifacts.serialization import atomic_write_json
 from fedcrg.artifacts.verification import ArtifactVerifier
 from fedcrg.core.enums import ExperimentId, ExperimentStatus, PolicyId
 from fedcrg.experiments.completion import ExperimentCompletion, ExperimentCompletionAuditor
+from fedcrg.metrics.federation import utility_margin_satisfied
 
 
 @dataclass(frozen=True, slots=True)
@@ -277,7 +278,7 @@ class ClaimGateEvaluator:
                 }
                 and row.attack_balanced_macro_tpr is not None
             ]
-            if method is None or not anchors or method - max(anchors) < -0.03:
+            if method is None or not anchors or not utility_margin_satisfied(method, max(anchors)):
                 return False
         return bool(reliability_better)
 

@@ -9,10 +9,10 @@ from collections.abc import Callable
 
 import pandas as pd
 
+from fedcrg.analysis.decision_architecture import build_decision_architecture_figure
 from fedcrg.analysis.figures import (
     assumption_stress,
     calibration_phase_transition,
-    decision_architecture,
     external_replication,
     mismatch_power_map,
     per_client_operating_points,
@@ -152,7 +152,9 @@ class PublicationPackageBuilder:
         figures = (
             self._figure(
                 "Figure 1 - Decision architecture",
-                lambda: decision_architecture(figure_root / "figure_1_decision_architecture.png"),
+                lambda: build_decision_architecture_figure(
+                    figure_root / "figure_1_decision_architecture.png"
+                ),
             ),
             self._frame_figure(
                 "Figure 2 - Readiness frontier",

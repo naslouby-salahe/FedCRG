@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
+from fedcrg.artifacts.dataset import EligibilityManifestStore
 from fedcrg.artifacts.serialization import atomic_write_json
 from fedcrg.config.models import ExperimentConfig
 from fedcrg.core.enums import DatasetFeatureContractId, ExperimentId, PolicyId
-from fedcrg.core.ids import ClientId
 from fedcrg.data.datasets.diad import DiadAdapter
 from fedcrg.data.feature_sensitivity import NumericSafeFeatureContract, derive_numeric_safe_features
 
@@ -23,8 +22,7 @@ class BuildDiadFeatureSensitivityContract:
         output: Path,
         train_count: int = 2000,
     ) -> NumericSafeFeatureContract:
-        raw = json.loads(eligibility_manifest.read_text(encoding="utf-8"))
-        eligible = tuple(ClientId(str(value)) for value in raw.get("eligible_clients", []))
+        eligible = EligibilityManifestStore().load(eligibility_manifest).eligible_clients
         if not eligible:
             raise ValueError("R14 requires a frozen non-empty DIAD eligibility list")
         adapter = DiadAdapter(data_root)

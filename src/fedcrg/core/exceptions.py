@@ -15,7 +15,3 @@ class DataIntegrityError(FedCRGError):
 
 class ImmutableRunError(FedCRGError):
     """Raised when application code tries to mutate a completed run."""
-
-
-class ExperimentBlockedError(FedCRGError):
-    """Raised when an experiment has an unmet or failed prerequisite."""

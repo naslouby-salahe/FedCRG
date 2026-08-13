@@ -9,9 +9,20 @@ from fedcrg.core.ids import ClientId
 from fedcrg.metrics.results import FederationMetrics, PolicyEvaluation, UtilityAssessment
 
 
+LOCKED_UTILITY_MARGIN = -0.03
+"""The locked reliability/utility comparator margin (roadmap Claim Gate G3/G5)."""
+
+
 def _mean_defined(values: list[float | None]) -> float | None:
     defined = [value for value in values if value is not None]
     return float(np.mean(defined)) if defined else None
+
+
+def utility_margin_satisfied(
+    method_value: float, anchor_value: float, margin: float = LOCKED_UTILITY_MARGIN
+) -> bool:
+    """The single locked utility-preservation comparison, shared by every caller."""
+    return method_value - anchor_value >= margin
 
 
 def aggregate_policy(
@@ -66,7 +77,7 @@ def utility_anchor(federations: tuple[FederationMetrics, ...]) -> float | None:
 
 
 def utility_preserved(
-    federations: tuple[FederationMetrics, ...], margin: float = -0.03
+    federations: tuple[FederationMetrics, ...], margin: float = LOCKED_UTILITY_MARGIN
 ) -> bool | None:
     anchor = utility_anchor(federations)
     method = next(
@@ -75,7 +86,7 @@ def utility_preserved(
     )
     if anchor is None or method is None:
         return None
-    return method - anchor >= margin
+    return utility_margin_satisfied(method, anchor, margin)
 
 
 def assert_ranking_metric_invariance(
@@ -95,7 +106,7 @@ def assert_ranking_metric_invariance(
 
 
 def assess_utility(
-    federations: tuple[FederationMetrics, ...], margin: float = -0.03
+    federations: tuple[FederationMetrics, ...], margin: float = LOCKED_UTILITY_MARGIN
 ) -> UtilityAssessment:
     anchor = utility_anchor(federations)
     method = next(
@@ -108,5 +119,9 @@ def assess_utility(
         method_value=method,
         difference=difference,
         margin=margin,
-        preserved=None if difference is None else difference >= margin,
+        preserved=(
+            None
+            if anchor is None or method is None
+            else utility_margin_satisfied(method, anchor, margin)
+        ),
     )

@@ -119,10 +119,6 @@ class ComputeDeviceId(StrEnum):
     CUDA = "cuda"
 
 
-class ScoreDtype(StrEnum):
-    FLOAT64 = "float64"
-
-
 class DeepSvddCenterMode(StrEnum):
     EQUAL_MEAN_OF_CLIENT_INITIAL_EMBEDDINGS = "equal_mean_of_client_initial_embeddings"
 
@@ -158,27 +154,6 @@ class PolicyId(StrEnum):
 class PolicyEvaluationStatus(StrEnum):
     EVALUATED = "evaluated"
     UNDEFINED = "undefined"
-
-
-class MetricId(StrEnum):
-    FPR = "fpr"
-    TPR = "tpr"
-    PRECISION = "precision"
-    RECALL = "recall"
-    F1 = "f1"
-    BALANCED_ACCURACY = "balanced_accuracy"
-    AUROC = "auroc"
-    AUPRC = "auprc"
-    BAND_ERROR = "band_error"
-    MEBE = "mebe"
-    HIGH_EXCESS = "high_excess"
-    BAND_VIOLATION_RATE = "band_violation_rate"
-    MAFE = "mafe"
-    ATTACK_BALANCED_TPR = "attack_balanced_tpr"
-    ATTACK_BALANCED_MACRO_TPR = "attack_balanced_macro_tpr"
-    MACRO_TPR = "macro_tpr"
-    WORST_CLIENT_TPR = "worst_client_tpr"
-    WORST_CLIENT_ATTACK_BALANCED_TPR = "worst_client_attack_balanced_tpr"
 
 
 class ExperimentId(StrEnum):
