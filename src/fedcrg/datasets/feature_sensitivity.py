@@ -87,7 +87,7 @@ def derive_numeric_safe_features(
             continue
         finite_for_all = True
         for frame in training_frames.values():
-            values = pd.to_numeric(frame[column], errors="coerce").to_numpy(dtype=np.float64)
+            values = np.asarray(pd.to_numeric(frame[column], errors="coerce"), dtype=np.float64)
             if float(np.isfinite(values).mean()) < 0.99:
                 finite_for_all = False
                 break

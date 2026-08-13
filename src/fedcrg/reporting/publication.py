@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 from collections.abc import Callable, Iterator
 
 import pandas as pd
@@ -362,7 +363,10 @@ class PublicationPackageBuilder:
         if not rows:
             return pd.DataFrame()
         frame = pd.DataFrame.from_records(rows)
-        return frame.groupby(["client_id", "policy"], as_index=False)[["fpr"]].mean()
+        return cast(
+            pd.DataFrame,
+            frame.groupby(["client_id", "policy"], as_index=False)[["fpr"]].mean(),
+        )
 
     @classmethod
     def _reliability_utility_frame(cls, runs: tuple[Path, ...]) -> pd.DataFrame:
@@ -384,7 +388,10 @@ class PublicationPackageBuilder:
         frame = pd.DataFrame.from_records(rows).dropna(subset=["mebe", "attack_balanced_macro_tpr"])
         if frame.empty:
             return frame
-        return frame.groupby("policy", as_index=False)[["mebe", "attack_balanced_macro_tpr"]].mean()
+        return cast(
+            pd.DataFrame,
+            frame.groupby("policy", as_index=False)[["mebe", "attack_balanced_macro_tpr"]].mean(),
+        )
 
     @staticmethod
     def _sensitivity_cell_files(outputs_root: Path, code: str) -> tuple[Path, ...]:
@@ -426,10 +433,11 @@ class PublicationPackageBuilder:
                     )
         if not rows:
             return pd.DataFrame()
-        return (
+        return cast(
+            pd.DataFrame,
             pd.DataFrame.from_records(rows)
             .groupby(["evidence", "sample_count"], as_index=False)[["admission_rate"]]
-            .mean()
+            .mean(),
         )
 
     @classmethod
@@ -471,4 +479,7 @@ class PublicationPackageBuilder:
         if not rows:
             return pd.DataFrame()
         frame = pd.DataFrame.from_records(rows)
-        return frame.groupby(["client_id", "policy"], as_index=False)[["fpr"]].mean()
+        return cast(
+            pd.DataFrame,
+            frame.groupby(["client_id", "policy"], as_index=False)[["fpr"]].mean(),
+        )

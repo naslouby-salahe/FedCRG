@@ -59,10 +59,15 @@ results build|verify); entry point `cli.app:cli`; all 14 legacy files deleted.
 
 ## Batch 8 — Makefile, Nox, CI, typing (matrix R10, R11, T03, T07, E2)
 
-1. Add `Makefile` with all required targets.
-2. Add `noxfile.py` sessions.
-3. Wire pyright into pyproject + CI; keep ruff; update CI workflow.
-4. Update requirements.lock.
+DONE 2026-08-13: Makefile with all 22 required targets (no scientific values);
+`noxfile.py` with format/lint/typecheck/unit/integration/contract/regression/
+audit/quality sessions (all green, quality green in clean venv);
+`tools/audit_repository.py` (fast architecture re-audit, exit-code gated);
+CI switched mypy -> pyright (+ format check, audit, pytest -n auto);
+`[tool.pyright]` standard mode in pyproject; pandas-stub defects fixed with
+narrow cast (publication groupby, nbaiot apply, cache column); `canonical`
+removed from nbaiot (`_FIXED_DEVICES`); requirements.lock updated (pyright,
+nox, pytest-xdist); tests/ made a package; pytest pythonpath includes ".".
 
 ## Batch 9 — Contract tests and typing audit (matrix T02, T06, D09, E1, E3)
 

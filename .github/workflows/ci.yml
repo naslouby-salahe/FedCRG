@@ -19,6 +19,13 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements.lock
       - run: python -m pip install -e . --no-deps
-      - run: ruff check src tests
-      - run: mypy src/fedcrg
-      - run: pytest --cov=fedcrg --cov-report=term-missing
+      - name: Format check
+        run: ruff format --check src tests
+      - name: Lint
+        run: ruff check src tests
+      - name: Type check
+        run: pyright src/fedcrg
+      - name: Repository audit
+        run: python tools/audit_repository.py
+      - name: Tests (parallel)
+        run: pytest -n auto --cov=fedcrg --cov-report=term-missing

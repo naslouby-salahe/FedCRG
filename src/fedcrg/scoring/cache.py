@@ -405,7 +405,7 @@ class ScoreCache:
         role: DataRole,
         frame: pd.DataFrame,
     ) -> RoleScores:
-        group_values = frame["attack_family_test_only"]
+        group_values = cast(pd.Series, frame["attack_family_test_only"])
         groups = None
         if group_values.notna().any():
             groups = tuple(AttackGroupId(str(value)) for value in group_values.dropna().astype(str))

@@ -60,8 +60,8 @@ Status vocabulary (only these values are used):
 | R07 | Raw data under `data/raw/`, immutable | adapters read only | `data/raw/` | n/a | present | — | keep | tests | VERIFIED |
 | R08 | Outputs layout `logs/ monitoring/ cache/{models,scores,analysis}/ runs/` | dirs per §13 | `outputs/` | n/a | present | — | `logs/`+`monitoring/` added (gitkeep); `cache/precomputed/` renamed to `cache/analysis/`; `cache/datasets/` removed | layout contract test updated | VERIFIED |
 | R09 | `results/<campaign_id>/` publication bundles + `fedcrg results build|verify` | per §14 | `results/` | n/a | present | — | `ResultsBuilder`/`ResultsVerifier` + CLI; bundle layout matches §14; campaign completion invokes the same builder | CLI + integration test | VERIFIED |
-| R10 | Makefile with required targets | `make help/install/format/lint/typecheck/test*/audit/validate/preprocess/plan/run/campaign/status/monitor/results/verify-results/quality` | `Makefile` | no science in Makefile | `NOT_IMPLEMENTED` | no Makefile | add | targets exist | `NOT_IMPLEMENTED` |
-| R11 | Nox sessions | `noxfile.py` with format/lint/typecheck/unit/integration/contract/regression/audit/quality | `noxfile.py` | pyproject | `NOT_IMPLEMENTED` | no noxfile | add; reuse pyproject config | sessions run | `NOT_IMPLEMENTED` |
+| R10 | Makefile with required targets | `make help/install/format/lint/typecheck/test*/audit/validate/preprocess/plan/run/campaign/status/monitor/results/verify-results/quality` | `Makefile` | no science in Makefile | present | — | all 22 targets; forwards to real commands; no scientific values | targets exist | VERIFIED |
+| R11 | Nox sessions | `noxfile.py` with format/lint/typecheck/unit/integration/contract/regression/audit/quality | `noxfile.py` | pyproject | present | — | all 9 sessions; reuse pyproject config; `nox -s quality` green in clean venv | sessions run | VERIFIED |
 
 ## 4. CLI, logging, monitoring
 
@@ -143,13 +143,13 @@ Status vocabulary (only these values are used):
 |----|-------------|------------------------|-------------------|------------------|---------------|--------------------|-----------------|----------------------|--------|
 | T01 | No `Any` in production | none | `src/fedcrg/` | n/a | present | — | keep | contract test + rg | VERIFIED |
 | T02 | No inappropriate `object` / `dict[str, object]` transport | typed models | `src/fedcrg/` | n/a | `PARTIAL` | json_io boundary + records/environment/integrity helpers | keep json_io boundary only; type the rest | contract test | `PARTIAL` |
-| T03 | Pyright/Pylance-compatible typing passes | pyright config | `pyproject.toml`, CI | n/a | `INCORRECT` | CI uses mypy; pyright passes locally (0 errors) but not configured | switch CI to pyright; add config; drop mypy or keep both | CI green on pyright | `PARTIAL` |
+| T03 | Pyright/Pylance-compatible typing passes | pyright config | `pyproject.toml`, CI | n/a | present | — | `[tool.pyright]` standard mode in pyproject; CI runs pyright; mypy dropped; 0 errors incl. nox venv; pandas-stub defects handled with narrow cast | CI green on pyright | VERIFIED |
 | T04 | Ruff + Ruff format pass | config | `pyproject.toml` | n/a | present | — | keep | CI | VERIFIED |
 | T05 | pytest + xdist; unit/integration/contract/regression split | dirs exist | `tests/` | n/a | present | 125 tests pass | keep | full suite | VERIFIED |
 | T06 | Contract tests enforce architecture (§28 list) | `tests/contract/*` | `tests/contract/` | n/a | `PARTIAL` | many present; missing: preprocessed root, no pipeline pkg, no canonical (regex only? add), results verify, config YAML ownership, no constants.py | add missing contract tests; update stale ones | new tests pass | `PARTIAL` |
-| T07 | CI workflow complete and current | `.github/workflows/ci.yml` | `.github/workflows/` | n/a | `PARTIAL` | runs ruff+mypy+pytest; no pyright, no nox | update | CI passes | `PARTIAL` |
+| T07 | CI workflow complete and current | `.github/workflows/ci.yml` | `.github/workflows/` | n/a | present | — | format check, lint, pyright, audit tool, pytest -n auto; lock-file install | CI passes | VERIFIED |
 | T08 | Tests not a second scientific config source | fixtures use YAML or explicit args | `tests/` | n/a | present | — | keep | review | VERIFIED |
-| T09 | requirements.lock current | lockfile | `requirements.lock` | n/a | `PARTIAL` | missing psutil/rich if adopted; fine otherwise | update when deps added | lock regenerated | `PARTIAL` |
+| T09 | requirements.lock current | lockfile | `requirements.lock` | n/a | present | — | includes psutil, pyright, nox, pytest-xdist; mypy dropped | lock regenerated | VERIFIED |
 
 ## 10. Documentation and hygiene
 

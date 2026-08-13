@@ -97,7 +97,9 @@ class EnvironmentLocker:
                 raise RuntimeError(
                     f"Required distribution is not installed: {distribution}"
                 ) from exc
-            normalized_name = metadata.metadata(distribution).get("Name", distribution)
+            package_metadata = metadata.metadata(distribution)
+            raw_name = package_metadata["Name"] if "Name" in package_metadata else distribution
+            normalized_name = str(raw_name)
             normalized.append((normalized_name, version))
         normalized.sort(key=lambda item: item[0].lower())
         content = "".join(f"{name}=={version}\n" for name, version in normalized)

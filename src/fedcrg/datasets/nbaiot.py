@@ -1,9 +1,10 @@
-"""N-BaIoT natural-device adapter with explicit canonical device mapping."""
+"""N-BaIoT natural-device adapter with explicit fixed device mapping."""
 
 from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -15,7 +16,7 @@ from fedcrg.domain.errors import DataIntegrityError
 from fedcrg.domain.identifiers import ClientId
 
 
-_CANONICAL_DEVICES = {
+_FIXED_DEVICES = {
     "nb01": ("danmini", "doorbell"),
     "nb02": ("ennio", "doorbell"),
     "nb03": ("ecobee", "thermostat"),
@@ -51,7 +52,7 @@ class NBaiotAdapter(DatasetAdapter):
             return self._directories
         directories = DatasetDiscovery.directories(self.root)
         mapping: dict[ClientId, Path] = {}
-        for client_value, tokens in _CANONICAL_DEVICES.items():
+        for client_value, tokens in _FIXED_DEVICES.items():
             client_id = ClientId(client_value)
             matches = [
                 directory
@@ -61,14 +62,14 @@ class NBaiotAdapter(DatasetAdapter):
             if len(matches) != 1:
                 raise DataIntegrityError(
                     f"{FailureCode.DATASET_COUNT_MISMATCH.value}: {client_id} matched "
-                    f"{len(matches)} canonical device directories"
+                    f"{len(matches)} fixed device directories"
                 )
             mapping[client_id] = matches[0]
-        if len({path.resolve() for path in mapping.values()}) != len(_CANONICAL_DEVICES):
+        if len({path.resolve() for path in mapping.values()}) != len(_FIXED_DEVICES):
             raise DataIntegrityError(
-                f"{FailureCode.DATASET_COUNT_MISMATCH.value}: canonical device mapping is not one-to-one"
+                f"{FailureCode.DATASET_COUNT_MISMATCH.value}: fixed device mapping is not one-to-one"
             )
-        if len(directories) != len(_CANONICAL_DEVICES):
+        if len(directories) != len(_FIXED_DEVICES):
             raise DataIntegrityError(
                 f"{FailureCode.DATASET_COUNT_MISMATCH.value}: expected nine device directories, "
                 f"found {len(directories)}"
@@ -122,7 +123,7 @@ class NBaiotAdapter(DatasetAdapter):
                     f"{frame.shape[1]} columns, expected {self.expected_feature_count}"
                 )
             try:
-                numeric = frame.apply(pd.to_numeric, errors="raise")
+                numeric = cast(pd.DataFrame, frame.apply(pd.to_numeric, errors="raise"))
             except Exception as exc:
                 raise DataIntegrityError(
                     f"{FailureCode.FEATURE_SCHEMA_MISMATCH.value}: non-numeric value in {path}"

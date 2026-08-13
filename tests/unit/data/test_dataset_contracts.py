@@ -6,14 +6,14 @@ import pandas as pd
 from fedcrg.domain.enums import DatasetId
 from fedcrg.domain.identifiers import ClientId
 from fedcrg.datasets.diad import DIAD_FEATURES, DiadAdapter
-from fedcrg.datasets.nbaiot import _CANONICAL_DEVICES, NBaiotAdapter
+from fedcrg.datasets.nbaiot import _FIXED_DEVICES, NBaiotAdapter
 
-_NBAIOT_CLIENT_IDS = tuple(ClientId(value) for value in _CANONICAL_DEVICES)
+_NBAIOT_CLIENT_IDS = tuple(ClientId(value) for value in _FIXED_DEVICES)
 
 
 def test_nbaiot_adapter_maps_exact_nine_clients_and_preserves_provenance(tmp_path: Path) -> None:
     columns = [f"f{i}" for i in range(115)]
-    for tokens in _CANONICAL_DEVICES.values():
+    for tokens in _FIXED_DEVICES.values():
         root = tmp_path / "_".join(tokens)
         (root / "gafgyt").mkdir(parents=True)
         pd.DataFrame(np.zeros((2, 115)), columns=columns).to_csv(root / "benign_traffic.csv", index=False)
