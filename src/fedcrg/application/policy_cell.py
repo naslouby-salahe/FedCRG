@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
 from fedcrg.application.evaluate import EvaluatePolicies
+from fedcrg.artifacts.dataset import PreparedDatasetManifestStore
 from fedcrg.artifacts.hashing import sha256_file
 from fedcrg.artifacts.layout import RunLayout
 from fedcrg.artifacts.references import CacheReference, CacheReferenceStore
@@ -37,11 +37,13 @@ class PolicyCellMaterializer:
         score_cache: ScoreCache | None = None,
         references: CacheReferenceStore | None = None,
         training_manifests: TrainingManifestStore | None = None,
+        dataset_manifests: PreparedDatasetManifestStore | None = None,
     ) -> None:
         self.evaluator = evaluator or EvaluatePolicies()
         self.score_cache = score_cache or ScoreCache()
         self.references = references or CacheReferenceStore()
         self.training_manifests = training_manifests or TrainingManifestStore()
+        self.dataset_manifests = dataset_manifests or PreparedDatasetManifestStore()
 
     def evaluate_federation(
         self,
@@ -139,9 +141,11 @@ class PolicyCellMaterializer:
                 + ", ".join(str(path) for path in missing)
             )
 
-        prepared = json.loads(prepared_manifest_path.read_text(encoding="utf-8"))
-        if prepared.get("data_spec_hash") != config.data_spec_hash:
+        prepared = self.dataset_manifests.load(prepared_manifest_path)
+        if prepared.data_spec_hash != Sha256(config.data_spec_hash):
             raise ValueError("Prepared dataset provenance does not match requested cell")
+        if prepared.dataset_id is not config.dataset.id:
+            raise ValueError("Prepared dataset identity does not match requested cell")
 
         training = self.training_manifests.load(caches.training_manifest)
         if training.data_spec_hash != Sha256(config.data_spec_hash):
