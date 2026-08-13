@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
 
+from fedcrg.artifacts.dataset import CalibrationAssignmentManifestStore
 from fedcrg.config.models import DatasetConfig
 from fedcrg.core.enums import CalibrationAssignmentMode, DataRole, DatasetId
 from fedcrg.core.ids import CalibrationSeed, ClientId
+from fedcrg.data.manifests import CalibrationAssignmentManifest
 from fedcrg.data.splitting import CalibrationAssignmentBuilder
 from fedcrg.scoring.cache import ScoreCache
 from fedcrg.scoring.models import RoleScores, ScoreManifest
@@ -58,8 +59,13 @@ class CalibrationScoreViews:
 
 
 class CalibrationScoreViewBuilder:
-    def __init__(self, assignments: CalibrationAssignmentBuilder | None = None) -> None:
+    def __init__(
+        self,
+        assignments: CalibrationAssignmentBuilder | None = None,
+        assignment_manifests: CalibrationAssignmentManifestStore | None = None,
+    ) -> None:
         self.assignments = assignments or CalibrationAssignmentBuilder()
+        self.assignment_manifests = assignment_manifests or CalibrationAssignmentManifestStore()
 
     def build_from_cache(
         self,
@@ -165,12 +171,12 @@ class CalibrationScoreViewBuilder:
             )
         return CalibrationScoreViews(calibration_seed, mode, tuple(result))
 
-    @staticmethod
     def _load_expected_manifest(
+        self,
         prepared_root: Path | None,
         calibration_seed: CalibrationSeed,
         mode: CalibrationAssignmentMode,
-    ) -> dict[str, object] | None:
+    ) -> CalibrationAssignmentManifest | None:
         if prepared_root is None:
             return None
         path = (
@@ -180,16 +186,16 @@ class CalibrationScoreViewBuilder:
         )
         if not path.is_file():
             raise FileNotFoundError(f"Missing frozen calibration-assignment manifest: {path}")
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        if int(payload["calibration_seed"]) != int(calibration_seed):
+        manifest = self.assignment_manifests.load(path)
+        if manifest.calibration_seed != calibration_seed:
             raise ValueError("Calibration-assignment manifest seed mismatch")
-        if str(payload["mode"]) != mode.value:
+        if manifest.mode is not mode:
             raise ValueError("Calibration-assignment manifest mode mismatch")
-        return payload
+        return manifest
 
     @staticmethod
     def _verify_expected(
-        expected: dict[str, object] | None,
+        expected: CalibrationAssignmentManifest | None,
         client_id: ClientId,
         role: DataRole,
         row_count: int,
@@ -197,29 +203,8 @@ class CalibrationScoreViewBuilder:
     ) -> None:
         if expected is None:
             return
-        clients = expected.get("clients")
-        if not isinstance(clients, list):
-            raise ValueError("Malformed calibration-assignment manifest")
-        client = next(
-            (
-                item
-                for item in clients
-                if isinstance(item, dict) and item.get("client_id") == client_id.value
-            ),
-            None,
-        )
-        if not isinstance(client, dict):
-            raise ValueError(f"Assignment manifest is missing {client_id.value}")
-        roles = client.get("roles")
-        if not isinstance(roles, list):
-            raise ValueError(f"Assignment manifest roles are malformed for {client_id.value}")
-        record = next(
-            (item for item in roles if isinstance(item, dict) and item.get("role") == role.value),
-            None,
-        )
-        if not isinstance(record, dict):
-            raise ValueError(f"Assignment manifest is missing {client_id.value}/{role.value}")
-        if int(record["row_count"]) != row_count or str(record["row_id_sha256"]) != row_hash:
+        record = expected.client(client_id).role(role)
+        if record.row_count != row_count or record.row_id_sha256.value != row_hash:
             raise ValueError(
                 f"Calibration assignment hash mismatch for {client_id.value}/{role.value}"
             )

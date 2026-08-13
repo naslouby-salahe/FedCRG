@@ -58,6 +58,12 @@ class CalibrationAssignmentManifest:
     mode: CalibrationAssignmentMode
     clients: tuple[ClientCalibrationManifest, ...]
 
+    def client(self, client_id: ClientId) -> ClientCalibrationManifest:
+        for item in self.clients:
+            if item.client_id == client_id:
+                return item
+        raise KeyError(client_id.value)
+
 
 @dataclass(frozen=True, slots=True)
 class RoleArtifactManifest:

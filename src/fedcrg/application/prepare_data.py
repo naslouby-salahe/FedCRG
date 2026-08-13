@@ -9,7 +9,10 @@ from pathlib import Path, PurePosixPath
 
 import pandas as pd
 
-from fedcrg.artifacts.dataset import PreparedDatasetManifestStore
+from fedcrg.artifacts.dataset import (
+    CalibrationAssignmentManifestStore,
+    PreparedDatasetManifestStore,
+)
 from fedcrg.artifacts.hashing import sha256_file
 from fedcrg.artifacts.serialization import atomic_write_json
 from fedcrg.config.models import ExperimentConfig
@@ -56,11 +59,15 @@ class PrepareData:
         preprocessor: FederatedPreprocessor | None = None,
         eligibility: ClientEligibilityEvaluator | None = None,
         manifests: PreparedDatasetManifestStore | None = None,
+        calibration_assignment_manifests: CalibrationAssignmentManifestStore | None = None,
     ) -> None:
         self.splitter = splitter or DataSplitter()
         self.preprocessor = preprocessor or FederatedPreprocessor()
         self.eligibility = eligibility or ClientEligibilityEvaluator()
         self.manifests = manifests or PreparedDatasetManifestStore()
+        self.calibration_assignment_manifests = (
+            calibration_assignment_manifests or CalibrationAssignmentManifestStore()
+        )
 
     @staticmethod
     def adapter(dataset: DatasetId, root: Path) -> DatasetAdapter:
@@ -339,7 +346,7 @@ class PrepareData:
                 tuple(seeded[seed]),
             )
             path = seeded_root / f"c{int(seed)}.json"
-            atomic_write_json(path, manifest)
+            self.calibration_assignment_manifests.save(path, manifest)
             references.append(
                 CalibrationAssignmentReference(
                     seed,
@@ -355,7 +362,7 @@ class PrepareData:
                 tuple(source_order),
             )
             path = root / "splits" / "source_order.json"
-            atomic_write_json(path, manifest)
+            self.calibration_assignment_manifests.save(path, manifest)
             references.append(
                 CalibrationAssignmentReference(
                     seed,
