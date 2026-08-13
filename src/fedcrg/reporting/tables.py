@@ -11,6 +11,7 @@ from fedcrg.analysis.policy_contrasts import confirmatory_contrasts, load_federa
 from fedcrg.artifacts.json_io import as_json_dict, to_json_value
 from fedcrg.artifacts.paths import RunLayout
 from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.domain.constants import NBAIOT_NAMED_CALIBRATION_SEED
 from fedcrg.domain.enums import ExperimentId, PolicyId
 
 
@@ -80,7 +81,9 @@ class PublicationTableBuilder:
     def ablations(self, run_dirs: tuple[Path, ...], output: Path) -> Path:
         records = load_federation_results(run_dirs)
         primary = tuple(row for row in records if row.experiment_id is ExperimentId.PRIMARY_NBAIOT)
-        contrasts = confirmatory_contrasts(primary, named_calibration_seed=1000)
+        contrasts = confirmatory_contrasts(
+            primary, named_calibration_seed=NBAIOT_NAMED_CALIBRATION_SEED
+        )
         rows = [
             {
                 "comparator": result.comparator.value,

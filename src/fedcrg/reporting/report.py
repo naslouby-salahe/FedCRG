@@ -15,6 +15,7 @@ from fedcrg.pipeline.verify_outputs import VerifyOutputs
 from fedcrg.artifacts.paths import RunLayout
 from fedcrg.artifacts.integrity import ArtifactVerifier
 from fedcrg.artifacts.json_io import as_json_dict, to_json_value
+from fedcrg.domain.constants import NBAIOT_NAMED_CALIBRATION_SEED
 from fedcrg.domain.enums import ExperimentId, ExperimentStatus
 
 
@@ -96,7 +97,7 @@ class ReportBuilder:
         if r1 is not None and r1.complete:
             contrasts = confirmatory_contrasts(
                 primary_records,
-                named_calibration_seed=1000,
+                named_calibration_seed=NBAIOT_NAMED_CALIBRATION_SEED,
             )
             contrasts_payload: object = [
                 {

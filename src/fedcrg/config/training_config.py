@@ -6,6 +6,12 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from fedcrg.domain.constants import (
+    ATTACK_DEVELOPMENT_SEED,
+    BOOTSTRAP_SEED,
+    PRIMARY_MODEL_SEEDS,
+    SYNTHETIC_MASTER_SEED,
+)
 from fedcrg.domain.enums import (
     ActivationId,
     AggregationId,
@@ -75,10 +81,10 @@ class TrainingConfig(BaseModel):
 class RandomnessConfig(BaseModel):
     model_config = {"frozen": True, "extra": "forbid", "use_enum_values": False}
 
-    model_seeds: tuple[int, ...] = (11, 22, 33, 44, 55)
-    attack_split_seed: Literal[9001] = 9001
-    synthetic_seed: Literal[123456] = 123456
-    bootstrap_seed: Literal[424242] = 424242
+    model_seeds: tuple[int, ...] = PRIMARY_MODEL_SEEDS
+    attack_split_seed: int = ATTACK_DEVELOPMENT_SEED
+    synthetic_seed: int = SYNTHETIC_MASTER_SEED
+    bootstrap_seed: int = BOOTSTRAP_SEED
 
     @model_validator(mode="after")
     def validate_model_seeds(self) -> RandomnessConfig:

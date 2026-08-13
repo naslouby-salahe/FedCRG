@@ -9,17 +9,29 @@ from pathlib import Path
 
 from fedcrg.artifacts.manifests import RunManifest, RunManifestStore
 from fedcrg.artifacts.paths import RunLayout
+from fedcrg.domain.constants import (
+    DEEP_SVDD_MODEL_SEEDS,
+    DIAD_NAMED_CALIBRATION_SEED,
+    NBAIOT_NAMED_CALIBRATION_SEED,
+    PRIMARY_MODEL_SEEDS,
+)
 from fedcrg.domain.enums import DatasetId, ExperimentId, ExperimentStatus, PolicyId
 from fedcrg.experiments.experiment_definition import (
     SECOND_DETECTOR_POLICIES,
     all_experiment_definitions,
 )
 
-_PRIMARY_MODEL_SEEDS = (11, 22, 33, 44, 55)
-_NBAIOT_CALIBRATION_SEEDS = tuple(range(1000, 1050))
-_DIAD_CALIBRATION_SEEDS = tuple(range(2000, 2020))
-_SECOND_DETECTOR_MODEL_SEEDS = (11, 22, 33)
-_SECOND_DETECTOR_CALIBRATION_SEEDS = tuple(range(1000, 1010))
+_PRIMARY_MODEL_SEEDS = PRIMARY_MODEL_SEEDS
+_NBAIOT_CALIBRATION_SEEDS = tuple(
+    range(NBAIOT_NAMED_CALIBRATION_SEED, NBAIOT_NAMED_CALIBRATION_SEED + 50)
+)
+_DIAD_CALIBRATION_SEEDS = tuple(
+    range(DIAD_NAMED_CALIBRATION_SEED, DIAD_NAMED_CALIBRATION_SEED + 20)
+)
+_SECOND_DETECTOR_MODEL_SEEDS = DEEP_SVDD_MODEL_SEEDS
+_SECOND_DETECTOR_CALIBRATION_SEEDS = tuple(
+    range(NBAIOT_NAMED_CALIBRATION_SEED, NBAIOT_NAMED_CALIBRATION_SEED + 10)
+)
 
 _AGGREGATE_WORKLOAD_EXPERIMENTS = (
     ExperimentId.READINESS_THEOREM,
@@ -120,7 +132,7 @@ class ExperimentCompletionAuditor:
                         experiment_id,
                         runs,
                         _PRIMARY_MODEL_SEEDS,
-                        (2000,),
+                        (DIAD_NAMED_CALIBRATION_SEED,),
                         definition.policies,
                     )
                 )
@@ -132,7 +144,7 @@ class ExperimentCompletionAuditor:
                         outputs_root,
                         experiment_id,
                         expected_model_seeds=_PRIMARY_MODEL_SEEDS,
-                        expected_calibration_seed=1000,
+                        expected_calibration_seed=NBAIOT_NAMED_CALIBRATION_SEED,
                     )
                 )
             elif experiment_id in _SINGLE_SEED_SENSITIVITY_EXPERIMENTS:
@@ -140,7 +152,7 @@ class ExperimentCompletionAuditor:
                     self._single_seed_sensitivity_workload(
                         outputs_root,
                         experiment_id,
-                        expected_calibration_seed=1000,
+                        expected_calibration_seed=NBAIOT_NAMED_CALIBRATION_SEED,
                     )
                 )
             elif experiment_id is ExperimentId.SOURCE_ORDER_CALIBRATION:
@@ -397,8 +409,14 @@ class ExperimentCompletionAuditor:
                 )
             )
         expected = {
-            *((DatasetId.NBAIOT.value, model_seed, 1000) for model_seed in _PRIMARY_MODEL_SEEDS),
-            *((DatasetId.DIAD.value, model_seed, 2000) for model_seed in _PRIMARY_MODEL_SEEDS),
+            *(
+                (DatasetId.NBAIOT.value, model_seed, NBAIOT_NAMED_CALIBRATION_SEED)
+                for model_seed in _PRIMARY_MODEL_SEEDS
+            ),
+            *(
+                (DatasetId.DIAD.value, model_seed, DIAD_NAMED_CALIBRATION_SEED)
+                for model_seed in _PRIMARY_MODEL_SEEDS
+            ),
         }
         missing = expected - identities
         unexpected = identities - expected
