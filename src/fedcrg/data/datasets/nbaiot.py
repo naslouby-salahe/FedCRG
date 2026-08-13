@@ -135,7 +135,7 @@ class NBaiotAdapter(DatasetAdapter):
             source = path.relative_to(self.root).as_posix()
             numeric["row_id"] = np.array(
                 [
-                    stable_row_id(self.dataset_id, client_id, source, index)
+                    stable_row_id(self.dataset_id, client_id, source, index).value
                     for index in range(len(numeric))
                 ],
                 dtype=object,

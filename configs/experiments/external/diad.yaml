@@ -18,7 +18,7 @@ training:
   early_stopping: false
   deterministic_algorithms: true
   record_round20_score_correlation: true
-  device: cpu
+  device: cuda
 policies:
   - REF-Q99-R
   - GLOBAL-Q99-FULL

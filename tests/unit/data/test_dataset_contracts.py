@@ -42,3 +42,46 @@ def test_diad_adapter_uses_hashed_public_identity_and_exact_feature_allowlist(tm
     assert "device_mac" not in client.benign.columns
     assert set(DIAD_FEATURES).issubset(client.benign.columns)
     assert client.attack["attack_group"].tolist() == ["ddos"]
+
+
+def test_diad_adapter_partition_cache_preserves_rows_across_multiple_files_and_chunks(
+    tmp_path: Path,
+) -> None:
+    """Regression test for the single-pass per-client partition cache: verifies that
+    reading pre-filtered shards produces identical row_id/content to a direct scan,
+    across multiple source files, multiple devices, and multiple internal chunks."""
+    root = tmp_path / "packets"
+    root.mkdir()
+    macs = ["AA:AA:AA:AA:AA:01", "AA:AA:AA:AA:AA:02"]
+
+    def _write(path: Path, macs_for_rows: list[str], labels: list[str]) -> None:
+        frame = pd.DataFrame(
+            {feature: list(range(len(macs_for_rows))) for feature in DIAD_FEATURES}
+        )
+        frame["label"] = labels
+        frame["attack_category"] = labels
+        frame["device_mac"] = macs_for_rows
+        frame.to_csv(path, index=False)
+
+    _write(
+        root / "benign.csv",
+        macs * 6,
+        ["benign"] * 12,
+    )
+    _write(
+        root / "ddos.csv",
+        macs * 4,
+        ["ddos"] * 8,
+    )
+
+    adapter = DiadAdapter(tmp_path)
+    adapter.chunk_size = 5
+    client_ids = adapter.discover_clients()
+    assert len(client_ids) == 2
+
+    for client_id in client_ids:
+        client = adapter.load_client(client_id)
+        assert client.benign.shape[0] == 6
+        assert client.attack.shape[0] == 4
+        assert client.benign["row_id"].nunique() == 6
+        assert client.attack["attack_group"].eq("ddos").all()

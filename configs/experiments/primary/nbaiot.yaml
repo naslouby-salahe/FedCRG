@@ -18,7 +18,7 @@ training:
   early_stopping: false
   deterministic_algorithms: true
   record_round20_score_correlation: false
-  device: cpu
+  device: cuda
 randomness:
   model_seeds: [11, 22, 33, 44, 55]
   attack_split_seed: 9001

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import time
 import uuid
 from pathlib import Path, PurePosixPath
 
@@ -25,6 +26,7 @@ from fedcrg.core.enums import (
 )
 from fedcrg.core.exceptions import DataIntegrityError
 from fedcrg.core.ids import CalibrationSeed, ClientId, Sha256
+from fedcrg.core.logging import get_logger
 from fedcrg.data.adapter import DatasetAdapter
 from fedcrg.data.datasets.diad import DiadAdapter
 from fedcrg.data.datasets.nbaiot import NBaiotAdapter
@@ -48,6 +50,8 @@ from fedcrg.data.preprocessing import (
     PreprocessingModel,
 )
 from fedcrg.data.splitting import DataSplitter
+
+_LOGGER = get_logger(__name__)
 
 
 class PrepareData:
@@ -179,7 +183,10 @@ class PrepareData:
     ]:
         records: list[EligibilityRecord] = []
         statistics: dict[ClientId, ClientPreprocessingStatistics] = {}
-        for client_id in discovered:
+        total = len(discovered)
+        for index, client_id in enumerate(discovered, start=1):
+            started = time.monotonic()
+            _LOGGER.info("staging client %d/%d %s", index, total, client_id.value)
             data = adapter.load_client(client_id)
             if data.client_id != client_id:
                 raise DataIntegrityError(
@@ -191,6 +198,12 @@ class PrepareData:
             record = self.eligibility.evaluate(data, config.dataset)
             records.append(record)
             if record.status is not EligibilityStatus.ELIGIBLE:
+                _LOGGER.info(
+                    "client %s excluded (%s) in %.1fs",
+                    client_id.value,
+                    record.status.value,
+                    time.monotonic() - started,
+                )
                 continue
             splits = self.splitter.split_base(data, config.dataset)
             statistics[client_id] = self.preprocessor.client_statistics(
@@ -199,6 +212,11 @@ class PrepareData:
                 config.dataset.feature_count,
             )
             self._write_raw_splits(root, splits)
+            _LOGGER.info(
+                "client %s staged in %.1fs",
+                client_id.value,
+                time.monotonic() - started,
+            )
         return tuple(records), statistics
 
     @staticmethod

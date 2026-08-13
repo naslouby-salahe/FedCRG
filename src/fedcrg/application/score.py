@@ -14,11 +14,14 @@ from fedcrg.artifacts.training import TrainingManifestStore
 from fedcrg.config.models import ExperimentConfig
 from fedcrg.core.enums import DataRole
 from fedcrg.core.ids import AttackGroupId, ModelSeed, RowId, Sha256
+from fedcrg.core.logging import get_logger
 from fedcrg.data.manifests import PreparedDatasetManifest
 from fedcrg.detectors.base import DetectorModel
 from fedcrg.scoring.cache import ScoreCache, ScoreCacheIdentity
 from fedcrg.scoring.computer import ScoreComputer
 from fedcrg.scoring.models import RoleScores
+
+_LOGGER = get_logger(__name__)
 
 _BASE_SCORE_ROLES = (
     DataRole.TRAIN,
@@ -119,8 +122,16 @@ class ComputeScores:
         prepared_manifest: PreparedDatasetManifest,
         model: DetectorModel,
     ) -> Iterator[RoleScores]:
-        for client_manifest in prepared_manifest.clients:
+        total_clients = len(prepared_manifest.clients)
+        for client_index, client_manifest in enumerate(prepared_manifest.clients, start=1):
             client_id = client_manifest.client_id
+            _LOGGER.info(
+                "scoring client %d/%d %s (%d roles)",
+                client_index,
+                total_clients,
+                client_id.value,
+                len(_BASE_SCORE_ROLES),
+            )
             for role in _BASE_SCORE_ROLES:
                 role_manifest = client_manifest.role(role)
                 path = prepared_root / Path(role_manifest.relative_path)

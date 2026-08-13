@@ -27,12 +27,14 @@ from fedcrg.cli.research import (
 from fedcrg.cli.shared import load_config
 from fedcrg.cli.training import score_command, train_command
 from fedcrg.cli.verification import verify_command
+from fedcrg.core.logging import configure_logging
 
 
 @click.group()
 @click.version_option(package_name="fedcrg")
 def cli() -> None:
     """FedCRG reproducible research tooling."""
+    configure_logging()
 
 
 @cli.command(name="doctor")

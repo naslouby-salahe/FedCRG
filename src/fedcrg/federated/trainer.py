@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+import time
 from collections.abc import Mapping
 
 import numpy as np
@@ -11,12 +12,15 @@ from torch.utils.data import TensorDataset
 
 from fedcrg.config.models import TrainingConfig
 from fedcrg.core.ids import ClientId, ModelSeed, Sha256
+from fedcrg.core.logging import get_logger
 from fedcrg.detectors.base import DetectorModel
 from fedcrg.federated.client import FederatedClient
 from fedcrg.federated.models import RoundResult, TrainingResult
 from fedcrg.federated.sampling import ClientSampler
 from fedcrg.federated.scheduling import cosine_learning_rate
 from fedcrg.federated.server import FederatedServer
+
+_LOGGER = get_logger(__name__)
 
 
 class FederatedTrainer:
@@ -49,7 +53,16 @@ class FederatedTrainer:
         round20_model: DetectorModel | None = None
         model_payload_bytes = model.trainable_tensor_bytes()
 
+        _LOGGER.info(
+            "training start model_seed=%d device=%s clients=%d rounds=%d local_epochs=%d",
+            int(seed),
+            device,
+            len(client_ids),
+            config.rounds,
+            config.local_epochs,
+        )
         for round_index in range(config.rounds):
+            started = time.monotonic()
             round_result = self._train_round(
                 server=server,
                 clients=clients,
@@ -60,6 +73,15 @@ class FederatedTrainer:
                 model_payload_bytes=model_payload_bytes,
             )
             round_results.append(round_result)
+            _LOGGER.info(
+                "model_seed=%d round %d/%d loss=%.6f lr=%.2e elapsed=%.1fs",
+                int(seed),
+                round_index + 1,
+                config.rounds,
+                round_result.mean_client_loss,
+                round_result.learning_rate,
+                time.monotonic() - started,
+            )
             if (
                 config.record_round20_score_correlation
                 and round_index == self.diagnostic_round_index
@@ -81,6 +103,12 @@ class FederatedTrainer:
             model_payload_bytes=model_payload_bytes,
             total_model_communication_bytes=total_communication,
             round20_training_score_correlation=score_correlation,
+        )
+        _LOGGER.info(
+            "training done model_seed=%d final_loss=%.6f hash=%s",
+            int(seed),
+            round_results[-1].mean_client_loss,
+            result.final_model_hash.value[:12],
         )
         return final_model, result
 

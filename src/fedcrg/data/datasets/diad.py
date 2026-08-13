@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import os
+import shutil
+import tempfile
+import uuid
 from pathlib import Path
 
 import numpy as np
@@ -12,10 +16,13 @@ from fedcrg.core.constants import DIAD_EXPECTED_FEATURES
 from fedcrg.core.enums import ChronologyStatus, DatasetId, FailureCode
 from fedcrg.core.exceptions import DataIntegrityError
 from fedcrg.core.ids import ClientId
+from fedcrg.core.logging import get_logger
 from fedcrg.data.adapter import DatasetAdapter
 from fedcrg.data.discovery import DatasetDiscovery
 from fedcrg.data.models import ClientData
 from fedcrg.data.splitting import stable_row_id
+
+_LOGGER = get_logger(__name__)
 
 _BASE_FEATURES = (
     "inter_arrival_time",
@@ -125,12 +132,63 @@ class DiadAdapter(DatasetAdapter):
         self._raw_ids_by_public_id = raw_by_public
         return tuple(sorted(raw_by_public))
 
+    def _partition_dir(self) -> Path:
+        """One-time per-client row partition cache: avoids rescanning the full
+        multi-GB source files once per client (O(clients * filesize) -> O(filesize))."""
+        signature = "|".join(
+            f"{path.name}:{path.stat().st_size}:{int(path.stat().st_mtime)}"
+            for path in self.source_files()
+        )
+        key = hashlib.sha256(signature.encode("utf-8")).hexdigest()[:16]
+        return Path(tempfile.gettempdir()) / "fedcrg_diad_partition" / key
+
+    def _shard_path(self, partition_dir: Path, client_id: ClientId, path: Path) -> Path:
+        file_key = hashlib.sha256(str(path.relative_to(self.root)).encode("utf-8")).hexdigest()[:16]
+        return partition_dir / client_id.value / f"{file_key}.csv"
+
+    def _ensure_partitioned(self) -> None:
+        partition_dir = self._partition_dir()
+        if (partition_dir / ".complete").is_file():
+            return
+        assert self._raw_ids_by_public_id is not None
+        known_ids = set(self._raw_ids_by_public_id)
+        tmp_dir = partition_dir.parent / f".tmp-{uuid.uuid4().hex}"
+        tmp_dir.mkdir(parents=True)
+        try:
+            sources = self.source_files()
+            for source_index, path in enumerate(sources, start=1):
+                header = pd.read_csv(path, nrows=0)
+                if "device_mac" not in header.columns:
+                    continue
+                _LOGGER.info(
+                    "partitioning DIAD source %d/%d %s", source_index, len(sources), path.name
+                )
+                written: set[ClientId] = set()
+                for chunk in pd.read_csv(path, chunksize=self.chunk_size):
+                    chunk = chunk.copy()
+                    chunk["_source_row_index"] = chunk.index.to_numpy(dtype=np.int64)
+                    normalized_ids = chunk["device_mac"].astype(str).map(self.normalize_device_mac)
+                    for normalized_mac, group in chunk.groupby(normalized_ids):
+                        public_id = self.public_client_id(str(normalized_mac))
+                        if public_id not in known_ids:
+                            continue
+                        shard = self._shard_path(tmp_dir, public_id, path)
+                        shard.parent.mkdir(parents=True, exist_ok=True)
+                        group.to_csv(shard, mode="a", header=public_id not in written, index=False)
+                        written.add(public_id)
+            (tmp_dir / ".complete").write_text("1", encoding="utf-8")
+            os.replace(tmp_dir, partition_dir)
+        except Exception:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            raise
+
     def load_client(self, client_id: ClientId) -> ClientData:
         self.discover_clients()
         assert self._raw_ids_by_public_id is not None
         if client_id not in self._raw_ids_by_public_id:
             raise DataIntegrityError(f"{FailureCode.ID_INVALID.value}: {client_id}")
-        target_mac = self._raw_ids_by_public_id[client_id]
+        self._ensure_partitioned()
+        partition_dir = self._partition_dir()
 
         benign_parts: list[pd.DataFrame] = []
         attack_parts: list[pd.DataFrame] = []
@@ -146,12 +204,12 @@ class DiadAdapter(DatasetAdapter):
             capture_column = self._capture_time_column(header)
             capture_available = capture_available and capture_column is not None
 
-            for chunk in pd.read_csv(path, chunksize=self.chunk_size):
-                normalized_ids = chunk["device_mac"].astype(str).map(self.normalize_device_mac)
-                selected = chunk.loc[normalized_ids == target_mac].copy()
-                if selected.empty:
-                    continue
-                original_indices = selected.index.to_numpy(dtype=np.int64)
+            shard = self._shard_path(partition_dir, client_id, path)
+            if not shard.is_file():
+                continue
+            for chunk in pd.read_csv(shard, chunksize=self.chunk_size):
+                selected = chunk
+                original_indices = selected.pop("_source_row_index").to_numpy(dtype=np.int64)
                 anomaly_values = selected[anomaly_column]
                 benign_mask = anomaly_values.map(self._is_benign).to_numpy(dtype=bool)
                 model = self._model_frame(
@@ -242,7 +300,7 @@ class DiadAdapter(DatasetAdapter):
                 benign["_source_file"] = source
                 benign["_source_row_index"] = benign.index.to_numpy(dtype=np.int64)
                 benign["_row_id"] = [
-                    stable_row_id(self.dataset_id, client_id, source, int(index))
+                    stable_row_id(self.dataset_id, client_id, source, int(index)).value
                     for index in benign.index
                 ]
                 if capture_column is not None:
@@ -324,7 +382,7 @@ class DiadAdapter(DatasetAdapter):
         source = path.relative_to(self.root).as_posix()
         model["row_id"] = np.array(
             [
-                stable_row_id(self.dataset_id, client_id, source, int(index))
+                stable_row_id(self.dataset_id, client_id, source, int(index)).value
                 for index in source_indices
             ],
             dtype=object,
