@@ -11,7 +11,10 @@ from fedcrg.artifacts.serialization import atomic_write_json, to_json_value
 from fedcrg.core.enums import CalibrationAssignmentMode, DataRole, DatasetId, FailureCode
 from fedcrg.core.ids import CalibrationSeed, ClientId, Sha256
 from fedcrg.data.manifests import (
+    CalibrationAssignmentManifest,
     CalibrationAssignmentReference,
+    CalibrationRoleManifest,
+    ClientCalibrationManifest,
     ClientDatasetManifest,
     PreparedDatasetManifest,
     RoleArtifactManifest,
@@ -135,3 +138,29 @@ class PreparedDatasetManifestStore:
         if rebuilt.deterministic_payload_sha256 != manifest.deterministic_payload_sha256:
             raise ValueError("Prepared dataset deterministic payload hash mismatch")
         return manifest
+
+
+class CalibrationAssignmentManifestStore:
+    def save(self, path: Path, manifest: CalibrationAssignmentManifest) -> None:
+        atomic_write_json(path, manifest)
+
+    def load(self, path: Path) -> CalibrationAssignmentManifest:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        return CalibrationAssignmentManifest(
+            calibration_seed=CalibrationSeed(int(raw["calibration_seed"])),
+            mode=CalibrationAssignmentMode(str(raw["mode"])),
+            clients=tuple(
+                ClientCalibrationManifest(
+                    client_id=ClientId(str(client["client_id"])),
+                    roles=tuple(
+                        CalibrationRoleManifest(
+                            role=DataRole(str(role["role"])),
+                            row_count=int(role["row_count"]),
+                            row_id_sha256=Sha256(str(role["row_id_sha256"])),
+                        )
+                        for role in client["roles"]
+                    ),
+                )
+                for client in raw["clients"]
+            ),
+        )
