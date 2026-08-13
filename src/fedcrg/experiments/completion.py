@@ -142,7 +142,7 @@ class ExperimentCompletionAuditor:
         ]
         expected_identities = set(product(model_seeds, calibration_seeds, policies))
         observed_identities = {
-            (manifest.model_seed, manifest.calibration_seed, manifest.policy_id)
+            (int(manifest.model_seed), int(manifest.calibration_seed), manifest.policy_id)
             for manifest, _ in selected
         }
         problems = self._identity_problems(expected_identities, observed_identities)
@@ -170,7 +170,7 @@ class ExperimentCompletionAuditor:
         ]
         expected_identities = set(product(model_seeds, calibration_seeds, policies))
         observed_identities = {
-            (manifest.model_seed, manifest.calibration_seed, manifest.policy_id)
+            (int(manifest.model_seed), int(manifest.calibration_seed), manifest.policy_id)
             for manifest, _ in selected
         }
         problems = self._identity_problems(expected_identities, observed_identities)

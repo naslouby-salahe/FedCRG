@@ -10,6 +10,8 @@ from fedcrg.detectors.base import DetectorModel
 
 
 class DeepSvdd(DetectorModel):
+    center: torch.Tensor
+
     def __init__(self, input_dim: int, config: DeepSvddConfig) -> None:
         super().__init__()
         activation = torch.nn.Tanh if config.activation is ActivationId.TANH else torch.nn.ReLU

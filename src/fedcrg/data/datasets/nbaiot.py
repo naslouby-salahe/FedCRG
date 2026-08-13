@@ -133,10 +133,13 @@ class NBaiotAdapter(DatasetAdapter):
                     f"{FailureCode.NONFINITE_SCORE.value}: non-finite N-BaIoT source feature in {path}"
                 )
             source = path.relative_to(self.root).as_posix()
-            numeric["row_id"] = [
-                stable_row_id(self.dataset_id, client_id, source, index)
-                for index in range(len(numeric))
-            ]
+            numeric["row_id"] = np.array(
+                [
+                    stable_row_id(self.dataset_id, client_id, source, index)
+                    for index in range(len(numeric))
+                ],
+                dtype=object,
+            )
             numeric["source_file"] = source
             numeric["source_row_index"] = np.arange(len(numeric), dtype=np.int64)
             if attack_group is not None:

@@ -175,8 +175,8 @@ class TrainingConfig(FrozenModel):
     learning_rate_final: float = Field(default=1e-5, gt=0.0)
     adam_betas: tuple[float, float] = (0.9, 0.999)
     adam_epsilon: float = Field(default=1e-8, gt=0.0)
-    weight_decay: Literal[0.0] = 0.0
-    client_fraction: Literal[1.0] = 1.0
+    weight_decay: float = Field(default=0.0, ge=0.0, le=0.0)
+    client_fraction: float = Field(default=1.0, ge=1.0, le=1.0)
     aggregation: Literal[AggregationId.EQUAL_CLIENT_MEAN] = AggregationId.EQUAL_CLIENT_MEAN
     early_stopping: Literal[False] = False
     mixed_precision: Literal[False] = False

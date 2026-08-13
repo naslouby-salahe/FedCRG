@@ -17,7 +17,7 @@ from fedcrg.config.models import (
     RandomnessConfig,
     TrainingConfig,
 )
-from fedcrg.core.enums import DetectorId
+from fedcrg.core.enums import DetectorId, ExperimentId
 from fedcrg.core.exceptions import ConfigurationError
 
 _SECTION_KEYS = ("protocol", "dataset", "detector")
@@ -85,7 +85,7 @@ class ExperimentConfigResolver:
             if not isinstance(outputs_raw, str):
                 raise ConfigurationError("outputs_root must be a path string")
             return ExperimentConfig(
-                id=root["id"],
+                id=ExperimentId(str(root["id"])),
                 protocol=protocol,
                 dataset=dataset,
                 detector=detector,

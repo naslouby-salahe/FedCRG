@@ -320,12 +320,15 @@ class DiadAdapter(DatasetAdapter):
         if feature_names == DIAD_FEATURES and len(DIAD_FEATURES) != DIAD_EXPECTED_FEATURES:
             raise RuntimeError("Internal DIAD feature contract is not 86 columns")
         model = frame.loc[:, feature_names].apply(pd.to_numeric, errors="coerce")
-        model = model.replace([np.inf, -np.inf], np.nan)
+        model = pd.DataFrame(model.replace([np.inf, -np.inf], np.nan))
         source = path.relative_to(self.root).as_posix()
-        model["row_id"] = [
-            stable_row_id(self.dataset_id, client_id, source, int(index))
-            for index in source_indices
-        ]
+        model["row_id"] = np.array(
+            [
+                stable_row_id(self.dataset_id, client_id, source, int(index))
+                for index in source_indices
+            ],
+            dtype=object,
+        )
         model["source_file"] = source
         model["source_row_index"] = source_indices
         return model

@@ -16,7 +16,7 @@ from fedcrg.artifacts.manifest import RunManifestStore
 from fedcrg.artifacts.serialization import atomic_write_json
 from fedcrg.artifacts.verification import ArtifactVerifier
 from fedcrg.core.enums import ExperimentId, ExperimentStatus, PolicyId
-from fedcrg.experiments.completion import ExperimentCompletionAuditor
+from fedcrg.experiments.completion import ExperimentCompletion, ExperimentCompletionAuditor
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,13 +185,13 @@ class ClaimGateEvaluator:
                 and bool(sources)
                 and (not closer or wording_updated)
             )
-        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        except (KeyError, TypeError, ValueError):
             return False
 
     def _statistical_core_integrity(
         self,
         outputs_root: Path,
-        completion: dict[str, object],
+        completion: dict[str, ExperimentCompletion],
     ) -> bool:
         from fedcrg.application.verify import VerifyOutputs
 
@@ -212,7 +212,7 @@ class ClaimGateEvaluator:
 
     def _data_integrity(
         self,
-        completion: dict[str, object],
+        completion: dict[str, ExperimentCompletion],
         run_dirs: tuple[Path, ...],
     ) -> bool:
         r1 = completion.get("R1")
@@ -338,7 +338,7 @@ class ClaimGateEvaluator:
     def _external_replication(
         cls,
         records: tuple[FederationResultRecord, ...],
-        completion: dict[str, object],
+        completion: dict[str, ExperimentCompletion],
     ) -> bool:
         r10 = completion.get("R10")
         return bool(
@@ -351,7 +351,7 @@ class ClaimGateEvaluator:
     def _detector_robustness(
         cls,
         records: tuple[FederationResultRecord, ...],
-        completion: dict[str, object],
+        completion: dict[str, ExperimentCompletion],
     ) -> bool:
         r11 = completion.get("R11")
         if r11 is None or not getattr(r11, "complete", False):

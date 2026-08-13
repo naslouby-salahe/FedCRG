@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import random
+from collections.abc import Mapping
 
 import numpy as np
 import torch
-from torch import Tensor
-from torch.utils.data import Dataset
+from torch.utils.data import TensorDataset
 
 from fedcrg.config.models import TrainingConfig
 from fedcrg.core.ids import ClientId, ModelSeed, Sha256
@@ -27,7 +27,7 @@ class FederatedTrainer:
     def train(
         self,
         model: DetectorModel,
-        datasets: dict[ClientId, Dataset[Tensor]],
+        datasets: Mapping[ClientId, TensorDataset],
         config: TrainingConfig,
         model_seed: ModelSeed | int,
     ) -> tuple[DetectorModel, TrainingResult]:
@@ -168,7 +168,7 @@ class FederatedTrainer:
     def _round20_score_correlation(
         round20_model: DetectorModel | None,
         final_model: DetectorModel,
-        datasets: dict[ClientId, Dataset[Tensor]],
+        datasets: Mapping[ClientId, TensorDataset],
     ) -> float | None:
         if round20_model is None:
             return None
@@ -179,7 +179,7 @@ class FederatedTrainer:
         with torch.no_grad():
             for client_id in sorted(datasets):
                 dataset = datasets[client_id]
-                values = dataset.tensors[0] if hasattr(dataset, "tensors") else None
+                values = dataset.tensors[0] if isinstance(dataset, TensorDataset) else None
                 if values is None:
                     raise TypeError("Round-20 diagnostic requires tensor-backed training datasets")
                 values = values.to(dtype=torch.float32)

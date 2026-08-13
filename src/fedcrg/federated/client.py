@@ -6,7 +6,7 @@ import hashlib
 
 import torch
 from torch import Tensor
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, TensorDataset
 
 from fedcrg.config.models import TrainingConfig
 from fedcrg.core.ids import ClientId, Sha256
@@ -25,7 +25,7 @@ def epoch_seed(model_seed: int, client_id: ClientId, round_index: int, epoch: in
 class FederatedClient:
     """Own one local benign-training dataset and execute one round at a time."""
 
-    def __init__(self, client_id: ClientId, dataset: Dataset[Tensor], device: torch.device) -> None:
+    def __init__(self, client_id: ClientId, dataset: TensorDataset, device: torch.device) -> None:
         self.client_id = client_id
         self.dataset = dataset
         self.device = device
