@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from fedcrg.artifacts.hashing import sha256_file
 from fedcrg.artifacts.serialization import atomic_write_json
@@ -15,7 +15,7 @@ from fedcrg.core.ids import Sha256
 class CacheReference:
     """Reference one immutable cache file without duplicating it per policy cell."""
 
-    relative_path: str
+    relative_path: PurePosixPath
     sha256: Sha256
 
     @classmethod
@@ -25,11 +25,13 @@ class CacheReference:
         try:
             relative = resolved_file.relative_to(resolved_outputs)
         except ValueError as exc:
-            raise ValueError(f"Cache artifact must live under outputs root: {resolved_file}") from exc
-        return cls(relative.as_posix(), Sha256(sha256_file(resolved_file)))
+            raise ValueError(
+                f"Cache artifact must live under outputs root: {resolved_file}"
+            ) from exc
+        return cls(PurePosixPath(relative.as_posix()), Sha256(sha256_file(resolved_file)))
 
     def resolve(self, outputs_root: Path) -> Path:
-        path = (outputs_root / self.relative_path).resolve()
+        path = (outputs_root / Path(self.relative_path)).resolve()
         try:
             path.relative_to(outputs_root.resolve())
         except ValueError as exc:
@@ -40,22 +42,14 @@ class CacheReference:
         path = self.resolve(outputs_root)
         return path.is_file() and Sha256(sha256_file(path)) == self.sha256
 
-    def to_dict(self) -> dict[str, str]:
-        return {"relative_path": self.relative_path, "sha256": self.sha256.value}
-
-    @classmethod
-    def from_dict(cls, payload: object) -> "CacheReference":
-        if not isinstance(payload, dict):
-            raise ValueError("Cache reference must be a JSON object")
-        return cls(
-            relative_path=str(payload["relative_path"]),
-            sha256=Sha256(str(payload["sha256"])),
-        )
-
 
 class CacheReferenceStore:
     def save(self, path: Path, reference: CacheReference) -> None:
-        atomic_write_json(path, reference.to_dict())
+        atomic_write_json(path, reference)
 
     def load(self, path: Path) -> CacheReference:
-        return CacheReference.from_dict(json.loads(path.read_text(encoding="utf-8")))
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return CacheReference(
+            relative_path=PurePosixPath(str(payload["relative_path"])),
+            sha256=Sha256(str(payload["sha256"])),
+        )
