@@ -1,5 +1,5 @@
 from click.testing import CliRunner
-from fedcrg.cli.main import cli
+from fedcrg.cli.app import cli
 
 
 def test_cli_help() -> None:

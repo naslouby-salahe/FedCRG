@@ -49,11 +49,13 @@ README architecture section rewritten. Remaining: `cli/` consolidation (Batch 7)
 
 ## Batch 7 — CLI surface (matrix L01-L06, D1)
 
-1. Consolidate CLI to `app.py`, `data_commands.py`, `experiment_commands.py`,
-   `analysis_commands.py`, `report_commands.py`.
-2. Add `data preprocess [DATASET_ID]`, `data status`, `experiment validate|run`,
-   `campaign run|status`, `results build|verify`, `monitor`, `report`.
-3. Rich console progress; keep CLI thin.
+DONE 2026-08-13: consolidated to `cli/app.py` (root, doctor, monitor, config),
+`data_commands.py` (data preprocess|status|prepare, environment),
+`experiment_commands.py` (experiment validate|plan|run-policy-cell|
+materialize-federation-cell|execute-grid, train, score, evaluate, synthetic,
+robustness, sensitivity, benchmark, campaign run|status|list),
+`analysis_commands.py` (claims, tables, verify), `report_commands.py` (report,
+results build|verify); entry point `cli.app:cli`; all 14 legacy files deleted.
 
 ## Batch 8 — Makefile, Nox, CI, typing (matrix R10, R11, T03, T07, E2)
 

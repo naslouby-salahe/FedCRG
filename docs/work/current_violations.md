@@ -55,8 +55,12 @@ matrix IDs (`docs/FedCRG Audit Matrix.md`).
 
 ## D. CLI / logging / monitoring (prompt §16-§18, §34)
 
-- D1. CLI groups differ from target; missing `campaign`, `results`,
-  `data status`, `experiment validate|run`. Matrix: L01-L06.
+- D1. ~~CLI groups differ from target; missing `campaign`, `results`,
+  `data status`, `experiment validate|run`~~ RESOLVED 2026-08-13: 14 CLI files
+  consolidated to `app.py` + `data_commands.py` + `experiment_commands.py` +
+  `analysis_commands.py` + `report_commands.py`; `campaign run|status|list`,
+  `results build|verify`, `data preprocess|status`, `experiment validate`
+  added; entry point `cli.app:cli`. Matrix: L01-L06.
 - D2. ~~Logs go to stderr only~~ RESOLVED 2026-08-13: file handler writes
   `outputs/logs/fedcrg.log`; `runtime.py` split into `runtime/{logging,gpu,monitoring}.py`.
   Matrix: L07.

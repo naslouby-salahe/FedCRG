@@ -34,7 +34,7 @@ dev = [
 ]
 
 [project.scripts]
-fedcrg = "fedcrg.cli.main:cli"
+fedcrg = "fedcrg.cli.app:cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]

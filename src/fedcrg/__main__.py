@@ -1,5 +1,4 @@
-from fedcrg.cli.main import cli
-
+from fedcrg.cli.app import cli
 
 if __name__ == "__main__":
     cli()

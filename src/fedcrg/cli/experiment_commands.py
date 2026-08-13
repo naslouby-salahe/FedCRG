@@ -1,4 +1,5 @@
-"""Experiment planning and execution CLI commands."""
+"""Experiment, training, scoring, sensitivity, robustness, synthetic, benchmark,
+and campaign CLI commands."""
 
 from __future__ import annotations
 
@@ -7,16 +8,53 @@ from pathlib import Path
 
 import click
 
-from fedcrg.domain.enums import DetectorId, ExperimentId, PolicyId
-from fedcrg.experiments.definitions.synthetic import RunSyntheticExperiments
-from fedcrg.experiments.planning import ExperimentPlanner
-from fedcrg.experiments.model_training import TrainDetector
 from fedcrg.configuration.resolve import load_config
+from fedcrg.domain.enums import DetectorId, ExperimentId, PolicyId
+from fedcrg.experiments.planning import ExperimentPlanner
 
 
 @click.group(name="experiment")
 def experiment_group() -> None:
     """Plan typed experiment executions."""
+
+
+@experiment_group.command(name="validate")
+@click.option(
+    "--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True
+)
+@click.option(
+    "--experiment", type=click.Choice([item.value for item in ExperimentId]), default=None
+)
+def validate_experiment(config_path: Path, experiment: str | None) -> None:
+    """Validate a fully resolved experiment configuration against the catalogue."""
+    config = load_config(config_path)
+    experiment_id = ExperimentId(experiment) if experiment is not None else config.id
+    if experiment_id is not config.id:
+        raise click.ClickException(
+            f"Config id {config.id.value} does not match requested {experiment_id.value}"
+        )
+    definition = (
+        ExperimentPlanner()
+        .create(
+            experiment_id,
+            config,
+            model_seed=config.randomness.model_seeds[0],
+            calibration_seed=config.dataset.primary_calibration_seed,
+        )
+        .definition
+    )
+    click.echo(
+        json.dumps(
+            {
+                "valid": True,
+                "experiment": experiment_id.value,
+                "type": definition.type.value,
+                "dependencies": [item.value for item in definition.dependencies],
+                "config_hash": config.config_hash,
+            },
+            indent=2,
+        )
+    )
 
 
 @experiment_group.command(name="plan")
@@ -187,6 +225,90 @@ def execute_grid(
     )
 
 
+@click.command(name="train")
+@click.option(
+    "--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True
+)
+@click.option("--prepared-root", type=click.Path(path_type=Path, exists=True), required=True)
+@click.option("--model-seed", type=int, required=True)
+def train_command(config_path: Path, prepared_root: Path, model_seed: int) -> None:
+    from fedcrg.experiments.model_training import TrainDetector
+
+    model_path, manifest_path = TrainDetector().train_from_cache(
+        load_config(config_path), prepared_root, model_seed
+    )
+    click.echo(json.dumps({"model": str(model_path), "manifest": str(manifest_path)}, indent=2))
+
+
+@click.command(name="score")
+@click.option(
+    "--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True
+)
+@click.option("--prepared-root", type=click.Path(path_type=Path, exists=True), required=True)
+@click.option("--model", "model_path", type=click.Path(path_type=Path, exists=True), required=True)
+@click.option(
+    "--training-manifest",
+    type=click.Path(path_type=Path, exists=True, dir_okay=False),
+    required=True,
+    help="Frozen training manifest that proves the model's scientific provenance.",
+)
+@click.option("--model-seed", type=int, required=True)
+def score_command(
+    config_path: Path,
+    prepared_root: Path,
+    model_path: Path,
+    training_manifest: Path,
+    model_seed: int,
+) -> None:
+    from fedcrg.scoring.compute_scores import ComputeScores
+
+    score_root = ComputeScores().score_from_cache(
+        load_config(config_path),
+        prepared_root,
+        model_path,
+        model_seed,
+        training_manifest,
+    )
+    click.echo(str(score_root))
+
+
+@click.command(name="evaluate")
+@click.option(
+    "--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True
+)
+@click.option("--score-root", type=click.Path(path_type=Path, exists=True), required=True)
+@click.option("--calibration-seed", type=int, default=None)
+@click.option("--output", type=click.Path(path_type=Path), default=Path("outputs/evaluation.json"))
+def evaluate_command(
+    config_path: Path, score_root: Path, calibration_seed: int | None, output: Path
+) -> None:
+    from fedcrg.artifacts.json_io import atomic_write_json
+    from fedcrg.experiments.policy_evaluation import EvaluatePolicies
+
+    config = load_config(config_path)
+    service = EvaluatePolicies()
+    bundle = service.evaluate_from_cache(config, score_root, calibration_seed=calibration_seed)
+    atomic_write_json(output, service.to_serializable(bundle))
+    click.echo(str(output))
+
+
+@click.command(name="benchmark")
+@click.option(
+    "--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True
+)
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path),
+    default=Path("outputs/reports/latest/benchmark.json"),
+)
+def benchmark_command(config_path: Path, output: Path) -> None:
+    from fedcrg.experiments.computational_benchmark import RunBenchmark
+
+    config = load_config(config_path)
+    path = RunBenchmark().run_on_synthetic_evidence(config, output)
+    click.echo(str(path))
+
+
 _SYNTHETIC_EXPERIMENTS = (
     ExperimentId.READINESS_THEOREM,
     ExperimentId.TARGET_FPR_SYNTHETIC,
@@ -213,6 +335,8 @@ def synthetic_group() -> None:
 )
 @click.option("--output", type=click.Path(path_type=Path), required=True)
 def synthetic_run(config_path: Path, experiment: str, output: Path) -> None:
+    from fedcrg.experiments.definitions.synthetic import RunSyntheticExperiments
+
     config = load_config(config_path)
     experiment_id = ExperimentId(experiment)
     runner = RunSyntheticExperiments()
@@ -244,6 +368,8 @@ def robustness_group() -> None:
 @click.option("--model-seed", type=int, required=True)
 def train_deep_svdd(config_path: Path, prepared_root: Path, model_seed: int) -> None:
     """Train the mandatory outcome-independent Deep-SVDD second score generator."""
+    from fedcrg.experiments.model_training import TrainDetector
+
     config = load_config(config_path)
     if config.detector.id is not DetectorId.DEEP_SVDD:
         raise ValueError("Second-detector robustness requires the Deep-SVDD config")
@@ -336,3 +462,68 @@ def sensitivity_run(
             config, score_root, prepared_root, output, calibration_seed
         )
     click.echo(str(path))
+
+
+@click.group(name="campaign")
+def campaign_group() -> None:
+    """Run and inspect persistent research campaigns."""
+
+
+@campaign_group.command(name="run")
+@click.option("--campaign-id", required=True)
+@click.option(
+    "--config", "config_paths", type=click.Path(path_type=Path, exists=True), multiple=True
+)
+@click.option("--prepared-root", type=click.Path(path_type=Path, exists=True), required=True)
+@click.option("--outputs", type=click.Path(path_type=Path), default=Path("outputs"))
+@click.option("--results", "results_root", type=click.Path(path_type=Path), default=Path("results"))
+def campaign_run(
+    campaign_id: str,
+    config_paths: tuple[Path, ...],
+    prepared_root: Path,
+    outputs: Path,
+    results_root: Path,
+) -> None:
+    """Execute a campaign over the given experiment configs and record persistent status."""
+    from fedcrg.experiments.campaign import CampaignRunner, CampaignWorkItem
+
+    if not config_paths:
+        raise click.UsageError("At least one --config is required")
+    work_items = tuple(
+        CampaignWorkItem(
+            experiment_id=load_config(path).id,
+            config_path=path,
+            prepared_root=prepared_root,
+        )
+        for path in config_paths
+    )
+    status = CampaignRunner().run(
+        campaign_id,
+        work_items,
+        outputs_root=outputs,
+        results_root=results_root,
+    )
+    click.echo(json.dumps(status.to_dict(), indent=2))
+
+
+@campaign_group.command(name="status")
+@click.option("--campaign-id", required=True)
+@click.option("--outputs", type=click.Path(path_type=Path), default=Path("outputs"))
+def campaign_status(campaign_id: str, outputs: Path) -> None:
+    """Show persistent status for one campaign."""
+    from fedcrg.experiments.campaign import CampaignStatusStore
+
+    status = CampaignStatusStore(outputs / "campaigns").load(campaign_id)
+    click.echo(json.dumps(status.to_dict(), indent=2))
+
+
+@campaign_group.command(name="list")
+@click.option("--outputs", type=click.Path(path_type=Path), default=Path("outputs"))
+def campaign_list(outputs: Path) -> None:
+    """List recorded campaigns."""
+    campaigns_root = outputs / "campaigns"
+    if not campaigns_root.exists():
+        click.echo("[]")
+        return
+    ids = sorted(path.stem for path in campaigns_root.glob("*.json"))
+    click.echo(json.dumps(ids, indent=2))
