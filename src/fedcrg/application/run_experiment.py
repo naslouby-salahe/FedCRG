@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from collections.abc import Callable
+from pathlib import Path
 
 import yaml
 
@@ -20,21 +20,28 @@ from fedcrg.experiments.planner import ExperimentPlanner
 
 
 class RunExperiment:
+    """Manage one policy-cell lifecycle without owning scientific computation."""
+
     def __init__(self) -> None:
         self.planner = ExperimentPlanner()
         self.manifests = RunManifestStore()
         self.verifier = ArtifactVerifier()
 
     @staticmethod
-    def _manifest(layout: RunLayout, plan: ExperimentPlan, policy: PolicyId, status: ExperimentStatus) -> RunManifest:
+    def _manifest(
+        layout: RunLayout,
+        plan: ExperimentPlan,
+        policy: PolicyId,
+        status: ExperimentStatus,
+    ) -> RunManifest:
         return RunManifest(
-            RunId(layout.root.name),
-            plan.definition.id,
-            policy,
-            plan.config_hash,
-            plan.model_seed,
-            plan.calibration_seed,
-            status,
+            run_id=RunId(layout.root.name),
+            experiment_id=plan.definition.id,
+            policy_id=policy,
+            config_hash=plan.config_hash,
+            model_seed=plan.model_seed,
+            calibration_seed=plan.calibration_seed,
+            status=status,
         )
 
     def prepare(
@@ -52,21 +59,35 @@ class RunExperiment:
         run_id = RunId.for_policy_cell(config, model_seed, calibration_seed, policy)
         layout = RunLayout.for_run(config.outputs_root, run_id)
         layout.create()
-        self.manifests.save(layout.manifest, self._manifest(layout, plan, policy, ExperimentStatus.READY))
-        atomic_write_text(layout.resolved_config, yaml.safe_dump(config.model_dump(mode="json"), sort_keys=False))
+        self.manifests.save(
+            layout.manifest,
+            self._manifest(layout, plan, policy, ExperimentStatus.READY),
+        )
+        atomic_write_text(
+            layout.resolved_config,
+            yaml.safe_dump(config.model_dump(mode="json"), sort_keys=False),
+        )
         environment = capture_environment(repository_root)
         atomic_write_json(layout.environment, environment)
-        atomic_write_json(layout.run_config, {
-            "run_id": str(run_id),
-            "experiment_id": experiment_id.value,
-            "policy_id": policy.value,
-            "parameters": config.model_dump(mode="json"),
-            "model_seed": model_seed,
-            "calibration_seed": calibration_seed,
-            "config_hash": config.config_hash,
-            "git_commit": environment["git_commit"],
-            "environment_lock_sha256": environment["environment_lock_sha256"],
-        })
+        atomic_write_json(
+            layout.run_config,
+            {
+                "run_id": str(run_id),
+                "experiment_id": experiment_id.value,
+                "policy_id": policy.value,
+                "parameters": config.model_dump(mode="json"),
+                "model_seed": model_seed,
+                "calibration_seed": calibration_seed,
+                "config_hash": config.config_hash,
+                "data_spec_hash": config.data_spec_hash,
+                "training_spec_hash": config.training_spec_hash,
+                "git_commit": environment["git_commit"],
+                "git_clean": environment["git_clean"],
+                "git_patch_sha256": environment["git_patch_sha256"],
+                "environment_pin_sha256": environment["environment_pin_sha256"],
+                "environment_pin_kind": environment["environment_pin_kind"],
+            },
+        )
         return plan, layout
 
     def execute(
@@ -77,17 +98,40 @@ class RunExperiment:
         calibration_seed: int,
         policy: PolicyId,
         runner: Callable[[ExperimentPlan, RunLayout], object],
+        repository_root: Path = Path("."),
     ) -> tuple[object, RunLayout]:
-        plan, layout = self.prepare(experiment_id, config, model_seed, calibration_seed, policy)
-        self.manifests.save(layout.manifest, self._manifest(layout, plan, policy, ExperimentStatus.RUNNING))
+        plan, layout = self.prepare(
+            experiment_id,
+            config,
+            model_seed,
+            calibration_seed,
+            policy,
+            repository_root,
+        )
+        self.manifests.save(
+            layout.manifest,
+            self._manifest(layout, plan, policy, ExperimentStatus.RUNNING),
+        )
         try:
             result = runner(plan, layout)
-            self.manifests.save(layout.manifest, self._manifest(layout, plan, policy, ExperimentStatus.VERIFYING))
+            self.manifests.save(
+                layout.manifest,
+                self._manifest(layout, plan, policy, ExperimentStatus.VERIFYING),
+            )
             verification = self.verifier.record(layout, plan.definition)
             if not verification.valid:
-                raise RuntimeError(f"Run verification failed: {verification.missing}")
+                raise RuntimeError(
+                    "Run verification failed: "
+                    + ", ".join(verification.missing + verification.mismatched)
+                )
         except Exception:
-            self.manifests.save(layout.manifest, self._manifest(layout, plan, policy, ExperimentStatus.FAILED))
+            self.manifests.save(
+                layout.manifest,
+                self._manifest(layout, plan, policy, ExperimentStatus.FAILED),
+            )
             raise
-        self.manifests.save(layout.manifest, self._manifest(layout, plan, policy, ExperimentStatus.COMPLETE))
+        self.manifests.save(
+            layout.manifest,
+            self._manifest(layout, plan, policy, ExperimentStatus.COMPLETE),
+        )
         return result, layout

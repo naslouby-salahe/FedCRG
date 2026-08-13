@@ -78,3 +78,78 @@ def run_policy_cell(
         ),
     )
     click.echo(str(layout.root))
+
+
+@experiment_group.command(name="materialize-federation-cell")
+@click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True)
+@click.option("--experiment", type=click.Choice([item.value for item in ExperimentId]), default=None)
+@click.option("--model-seed", type=int, required=True)
+@click.option("--calibration-seed", type=int, required=True)
+@click.option("--prepared-root", type=click.Path(path_type=Path, exists=True), required=True)
+@click.option("--model-path", type=click.Path(path_type=Path, exists=True), required=True)
+@click.option("--training-manifest", type=click.Path(path_type=Path, exists=True), required=True)
+@click.option("--score-root", type=click.Path(path_type=Path, exists=True), required=True)
+def materialize_federation_cell(
+    config_path: Path,
+    experiment: str | None,
+    model_seed: int,
+    calibration_seed: int,
+    prepared_root: Path,
+    model_path: Path,
+    training_manifest: Path,
+    score_root: Path,
+) -> None:
+    """Evaluate one federation once and materialize every configured policy run."""
+    from fedcrg.application.federation_cell import FederationCellMaterializer
+    from fedcrg.application.policy_cell import FrozenCacheInputs
+    config = load_config(config_path)
+    experiment_id = ExperimentId(experiment) if experiment is not None else config.id
+    result = FederationCellMaterializer().materialize(
+        experiment_id,
+        config,
+        model_seed,
+        calibration_seed,
+        FrozenCacheInputs(prepared_root, model_path, training_manifest, score_root),
+    )
+    click.echo(json.dumps({policy.value: str(path) for policy, path in result.run_directories.items()}, indent=2))
+
+
+@experiment_group.command(name="execute-grid")
+@click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True)
+@click.option("--prepared-root", type=click.Path(path_type=Path, exists=True), required=True)
+@click.option("--experiment", type=click.Choice([item.value for item in ExperimentId]), default=None)
+@click.option("--named-only", is_flag=True, default=False)
+def execute_grid(
+    config_path: Path,
+    prepared_root: Path,
+    experiment: str | None,
+    named_only: bool,
+) -> None:
+    """Execute each model seed once, score once, and materialize the requested policy grid."""
+    from fedcrg.application.pipeline import ExecuteFrozenWorkload
+
+    config = load_config(config_path)
+    experiment_id = ExperimentId(experiment) if experiment is not None else config.id
+    calibration_seeds = (
+        (config.dataset.primary_calibration_seed,)
+        if named_only
+        else config.dataset.calibration_seeds
+    )
+    result = ExecuteFrozenWorkload().execute(
+        experiment_id,
+        config,
+        prepared_root,
+        calibration_seeds=calibration_seeds,
+    )
+    click.echo(
+        json.dumps(
+            {
+                "experiment": experiment_id.value,
+                "model_seeds": [item.model_seed for item in result.models],
+                "model_count": len(result.models),
+                "policy_run_count": len(result.run_directories),
+                "calibration_seeds": list(calibration_seeds),
+            },
+            indent=2,
+        )
+    )
