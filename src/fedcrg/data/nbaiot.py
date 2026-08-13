@@ -10,7 +10,6 @@ import pandas as pd
 
 from fedcrg.data.prepare import ClientData, DatasetAdapter, DatasetDiscovery
 from fedcrg.data.splits import stable_row_id
-from fedcrg.domain.constants import NBAIOT_EXPECTED_FEATURES
 from fedcrg.domain.enums import ChronologyStatus, DatasetId, FailureCode
 from fedcrg.domain.errors import DataIntegrityError
 from fedcrg.domain.identifiers import ClientId
@@ -36,8 +35,11 @@ def _normalized_name(path: Path) -> str:
 class NBaiotAdapter(DatasetAdapter):
     """Load the nine named UCI devices in preserved source-file row order."""
 
-    def __init__(self, root: Path | str) -> None:
+    def __init__(self, root: Path | str, expected_feature_count: int) -> None:
         super().__init__(root)
+        if expected_feature_count <= 0:
+            raise ValueError("expected_feature_count must be positive")
+        self.expected_feature_count = expected_feature_count
         self._directories: dict[ClientId, Path] | None = None
 
     @property
@@ -114,10 +116,10 @@ class NBaiotAdapter(DatasetAdapter):
         frames: list[pd.DataFrame] = []
         for path in sorted(files):
             frame = pd.read_csv(path)
-            if frame.shape[1] != NBAIOT_EXPECTED_FEATURES:
+            if frame.shape[1] != self.expected_feature_count:
                 raise DataIntegrityError(
                     f"{FailureCode.FEATURE_SCHEMA_MISMATCH.value}: {path} has "
-                    f"{frame.shape[1]} columns, expected {NBAIOT_EXPECTED_FEATURES}"
+                    f"{frame.shape[1]} columns, expected {self.expected_feature_count}"
                 )
             try:
                 numeric = frame.apply(pd.to_numeric, errors="raise")

@@ -1,2 +1,2 @@
-id: mismatch_power
+id: target_fpr_synthetic
 extends: readiness_theorem.yaml

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fedcrg.config.method_config import ProtocolConfig
+from fedcrg.config.statistics_config import StatisticsConfig
 from fedcrg.domain.enums import FailureCode, PolicyId
 from fedcrg.domain.identifiers import ClientId
 from fedcrg.thresholds.comparators.development_f1 import dev_local_global
@@ -56,6 +57,7 @@ class PolicyThresholdSelector:
         self,
         benign_clients: tuple[BenignPolicyEvidence, ...],
         protocol: ProtocolConfig,
+        statistics: StatisticsConfig,
         requested_policies: tuple[PolicyId, ...],
         supervised_clients: tuple[SupervisedDevelopmentEvidence, ...] | None = None,
     ) -> PolicyThresholdSet:
@@ -113,7 +115,11 @@ class PolicyThresholdSelector:
             else {}
         )
         shrinkage_n0 = (
-            tune_shrinkage(benign_clients, protocol.alpha)
+            tune_shrinkage(
+                benign_clients,
+                protocol.alpha,
+                statistics.shrinkage_n0_candidates,
+            )
             if PolicyId.SHRINKAGE in non_oracle
             else None
         )
@@ -121,12 +127,18 @@ class PolicyThresholdSelector:
             three_sigma(benign_clients) if PolicyId.THREE_SIGMA in non_oracle else None
         )
         summary_threshold = (
-            summary_statistic_threshold(tuple(supervised_by_client.values()))
+            summary_statistic_threshold(
+                tuple(supervised_by_client.values()),
+                statistics.supervised_threshold_candidates,
+            )
             if PolicyId.SUMMARY_STATISTIC_SELECT in non_oracle
             else None
         )
         supervised_threshold = (
-            supervised_global_f1(tuple(supervised_by_client.values()))
+            supervised_global_f1(
+                tuple(supervised_by_client.values()),
+                statistics.supervised_threshold_candidates,
+            )
             if PolicyId.SUPERVISED_F1 in non_oracle
             else None
         )

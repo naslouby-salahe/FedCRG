@@ -160,7 +160,8 @@ class ProtocolTablePrecomputer:
             alpha=config.protocol.alpha,
             rho=config.protocol.rho,
             assurance=familywise_readiness_assurance(
-                config.dataset.expected_clients or config.dataset.minimum_clients
+                config.dataset.expected_clients or config.dataset.minimum_clients,
+                config.statistics.familywise_alpha,
             ),
         )
 

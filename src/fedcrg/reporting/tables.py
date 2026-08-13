@@ -11,7 +11,6 @@ from fedcrg.analysis.policy_contrasts import confirmatory_contrasts, load_federa
 from fedcrg.artifacts.json_io import as_json_dict, to_json_value
 from fedcrg.artifacts.paths import RunLayout
 from fedcrg.config.experiment_config import ExperimentConfig
-from fedcrg.domain.constants import NBAIOT_NAMED_CALIBRATION_SEED
 from fedcrg.domain.enums import ExperimentId, PolicyId
 
 
@@ -78,11 +77,15 @@ class PublicationTableBuilder:
         ]
         return self._write(pd.DataFrame.from_records(records).reindex(columns=columns), output)
 
-    def ablations(self, run_dirs: tuple[Path, ...], output: Path) -> Path:
+    def ablations(self, run_dirs: tuple[Path, ...], output: Path, config: ExperimentConfig) -> Path:
         records = load_federation_results(run_dirs)
         primary = tuple(row for row in records if row.experiment_id is ExperimentId.PRIMARY_NBAIOT)
         contrasts = confirmatory_contrasts(
-            primary, named_calibration_seed=NBAIOT_NAMED_CALIBRATION_SEED
+            primary,
+            named_calibration_seed=config.dataset.primary_calibration_seed,
+            expected_model_seeds=config.randomness.model_seeds,
+            bootstrap_seed=config.statistics.bootstrap_seed,
+            bootstrap_replicates=config.statistics.bootstrap_replicates,
         )
         rows = [
             {

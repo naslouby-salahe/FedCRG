@@ -9,8 +9,10 @@ from pathlib import Path
 from pydantic import BaseModel, model_validator
 
 from fedcrg.config.dataset_config import DatasetConfig
+from fedcrg.config.detector_config import DetectorConfig
 from fedcrg.config.method_config import ProtocolConfig
-from fedcrg.config.training_config import DetectorConfig, RandomnessConfig, TrainingConfig
+from fedcrg.config.statistics_config import StatisticsConfig
+from fedcrg.config.training_config import RandomnessConfig, TrainingConfig
 from fedcrg.domain.enums import (
     DatasetFeatureContractId,
     DatasetId,
@@ -35,7 +37,8 @@ class ExperimentConfig(BaseModel):
     dataset: DatasetConfig
     detector: DetectorConfig
     training: TrainingConfig
-    randomness: RandomnessConfig = RandomnessConfig()
+    randomness: RandomnessConfig
+    statistics: StatisticsConfig
     policies: tuple[PolicyId, ...]
     outputs_root: Path = Path("outputs")
 

@@ -2,7 +2,6 @@ from pathlib import Path
 
 from fedcrg.config.resolve import ExperimentConfigResolver
 from fedcrg.config.validate import validate_experiment_config
-from fedcrg.domain.constants import DIAD_EXPECTED_SOURCE_CLIENTS
 from fedcrg.domain.enums import DatasetId, DetectorId, ExperimentId, PolicyId
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -30,7 +29,7 @@ def test_external_profile_is_frozen() -> None:
     config = _load("configs/experiments/external/diad.yaml")
     assert config.id is ExperimentId.EXTERNAL_DIAD
     assert config.dataset.id is DatasetId.DIAD
-    assert config.dataset.expected_source_clients == DIAD_EXPECTED_SOURCE_CLIENTS
+    assert config.dataset.expected_source_clients == 115
     assert config.detector.hidden_dims == (64, 43, 28, 21)
     assert config.training.rounds == 30
     assert config.training.local_epochs == 20
@@ -38,7 +37,7 @@ def test_external_profile_is_frozen() -> None:
 
 
 def test_second_detector_profile_is_frozen() -> None:
-    config = _load("configs/experiments/robustness/deep_svdd_nbaiot.yaml")
+    config = _load("configs/experiments/robustness/second_detector.yaml")
     assert config.id is ExperimentId.SECOND_DETECTOR
     assert config.detector.id is DetectorId.DEEP_SVDD
     assert config.detector.hidden_dims == (64,)

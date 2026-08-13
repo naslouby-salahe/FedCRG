@@ -1,13 +1,13 @@
 import numpy as np
-from fedcrg.config.method_config import ProtocolConfig
 from fedcrg.domain.enums import DecisionState
 from fedcrg.domain.identifiers import ClientId
 from fedcrg.method.client_evaluation import ClientEvaluation
+from tests._fixtures import primary_protocol
 
 
 def test_protocol_service_composes_reference_readiness_mismatch_and_decision() -> None:
     protocol = ClientEvaluation()
-    config = ProtocolConfig()
+    config = primary_protocol()
     client_a = ClientId("a")
     reference = protocol.estimate_reference(
         {client_a: np.linspace(0, 1, 500), ClientId("b"): np.linspace(0, 1, 500)}, config

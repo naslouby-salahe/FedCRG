@@ -15,10 +15,10 @@ class ProtocolConfig(BaseModel):
 
     id: Literal[ProtocolId.FEDCRG] = ProtocolId.FEDCRG
     version: Literal["2.0"] = "2.0"
-    alpha: float = Field(default=0.01, gt=0.0, lt=1.0)
-    rho: float = Field(default=0.50, ge=0.0)
-    readiness_assurance: float = Field(default=0.95, gt=0.0, lt=1.0)
-    mismatch_confidence: float = Field(default=0.95, gt=0.0, lt=1.0)
+    alpha: float = Field(gt=0.0, lt=1.0)
+    rho: float = Field(ge=0.0)
+    readiness_assurance: float = Field(gt=0.0, lt=1.0)
+    mismatch_confidence: float = Field(gt=0.0, lt=1.0)
     strict_exceedance: Literal[True] = True
     reject_calibration_ties: Literal[True] = True
 

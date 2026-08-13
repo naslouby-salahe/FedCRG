@@ -135,7 +135,7 @@ class VerifyOutputs:
                         )
                     )
 
-        experiment_completion = self.completion.audit(outputs_root)
+        experiment_completion = self.completion.audit(outputs_root, repository_root)
         test_return_code: int | None = None
         if run_tests:
             process = subprocess.run(

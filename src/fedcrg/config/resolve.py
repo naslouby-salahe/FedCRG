@@ -8,19 +8,23 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from fedcrg.config.dataset_config import DatasetConfig
+from fedcrg.config.detector_config import DetectorConfig
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.config.load import load_yaml
 from fedcrg.config.method_config import ProtocolConfig
-from fedcrg.config.training_config import (
-    AutoencoderConfig,
-    DeepSvddConfig,
-    RandomnessConfig,
-    TrainingConfig,
-)
+from fedcrg.config.statistics_config import StatisticsConfig
+from fedcrg.config.training_config import RandomnessConfig, TrainingConfig
 from fedcrg.domain.enums import DetectorId, ExperimentId
 from fedcrg.domain.errors import ConfigurationError
 
-_SECTION_KEYS = ("protocol", "dataset", "detector")
+_SECTION_KEYS = (
+    "protocol",
+    "dataset",
+    "detector",
+    "training",
+    "randomness",
+    "statistics",
+)
 
 
 def _mapping(value: object, context: str) -> dict[str, object]:
@@ -73,11 +77,17 @@ class ExperimentConfigResolver:
             dataset = DatasetConfig.model_validate(_resolve_section(root["dataset"], "dataset"))
             detector_raw = _resolve_section(root["detector"], "detector")
             detector_id = DetectorId(str(detector_raw["id"]))
-            detector = (
-                AutoencoderConfig.model_validate(detector_raw)
-                if detector_id is DetectorId.AUTOENCODER
-                else DeepSvddConfig.model_validate(detector_raw)
-            )
+            detector: DetectorConfig
+            if detector_id is DetectorId.AUTOENCODER:
+                from fedcrg.config.detector_config import AutoencoderConfig
+
+                detector = AutoencoderConfig.model_validate(detector_raw)
+            elif detector_id is DetectorId.DEEP_SVDD:
+                from fedcrg.config.detector_config import DeepSvddConfig
+
+                detector = DeepSvddConfig.model_validate(detector_raw)
+            else:
+                raise ConfigurationError(f"Unsupported detector id: {detector_id.value}")
             policies_raw = root["policies"]
             if not isinstance(policies_raw, list):
                 raise ConfigurationError("policies must be a YAML list")
@@ -89,9 +99,14 @@ class ExperimentConfigResolver:
                 protocol=protocol,
                 dataset=dataset,
                 detector=detector,
-                training=TrainingConfig.model_validate(_mapping(root["training"], "training")),
+                training=TrainingConfig.model_validate(
+                    _resolve_section(root["training"], "training")
+                ),
                 randomness=RandomnessConfig.model_validate(
-                    _mapping(root.get("randomness", {}), "randomness")
+                    _resolve_section(root["randomness"], "randomness")
+                ),
+                statistics=StatisticsConfig.model_validate(
+                    _resolve_section(root["statistics"], "statistics")
                 ),
                 policies=tuple(policies_raw),
                 outputs_root=Path(outputs_raw),

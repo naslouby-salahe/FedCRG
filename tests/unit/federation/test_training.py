@@ -2,7 +2,9 @@ import pytest
 import torch
 from pydantic import ValidationError
 from torch.utils.data import TensorDataset
-from fedcrg.config.training_config import AutoencoderConfig, TrainingConfig
+from fedcrg.config.detector_config import AutoencoderConfig
+from fedcrg.config.training_config import TrainingConfig
+from fedcrg.domain.enums import ComputeDeviceId
 from fedcrg.domain.identifiers import ClientId
 from fedcrg.detectors.autoencoder import Autoencoder
 from fedcrg.federation.learning_rate import cosine_learning_rate
@@ -15,10 +17,20 @@ def test_learning_rate_uses_configured_endpoints() -> None:
 
 
 def test_client_fraction_is_locked_to_full_participation() -> None:
-    model = Autoencoder(2, AutoencoderConfig(hidden_dims=(1,)))
+    model = Autoencoder(2, AutoencoderConfig(hidden_dims=(1,), xavier_tanh_gain=5.0 / 3.0))
     datasets = {ClientId(f"c{i}"): TensorDataset(torch.randn(4, 2)) for i in range(4)}
     config = TrainingConfig(
-        rounds=1, local_epochs=1, batch_size=2, learning_rate_initial=1e-3, learning_rate_final=1e-3
+        rounds=1,
+        local_epochs=1,
+        batch_size=2,
+        learning_rate_initial=1e-3,
+        learning_rate_final=1e-3,
+        adam_betas=(0.9, 0.999),
+        adam_epsilon=1e-8,
+        weight_decay=0.0,
+        client_fraction=1.0,
+        record_round20_score_correlation=False,
+        device=ComputeDeviceId.CPU,
     )
     _, result = FederatedTrainer().train(model, datasets, config, model_seed=11)
     assert len(result.rounds[0].selected_clients) == 4
@@ -33,4 +45,9 @@ def test_client_fraction_below_one_is_rejected() -> None:
             client_fraction=0.5,
             learning_rate_initial=1e-3,
             learning_rate_final=1e-3,
+            adam_betas=(0.9, 0.999),
+            adam_epsilon=1e-8,
+            weight_decay=0.0,
+            record_round20_score_correlation=False,
+            device=ComputeDeviceId.CPU,
         )

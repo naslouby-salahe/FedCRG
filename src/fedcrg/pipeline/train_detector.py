@@ -14,14 +14,9 @@ from fedcrg.artifacts.manifests import PreparedDatasetManifestStore
 from fedcrg.artifacts.integrity import sha256_file
 from fedcrg.artifacts.manifests import ClientTrainingCount, TrainingManifest, TrainingManifestStore
 from fedcrg.config.experiment_config import ExperimentConfig
-from fedcrg.domain.constants import (
-    DIAD_AUTOENCODER_BYTES,
-    DIAD_AUTOENCODER_PARAMETERS,
-    NBAIOT_AUTOENCODER_BYTES,
-    NBAIOT_AUTOENCODER_PARAMETERS,
-)
-from fedcrg.domain.enums import DataRole, DatasetId, DetectorId, ExperimentId, FailureCode
+from fedcrg.domain.enums import DataRole, DetectorId, ExperimentId, FailureCode
 from fedcrg.domain.identifiers import ClientId, ModelSeed, Sha256
+from fedcrg.detectors.autoencoder import autoencoder_parameter_count, autoencoder_tensor_bytes
 from fedcrg.detectors.detector import DetectorModel
 from fedcrg.detectors.deep_svdd import DeepSvdd
 from fedcrg.detectors.create_detector import create_detector
@@ -87,15 +82,11 @@ class TrainDetector:
                 )
             return
 
-        expected_parameters = (
-            NBAIOT_AUTOENCODER_PARAMETERS
-            if config.dataset.id is DatasetId.NBAIOT
-            else DIAD_AUTOENCODER_PARAMETERS
+        expected_parameters = autoencoder_parameter_count(
+            config.dataset.feature_count, config.detector.hidden_dims
         )
-        expected_bytes = (
-            NBAIOT_AUTOENCODER_BYTES
-            if config.dataset.id is DatasetId.NBAIOT
-            else DIAD_AUTOENCODER_BYTES
+        expected_bytes = autoencoder_tensor_bytes(
+            config.dataset.feature_count, config.detector.hidden_dims
         )
         if model.trainable_parameter_count() != expected_parameters:
             raise RuntimeError(

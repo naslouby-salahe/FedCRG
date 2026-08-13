@@ -1,6 +1,6 @@
 """Detector construction from configuration."""
 
-from fedcrg.config.training_config import AutoencoderConfig, DeepSvddConfig, DetectorConfig
+from fedcrg.config.detector_config import AutoencoderConfig, DeepSvddConfig, DetectorConfig
 from fedcrg.detectors.autoencoder import Autoencoder
 from fedcrg.detectors.deep_svdd import DeepSvdd
 from fedcrg.detectors.detector import DetectorModel

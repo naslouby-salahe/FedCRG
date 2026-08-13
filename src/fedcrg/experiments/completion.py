@@ -9,28 +9,12 @@ from pathlib import Path
 
 from fedcrg.artifacts.manifests import RunManifest, RunManifestStore
 from fedcrg.artifacts.paths import RunLayout
-from fedcrg.domain.constants import (
-    DEEP_SVDD_MODEL_SEEDS,
-    DIAD_NAMED_CALIBRATION_SEED,
-    NBAIOT_NAMED_CALIBRATION_SEED,
-    PRIMARY_MODEL_SEEDS,
-)
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.config.resolve import ExperimentConfigResolver
 from fedcrg.domain.enums import DatasetId, ExperimentId, ExperimentStatus, PolicyId
 from fedcrg.experiments.experiment_definition import (
     SECOND_DETECTOR_POLICIES,
     all_experiment_definitions,
-)
-
-_PRIMARY_MODEL_SEEDS = PRIMARY_MODEL_SEEDS
-_NBAIOT_CALIBRATION_SEEDS = tuple(
-    range(NBAIOT_NAMED_CALIBRATION_SEED, NBAIOT_NAMED_CALIBRATION_SEED + 50)
-)
-_DIAD_CALIBRATION_SEEDS = tuple(
-    range(DIAD_NAMED_CALIBRATION_SEED, DIAD_NAMED_CALIBRATION_SEED + 20)
-)
-_SECOND_DETECTOR_MODEL_SEEDS = DEEP_SVDD_MODEL_SEEDS
-_SECOND_DETECTOR_CALIBRATION_SEEDS = tuple(
-    range(NBAIOT_NAMED_CALIBRATION_SEED, NBAIOT_NAMED_CALIBRATION_SEED + 10)
 )
 
 _AGGREGATE_WORKLOAD_EXPERIMENTS = (
@@ -84,12 +68,33 @@ class ExperimentCompletion:
 
 
 class ExperimentCompletionAuditor:
-    """Reconcile every pre-registered workload without inferring missing evidence."""
+    """Reconcile every pre-registered workload without inferring missing evidence.
 
-    def __init__(self) -> None:
+    Expected workloads are derived from the frozen experiment configuration files, so the
+    YAML profiles remain the single source of truth for seeds and role counts.
+    """
+
+    def __init__(self, resolver: ExperimentConfigResolver | None = None) -> None:
         self.manifests = RunManifestStore()
+        self.resolver = resolver or ExperimentConfigResolver()
 
-    def audit(self, outputs_root: Path) -> tuple[ExperimentCompletion, ...]:
+    def _load_config(self, repository_root: Path, relative: str) -> ExperimentConfig:
+        return self.resolver.resolve(repository_root / relative)
+
+    def audit(
+        self, outputs_root: Path, repository_root: Path = Path(".")
+    ) -> tuple[ExperimentCompletion, ...]:
+        primary = self._load_config(repository_root, "configs/experiments/primary/nbaiot.yaml")
+        external = self._load_config(repository_root, "configs/experiments/external/diad.yaml")
+        second_detector = self._load_config(
+            repository_root, "configs/experiments/robustness/second_detector.yaml"
+        )
+        nbaiot_named = primary.dataset.primary_calibration_seed
+        diad_named = external.dataset.primary_calibration_seed
+        nbaiot_seeds = primary.dataset.calibration_seeds
+        diad_seeds = external.dataset.calibration_seeds
+        nbaiot_clients = primary.dataset.expected_clients or primary.dataset.minimum_clients
+
         runs = self._completed_runs(outputs_root / "runs")
         rows: list[ExperimentCompletion] = []
         for definition in all_experiment_definitions():
@@ -99,10 +104,10 @@ class ExperimentCompletionAuditor:
                     self._policy_run_workload(
                         experiment_id,
                         runs,
-                        _PRIMARY_MODEL_SEEDS,
-                        _NBAIOT_CALIBRATION_SEEDS,
-                        tuple(PolicyId),
-                        expected_clients=9,
+                        primary.randomness.model_seeds,
+                        nbaiot_seeds,
+                        primary.policies,
+                        expected_clients=nbaiot_clients,
                     )
                 )
             elif experiment_id is ExperimentId.EXTERNAL_DIAD:
@@ -110,9 +115,9 @@ class ExperimentCompletionAuditor:
                     self._external_policy_workload(
                         experiment_id,
                         runs,
-                        _PRIMARY_MODEL_SEEDS,
-                        _DIAD_CALIBRATION_SEEDS,
-                        tuple(PolicyId),
+                        external.randomness.model_seeds,
+                        diad_seeds,
+                        external.policies,
                     )
                 )
             elif experiment_id is ExperimentId.SECOND_DETECTOR:
@@ -120,10 +125,10 @@ class ExperimentCompletionAuditor:
                     self._policy_run_workload(
                         experiment_id,
                         runs,
-                        _SECOND_DETECTOR_MODEL_SEEDS,
-                        _SECOND_DETECTOR_CALIBRATION_SEEDS,
+                        second_detector.randomness.model_seeds,
+                        tuple(range(nbaiot_named, nbaiot_named + 10)),
                         SECOND_DETECTOR_POLICIES,
-                        expected_clients=9,
+                        expected_clients=nbaiot_clients,
                     )
                 )
             elif experiment_id is ExperimentId.DIAD_FEATURE_SENSITIVITY:
@@ -131,8 +136,8 @@ class ExperimentCompletionAuditor:
                     self._external_policy_workload(
                         experiment_id,
                         runs,
-                        _PRIMARY_MODEL_SEEDS,
-                        (DIAD_NAMED_CALIBRATION_SEED,),
+                        external.randomness.model_seeds,
+                        (diad_named,),
                         definition.policies,
                     )
                 )
@@ -143,8 +148,8 @@ class ExperimentCompletionAuditor:
                     self._real_sensitivity_workload(
                         outputs_root,
                         experiment_id,
-                        expected_model_seeds=_PRIMARY_MODEL_SEEDS,
-                        expected_calibration_seed=NBAIOT_NAMED_CALIBRATION_SEED,
+                        expected_model_seeds=primary.randomness.model_seeds,
+                        expected_calibration_seed=nbaiot_named,
                     )
                 )
             elif experiment_id in _SINGLE_SEED_SENSITIVITY_EXPERIMENTS:
@@ -152,11 +157,11 @@ class ExperimentCompletionAuditor:
                     self._single_seed_sensitivity_workload(
                         outputs_root,
                         experiment_id,
-                        expected_calibration_seed=NBAIOT_NAMED_CALIBRATION_SEED,
+                        expected_calibration_seed=nbaiot_named,
                     )
                 )
             elif experiment_id is ExperimentId.SOURCE_ORDER_CALIBRATION:
-                rows.append(self._source_order_workload(outputs_root))
+                rows.append(self._source_order_workload(outputs_root, repository_root))
             else:
                 rows.append(
                     ExperimentCompletion(
@@ -387,8 +392,9 @@ class ExperimentCompletionAuditor:
             problems=tuple(problems),
         )
 
-    @staticmethod
-    def _source_order_workload(outputs_root: Path) -> ExperimentCompletion:
+    def _source_order_workload(
+        self, outputs_root: Path, repository_root: Path
+    ) -> ExperimentCompletion:
         experiment_id = ExperimentId.SOURCE_ORDER_CALIBRATION
         cells_root = outputs_root / "experiments" / experiment_id.value / "cells"
         files = tuple(sorted(cells_root.glob("*.json"))) if cells_root.exists() else ()
@@ -408,14 +414,18 @@ class ExperimentCompletionAuditor:
                     int(payload.get("calibration_seed", -1)),
                 )
             )
+        primary = self._load_config(repository_root, "configs/experiments/primary/nbaiot.yaml")
+        external = self._load_config(repository_root, "configs/experiments/external/diad.yaml")
+        nbaiot_named = primary.dataset.primary_calibration_seed
+        diad_named = external.dataset.primary_calibration_seed
         expected = {
             *(
-                (DatasetId.NBAIOT.value, model_seed, NBAIOT_NAMED_CALIBRATION_SEED)
-                for model_seed in _PRIMARY_MODEL_SEEDS
+                (DatasetId.NBAIOT.value, model_seed, nbaiot_named)
+                for model_seed in primary.randomness.model_seeds
             ),
             *(
-                (DatasetId.DIAD.value, model_seed, DIAD_NAMED_CALIBRATION_SEED)
-                for model_seed in _PRIMARY_MODEL_SEEDS
+                (DatasetId.DIAD.value, model_seed, diad_named)
+                for model_seed in external.randomness.model_seeds
             ),
         }
         missing = expected - identities

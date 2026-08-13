@@ -1,2 +1,2 @@
-extends: ../synthetic/default.yaml
+extends: ../synthetic/readiness_theorem.yaml
 id: temporal_dependence

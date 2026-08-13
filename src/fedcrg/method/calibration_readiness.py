@@ -262,10 +262,7 @@ def continuity_diagnostics(
     )
 
 
-def familywise_readiness_assurance(
-    client_count: int,
-    familywise_alpha: float = 0.05,
-) -> float:
+def familywise_readiness_assurance(client_count: int, familywise_alpha: float) -> float:
     if client_count <= 0:
         raise ValueError("client_count must be positive")
     if not 0.0 < familywise_alpha < 1.0:

@@ -14,10 +14,8 @@ from fedcrg.artifacts.manifests import PreparedDatasetManifestStore
 from fedcrg.artifacts.integrity import sha256_file
 from fedcrg.artifacts.json_io import atomic_write_json
 from fedcrg.config.dataset_config import DatasetConfig, SplitConfig
+from fedcrg.config.detector_config import AutoencoderConfig
 from fedcrg.config.experiment_config import ExperimentConfig
-from fedcrg.config.method_config import ProtocolConfig
-from fedcrg.config.training_config import AutoencoderConfig, RandomnessConfig, TrainingConfig
-from fedcrg.domain.constants import DIAD_EXPECTED_SOURCE_CLIENTS
 from fedcrg.domain.enums import (
     ComputeDeviceId,
     DataRole,
@@ -29,6 +27,12 @@ from fedcrg.domain.enums import (
 from fedcrg.domain.identifiers import ClientId, RowId, Sha256
 from fedcrg.data.prepare import ClientDatasetManifest, RoleArtifactManifest, hash_row_ids
 from fedcrg.method.calibration_readiness import ReadinessPlanCache
+from tests._fixtures import (
+    primary_protocol,
+    primary_randomness,
+    primary_statistics,
+    primary_training,
+)
 
 _FEATURES = ("f1", "f2", "f3", "f4")
 _ROLE_ROWS = {
@@ -43,17 +47,19 @@ _ROLE_ROWS = {
 def _config(root: Path) -> ExperimentConfig:
     return ExperimentConfig(
         id=ExperimentId.DIAD_FEATURE_SENSITIVITY,
-        protocol=ProtocolConfig(),
+        protocol=primary_protocol(),
         dataset=DatasetConfig(
             id=DatasetId.DIAD,
             feature_contract=DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE,
             source_version="1",
+            parser_version="1",
             feature_count=4,
             feature_names=_FEATURES,
-            expected_source_clients=DIAD_EXPECTED_SOURCE_CLIENTS,
+            expected_source_clients=115,
             minimum_clients=10,
             minimum_benign_rows=7800,
             minimum_malicious_rows=1000,
+            expected_benign_counts={},
             split=SplitConfig(
                 train_benign=4,
                 reference_benign=10,
@@ -68,16 +74,19 @@ def _config(root: Path) -> ExperimentConfig:
             calibration_seeds=(1000,),
             primary_calibration_seed=1000,
         ),
-        detector=AutoencoderConfig(hidden_dims=(3, 2, 1, 1)),
-        training=TrainingConfig(
-            rounds=1,
-            local_epochs=1,
-            batch_size=4,
-            learning_rate_initial=1e-3,
-            learning_rate_final=1e-3,
-            device=ComputeDeviceId.CPU,
+        detector=AutoencoderConfig(hidden_dims=(3, 2, 1, 1), xavier_tanh_gain=5.0 / 3.0),
+        training=primary_training().model_copy(
+            update={
+                "rounds": 1,
+                "local_epochs": 1,
+                "batch_size": 4,
+                "learning_rate_initial": 1e-3,
+                "learning_rate_final": 1e-3,
+                "device": ComputeDeviceId.CPU,
+            }
         ),
-        randomness=RandomnessConfig(model_seeds=(11,)),
+        randomness=primary_randomness().model_copy(update={"model_seeds": (11,)}),
+        statistics=primary_statistics(),
         policies=(PolicyId.REFERENCE_QUANTILE, PolicyId.LOCAL_QUANTILE, PolicyId.FEDCRG),
         outputs_root=root,
     )

@@ -20,8 +20,8 @@ def paired_model_seed_bootstrap(
     method: tuple[float, ...],
     comparator: tuple[float, ...],
     *,
-    replicates: int = 10000,
-    seed: int = 424242,
+    replicates: int,
+    seed: int,
 ) -> PairedBootstrapInterval:
     """Bootstrap paired model-seed indices, never treat calibration splits as subjects."""
 

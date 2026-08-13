@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 
-from fedcrg.domain.constants import SUPERVISED_THRESHOLD_CANDIDATES
 from fedcrg.thresholds.comparators.development_f1 import f1_at_threshold
 from fedcrg.thresholds.evidence import SupervisedDevelopmentEvidence
 
@@ -17,7 +16,10 @@ def mean_client_f1_at_threshold(
 
 def summary_statistic_threshold(
     clients: tuple[SupervisedDevelopmentEvidence, ...],
+    candidate_count: int,
 ) -> float | None:
+    if candidate_count <= 0:
+        raise ValueError("candidate_count must be positive")
     moments: dict[int, list[tuple[int, float, float]]] = {0: [], 1: []}
     for client in clients:
         for label in (0, 1):
@@ -47,7 +49,7 @@ def summary_statistic_threshold(
     if lower >= upper:
         return None
 
-    candidates = np.linspace(lower, upper, SUPERVISED_THRESHOLD_CANDIDATES, dtype=np.float64)
+    candidates = np.linspace(lower, upper, candidate_count, dtype=np.float64)
     scores = np.asarray([mean_client_f1_at_threshold(clients, float(t)) for t in candidates])
     best = float(np.max(scores))
     return float(candidates[int(np.flatnonzero(scores == best)[0])])

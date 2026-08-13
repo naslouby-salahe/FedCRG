@@ -8,7 +8,6 @@ from pathlib import Path
 
 from fedcrg.analysis.descriptive_statistics import DescriptiveSummary, describe
 from fedcrg.analysis.paired_bootstrap import PairedBootstrapInterval, paired_model_seed_bootstrap
-from fedcrg.domain.constants import PRIMARY_MODEL_SEEDS
 from fedcrg.domain.enums import DatasetId, ExperimentId, ExperimentStatus, PolicyId
 from fedcrg.domain.identifiers import CalibrationSeed, ModelSeed, RunId
 
@@ -84,8 +83,9 @@ def confirmatory_contrasts(
     records: tuple[FederationResultRecord, ...],
     *,
     named_calibration_seed: int,
-    bootstrap_seed: int = 424242,
-    bootstrap_replicates: int = 10_000,
+    expected_model_seeds: tuple[int, ...],
+    bootstrap_seed: int,
+    bootstrap_replicates: int,
 ) -> tuple[PolicyContrastResult, ...]:
     """Compute exactly the four pre-registered method-minus-comparator contrasts."""
 
@@ -96,7 +96,7 @@ def confirmatory_contrasts(
         PolicyId.SHRINKAGE,
     )
     selected = tuple(row for row in records if int(row.calibration_seed) == named_calibration_seed)
-    expected_seeds = {ModelSeed(seed) for seed in PRIMARY_MODEL_SEEDS}
+    expected_seeds = {ModelSeed(seed) for seed in expected_model_seeds}
     observed_method_seeds = {row.model_seed for row in selected if row.policy is PolicyId.FEDCRG}
     if observed_method_seeds != expected_seeds:
         raise ValueError(

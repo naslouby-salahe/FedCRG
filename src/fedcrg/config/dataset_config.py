@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, model_validator
 
-from fedcrg.domain.constants import DIAD_EXPECTED_SOURCE_CLIENTS
 from fedcrg.domain.enums import DatasetFeatureContractId, DatasetId
 
 
@@ -41,18 +40,18 @@ class DatasetConfig(BaseModel):
     id: DatasetId
     feature_contract: DatasetFeatureContractId
     source_version: str
-    parser_version: str = "1"
+    parser_version: str
     feature_count: int = Field(gt=0)
     feature_names: tuple[str, ...] = ()
     expected_clients: int | None = Field(default=None, gt=0)
     expected_source_clients: int | None = Field(default=None, gt=0)
-    minimum_clients: int = Field(default=1, gt=0)
+    minimum_clients: int = Field(gt=0)
     minimum_benign_rows: int | None = Field(default=None, gt=0)
     minimum_malicious_rows: int | None = Field(default=None, gt=0)
     split: SplitConfig
     calibration_seeds: tuple[int, ...]
     primary_calibration_seed: int
-    expected_benign_counts: dict[str, int] = Field(default_factory=dict)
+    expected_benign_counts: dict[str, int]
 
     @model_validator(mode="after")
     def validate_dataset_contract(self) -> DatasetConfig:
@@ -68,10 +67,10 @@ class DatasetConfig(BaseModel):
         if self.id is DatasetId.NBAIOT:
             if self.feature_contract is not DatasetFeatureContractId.NBAIOT_LOCKED_115:
                 raise ValueError("N-BaIoT must use the locked 115-feature contract")
-            if self.feature_count != 115 or self.expected_clients != 9:
-                raise ValueError("N-BaIoT contract requires 115 features and nine clients")
-            if len(self.expected_benign_counts) != 9:
-                raise ValueError("N-BaIoT requires the nine-client benign-count cross-check ledger")
+            if self.expected_clients is None or self.expected_clients < 1:
+                raise ValueError("N-BaIoT must declare its nine-client contract")
+            if len(self.expected_benign_counts) != self.expected_clients:
+                raise ValueError("N-BaIoT expected-benign-count ledger must match the client count")
 
         elif self.id is DatasetId.DIAD:
             if self.feature_contract not in {
@@ -79,17 +78,11 @@ class DatasetConfig(BaseModel):
                 DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE,
             }:
                 raise ValueError("DIAD uses either the locked or training-derived feature contract")
-            if self.expected_source_clients != DIAD_EXPECTED_SOURCE_CLIENTS:
-                raise ValueError(
-                    f"DIAD contract requires {DIAD_EXPECTED_SOURCE_CLIENTS} source identities"
-                )
-            if self.minimum_benign_rows != 7800 or self.minimum_malicious_rows != 1000:
-                raise ValueError("DIAD eligibility counts must remain 7800 benign / 1000 malicious")
-            if self.minimum_clients != 10:
-                raise ValueError("DIAD external validation requires at least ten eligible clients")
+            if self.expected_source_clients is None or self.expected_source_clients < 1:
+                raise ValueError("DIAD must declare its source identity count")
+            if self.minimum_benign_rows is None or self.minimum_malicious_rows is None:
+                raise ValueError("DIAD eligibility counts must be declared")
             if self.feature_contract is DatasetFeatureContractId.DIAD_LOCKED_86:
-                if self.feature_count != 86:
-                    raise ValueError("Confirmatory DIAD requires exactly 86 model features")
                 if self.feature_names:
                     raise ValueError("Locked DIAD feature names are owned by the dataset adapter")
             else:

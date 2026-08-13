@@ -235,6 +235,7 @@ class EvaluatePolicies:
         thresholds = self.selector.select(
             benign_inputs,
             config.protocol,
+            config.statistics,
             config.policies,
             supervised_inputs,
         )

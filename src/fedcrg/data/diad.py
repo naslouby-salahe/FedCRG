@@ -14,7 +14,6 @@ import pandas as pd
 
 from fedcrg.data.prepare import ClientData, DatasetAdapter, DatasetDiscovery
 from fedcrg.data.splits import stable_row_id
-from fedcrg.domain.constants import DIAD_EXPECTED_FEATURES
 from fedcrg.domain.enums import ChronologyStatus, DatasetId, FailureCode
 from fedcrg.domain.errors import DataIntegrityError
 from fedcrg.domain.identifiers import ClientId
@@ -373,7 +372,7 @@ class DiadAdapter(DatasetAdapter):
             raise DataIntegrityError(
                 f"{FailureCode.FEATURE_MISSING.value}: {len(missing)} required features absent ({preview})"
             )
-        if feature_names == DIAD_FEATURES and len(DIAD_FEATURES) != DIAD_EXPECTED_FEATURES:
+        if feature_names == DIAD_FEATURES and len(DIAD_FEATURES) != 86:
             raise RuntimeError("Internal DIAD feature contract is not 86 columns")
         model = frame.loc[:, feature_names].apply(pd.to_numeric, errors="coerce")
         model = pd.DataFrame(model.replace([np.inf, -np.inf], np.nan))

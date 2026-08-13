@@ -6,7 +6,7 @@ from typing import cast
 
 import torch
 
-from fedcrg.config.training_config import AutoencoderConfig
+from fedcrg.config.detector_config import AutoencoderConfig
 from fedcrg.domain.enums import ActivationId
 from fedcrg.detectors.detector import DetectorModel
 
@@ -17,6 +17,23 @@ def activation_module(activation: ActivationId) -> type[torch.nn.Module]:
     if activation is ActivationId.RELU:
         return torch.nn.ReLU
     raise ValueError(f"Unsupported activation: {activation.value}")
+
+
+def autoencoder_parameter_count(input_dim: int, hidden_dims: tuple[int, ...]) -> int:
+    """Derived trainable-parameter count of the symmetric biased autoencoder.
+
+    The full dimension chain is ``input -> hidden -> reversed(hidden) -> input`` and every
+    layer is a biased linear map, so the count is ``sum(d_l * d_{l+1} + d_{l+1})`` over
+    adjacent layer pairs.
+    """
+    encoder = (input_dim, *hidden_dims)
+    chain = (*encoder, *tuple(reversed(encoder[:-1])))
+    return sum(left * right + right for left, right in zip(chain[:-1], chain[1:], strict=True))
+
+
+def autoencoder_tensor_bytes(input_dim: int, hidden_dims: tuple[int, ...]) -> int:
+    """Derived float32 tensor payload of the symmetric autoencoder."""
+    return autoencoder_parameter_count(input_dim, hidden_dims) * 4
 
 
 class Autoencoder(DetectorModel):

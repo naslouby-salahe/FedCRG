@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from fedcrg.config.experiment_config import ExperimentConfig
-from fedcrg.domain.constants import SUPERVISED_THRESHOLD_CANDIDATES
 from fedcrg.domain.enums import PolicyId
 
 _FLOAT32_BYTES = 4
@@ -77,7 +76,7 @@ def threshold_policy_communication(
     reference_bytes = split.reference_benign * _FLOAT64_BYTES
     full_score_bytes = full_benign_budget * _FLOAT64_BYTES
     summary_moment_bytes = 2 * (_INT64_BYTES + 2 * _FLOAT64_BYTES)
-    candidate_f1_bytes = SUPERVISED_THRESHOLD_CANDIDATES * _FLOAT64_BYTES
+    candidate_f1_bytes = config.statistics.supervised_threshold_candidates * _FLOAT64_BYTES
     return (
         PolicyCommunicationLedger(
             PolicyId.FEDCRG,

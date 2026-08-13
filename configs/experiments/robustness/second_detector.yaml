@@ -1,0 +1,17 @@
+id: second_detector
+protocol: ../../method/fedcrg.yaml
+dataset: ../../datasets/nbaiot.yaml
+detector: ../../detectors/nbaiot_deep_svdd.yaml
+training: ../../training/nbaiot_deep_svdd.yaml
+randomness:
+  model_seeds: [11, 22, 33]
+  attack_split_seed: 9001
+  synthetic_seed: 123456
+statistics: ../../statistics/confirmatory.yaml
+policies:
+  - GLOBAL-Q99-FULL
+  - LOCAL-Q99-FULL
+  - SHRINKAGE
+  - GATE-A-ONLY
+  - FEDCRG
+outputs_root: outputs

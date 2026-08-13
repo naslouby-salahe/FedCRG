@@ -24,9 +24,12 @@ def report_build(run_dir: Path) -> None:
 
 @report_group.command(name="build-repository")
 @click.option("--outputs", type=click.Path(path_type=Path, exists=True), required=True)
-def report_build_repository(outputs: Path) -> None:
+@click.option(
+    "--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True
+)
+def report_build_repository(outputs: Path, config_path: Path) -> None:
     """Build the repository-wide reproducibility index from every completed run."""
-    click.echo(str(ReportBuilder().build_repository(outputs)))
+    click.echo(str(ReportBuilder().build_repository(outputs, load_config(config_path))))
 
 
 @report_group.command(name="build-publication")

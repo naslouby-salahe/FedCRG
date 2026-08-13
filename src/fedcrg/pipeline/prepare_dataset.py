@@ -81,9 +81,9 @@ class PrepareData:
         )
 
     @staticmethod
-    def adapter(dataset: DatasetId, root: Path) -> DatasetAdapter:
+    def adapter(dataset: DatasetId, root: Path, expected_feature_count: int) -> DatasetAdapter:
         if dataset is DatasetId.NBAIOT:
-            return NBaiotAdapter(root)
+            return NBaiotAdapter(root, expected_feature_count)
         if dataset is DatasetId.DIAD:
             return DiadAdapter(root)
         raise ValueError(f"No filesystem adapter for {dataset.value}")
@@ -95,7 +95,9 @@ class PrepareData:
         adapter_override: DatasetAdapter | None = None,
         include_source_order_assignment: bool = True,
     ) -> Path:
-        adapter = adapter_override or self.adapter(config.dataset.id, data_root)
+        adapter = adapter_override or self.adapter(
+            config.dataset.id, data_root, config.dataset.feature_count
+        )
         if adapter.dataset_id is not config.dataset.id:
             raise ValueError("Adapter dataset identity does not match experiment config")
 
@@ -212,7 +214,9 @@ class PrepareData:
                     time.monotonic() - started,
                 )
                 continue
-            splits = self.splitter.split_base(data, config.dataset)
+            splits = self.splitter.split_base(
+                data, config.dataset, config.randomness.attack_split_seed
+            )
             statistics[client_id] = self.preprocessor.client_statistics(
                 splits,
                 config.dataset.id,

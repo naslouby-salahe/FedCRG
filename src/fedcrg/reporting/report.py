@@ -15,7 +15,7 @@ from fedcrg.pipeline.verify_outputs import VerifyOutputs
 from fedcrg.artifacts.paths import RunLayout
 from fedcrg.artifacts.integrity import ArtifactVerifier
 from fedcrg.artifacts.json_io import as_json_dict, to_json_value
-from fedcrg.domain.constants import NBAIOT_NAMED_CALIBRATION_SEED
+from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import ExperimentId, ExperimentStatus
 
 
@@ -68,7 +68,11 @@ class ReportBuilder:
         output.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return output
 
-    def build_repository(self, outputs_root: Path) -> Path:
+    def build_repository(
+        self,
+        outputs_root: Path,
+        config: ExperimentConfig,
+    ) -> Path:
         """Build a publication-oriented evidence index from every completed run."""
         reports_root = outputs_root / "reports" / "latest"
         reports_root.mkdir(parents=True, exist_ok=True)
@@ -97,7 +101,10 @@ class ReportBuilder:
         if r1 is not None and r1.complete:
             contrasts = confirmatory_contrasts(
                 primary_records,
-                named_calibration_seed=NBAIOT_NAMED_CALIBRATION_SEED,
+                named_calibration_seed=config.dataset.primary_calibration_seed,
+                expected_model_seeds=config.randomness.model_seeds,
+                bootstrap_seed=config.statistics.bootstrap_seed,
+                bootstrap_replicates=config.statistics.bootstrap_replicates,
             )
             contrasts_payload: object = [
                 {

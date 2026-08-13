@@ -1,29 +1,10 @@
 id: primary_nbaiot
-protocol: ../../protocol/default.yaml
+protocol: ../../method/fedcrg.yaml
 dataset: ../../datasets/nbaiot.yaml
-detector: ../../detectors/autoencoder_nbaiot.yaml
-training:
-  rounds: 30
-  local_epochs: 120
-  batch_size: 64
-  optimizer: adam
-  learning_rate_initial: 0.001
-  learning_rate_final: 0.00001
-  adam_betas: [0.9, 0.999]
-  adam_epsilon: 0.00000001
-  weight_decay: 0.0
-  client_fraction: 1.0
-  aggregation: equal_client_mean
-  mixed_precision: false
-  early_stopping: false
-  deterministic_algorithms: true
-  record_round20_score_correlation: false
-  device: cuda
-randomness:
-  model_seeds: [11, 22, 33, 44, 55]
-  attack_split_seed: 9001
-  synthetic_seed: 123456
-  bootstrap_seed: 424242
+detector: ../../detectors/nbaiot_autoencoder.yaml
+training: ../../training/nbaiot_autoencoder.yaml
+randomness: ../../randomness/primary.yaml
+statistics: ../../statistics/confirmatory.yaml
 policies:
   - REF-Q99-R
   - GLOBAL-Q99-FULL

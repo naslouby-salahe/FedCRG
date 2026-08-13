@@ -2,7 +2,7 @@ import hashlib
 
 import numpy as np
 
-from fedcrg.config.training_config import AutoencoderConfig
+from fedcrg.config.detector_config import AutoencoderConfig
 from fedcrg.domain.enums import DataRole, DatasetId
 from fedcrg.domain.identifiers import ClientId, ModelSeed, RowId, Sha256
 from fedcrg.detectors.autoencoder import Autoencoder
@@ -13,7 +13,7 @@ _SOME_HASH = Sha256("a" * 64)
 
 
 def test_score_computer_emits_float64_manifest() -> None:
-    model = Autoencoder(2, AutoencoderConfig(hidden_dims=(1,)))
+    model = Autoencoder(2, AutoencoderConfig(hidden_dims=(1,), xavier_tanh_gain=5.0 / 3.0))
     client_id = ClientId("c1")
     row_ids = tuple(
         RowId(hashlib.sha256(f"row-{index}".encode()).hexdigest()) for index in range(3)

@@ -5,12 +5,23 @@ import pandas as pd
 
 from fedcrg.pipeline.prepare_dataset import PrepareData
 from fedcrg.config.dataset_config import DatasetConfig, SplitConfig
+from fedcrg.config.detector_config import AutoencoderConfig
 from fedcrg.config.experiment_config import ExperimentConfig
-from fedcrg.config.method_config import ProtocolConfig
-from fedcrg.config.training_config import AutoencoderConfig, RandomnessConfig, TrainingConfig
-from fedcrg.domain.enums import DatasetFeatureContractId, DatasetId, ExperimentId, PolicyId
+from fedcrg.domain.enums import (
+    ComputeDeviceId,
+    DatasetFeatureContractId,
+    DatasetId,
+    ExperimentId,
+    PolicyId,
+)
 from fedcrg.domain.identifiers import ClientId
 from fedcrg.data.prepare import DatasetAdapter, ClientData
+from tests._fixtures import (
+    primary_protocol,
+    primary_randomness,
+    primary_statistics,
+    primary_training,
+)
 
 _NBAIOT_CLIENT_IDS = tuple(ClientId(f"nb{i:02d}") for i in range(1, 10))
 _FEATURE_COLUMNS = [f"f{i}" for i in range(1, 116)]
@@ -47,18 +58,19 @@ class FakeAdapter(DatasetAdapter):
 
 class FakePrepare(PrepareData):
     @staticmethod
-    def adapter(dataset: DatasetId, root: Path) -> DatasetAdapter:
+    def adapter(dataset: DatasetId, root: Path, expected_feature_count: int) -> DatasetAdapter:
         return FakeAdapter(root)
 
 
 def _config(root: Path) -> ExperimentConfig:
     return ExperimentConfig(
         id=ExperimentId.PRIMARY_NBAIOT,
-        protocol=ProtocolConfig(),
+        protocol=primary_protocol(),
         dataset=DatasetConfig(
             id=DatasetId.NBAIOT,
             feature_contract=DatasetFeatureContractId.NBAIOT_LOCKED_115,
             source_version="1",
+            parser_version="1",
             feature_count=115,
             expected_clients=9,
             minimum_clients=9,
@@ -77,9 +89,17 @@ def _config(root: Path) -> ExperimentConfig:
             calibration_seeds=(1000,),
             primary_calibration_seed=1000,
         ),
-        detector=AutoencoderConfig(hidden_dims=(86, 57, 38, 29)),
-        training=TrainingConfig(rounds=1, local_epochs=1),
-        randomness=RandomnessConfig(model_seeds=(11,)),
+        detector=AutoencoderConfig(hidden_dims=(86, 57, 38, 29), xavier_tanh_gain=5.0 / 3.0),
+        training=primary_training().model_copy(
+            update={
+                "rounds": 1,
+                "local_epochs": 1,
+                "batch_size": 2,
+                "device": ComputeDeviceId.CPU,
+            }
+        ),
+        randomness=primary_randomness(),
+        statistics=primary_statistics(),
         policies=(PolicyId.FEDCRG,),
         outputs_root=root,
     )

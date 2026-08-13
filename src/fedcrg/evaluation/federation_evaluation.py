@@ -13,18 +13,12 @@ from fedcrg.evaluation.evaluation_results import (
 )
 
 
-LOCKED_UTILITY_MARGIN = -0.03
-"""The locked reliability/utility comparator margin (Claim Gate G3/G5)."""
-
-
 def _mean_defined(values: list[float | None]) -> float | None:
     defined = [value for value in values if value is not None]
     return float(np.mean(defined)) if defined else None
 
 
-def utility_margin_satisfied(
-    method_value: float, anchor_value: float, margin: float = LOCKED_UTILITY_MARGIN
-) -> bool:
+def utility_margin_satisfied(method_value: float, anchor_value: float, margin: float) -> bool:
     """The single locked utility-preservation comparison, shared by every caller."""
     return method_value - anchor_value >= margin
 
@@ -80,9 +74,7 @@ def utility_anchor(federations: tuple[FederationMetrics, ...]) -> float | None:
     return max(values) if values else None
 
 
-def utility_preserved(
-    federations: tuple[FederationMetrics, ...], margin: float = LOCKED_UTILITY_MARGIN
-) -> bool | None:
+def utility_preserved(federations: tuple[FederationMetrics, ...], margin: float) -> bool | None:
     anchor = utility_anchor(federations)
     method = next(
         (item.attack_balanced_macro_tpr for item in federations if item.policy is PolicyId.FEDCRG),
@@ -109,9 +101,7 @@ def assert_ranking_metric_invariance(
             raise RuntimeError(f"Ranking AUPRC changed across policies for {client_id}")
 
 
-def assess_utility(
-    federations: tuple[FederationMetrics, ...], margin: float = LOCKED_UTILITY_MARGIN
-) -> UtilityAssessment:
+def assess_utility(federations: tuple[FederationMetrics, ...], margin: float) -> UtilityAssessment:
     anchor = utility_anchor(federations)
     method = next(
         (item.attack_balanced_macro_tpr for item in federations if item.policy is PolicyId.FEDCRG),

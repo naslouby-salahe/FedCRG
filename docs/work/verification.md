@@ -22,3 +22,4 @@ Baseline (before any changes in this effort, 2026-08-13):
 | Batch | Command | Result | Date |
 |-------|---------|--------|------|
 | baseline | pytest; pyright | 125 passed; 0 errors | 2026-08-13 |
+| b1 (config ownership) | pytest; pyright; ruff check; ruff format --check | 125 passed; 0 errors; 0 warnings; clean | 2026-08-13 |

@@ -1,7 +1,6 @@
 import numpy as np
 import pytest
 
-from fedcrg.config.method_config import ProtocolConfig
 from fedcrg.domain.enums import (
     CalibrationReadinessState,
     DecisionReason,
@@ -27,12 +26,13 @@ from fedcrg.thresholds.evidence import (
     empirical_quantile,
 )
 from fedcrg.thresholds.selection import PolicyThresholdSelector
+from tests._fixtures import primary_protocol, primary_statistics
 
 _NON_ORACLE_POLICIES = tuple(policy for policy in PolicyId if policy is not PolicyId.ORACLE_TEST)
 
 
 def _protocol_result(client_id: ClientId, shift: float, mismatch: bool) -> ClientEvaluationResult:
-    protocol_config = ProtocolConfig()
+    protocol_config = primary_protocol()
     reference = ReferenceThreshold(0.75, 1, 100, 2, 50)
     diagnostics = ContinuityDiagnostics(
         unique_score_fraction=1.0,
@@ -97,7 +97,11 @@ def test_selector_returns_complete_threshold_ledger() -> None:
     benign_clients = (_benign("c1"), _benign("c2", 0.05))
     supervised_clients = tuple(_supervised(client) for client in benign_clients)
     thresholds = PolicyThresholdSelector().select(
-        benign_clients, ProtocolConfig(), _NON_ORACLE_POLICIES, supervised_clients
+        benign_clients,
+        primary_protocol(),
+        primary_statistics(),
+        _NON_ORACLE_POLICIES,
+        supervised_clients,
     )
     observed = {(entry.policy, entry.client_id) for entry in thresholds.entries}
     expected = {
@@ -110,7 +114,7 @@ def test_selector_returns_complete_threshold_ledger() -> None:
 def test_mismatch_only_uses_calibration_empirical_quantile() -> None:
     client = _benign("c1")
     result = PolicyThresholdSelector().select(
-        (client,), ProtocolConfig(), (PolicyId.MISMATCH_ONLY,)
+        (client,), primary_protocol(), primary_statistics(), (PolicyId.MISMATCH_ONLY,)
     )
     assert result.for_client(PolicyId.MISMATCH_ONLY, client.client_id) == empirical_quantile(
         client.calibration_scores
@@ -120,7 +124,7 @@ def test_mismatch_only_uses_calibration_empirical_quantile() -> None:
 def test_no_mismatch_ablation_retains_reference() -> None:
     client = _benign("c1", mismatch=False)
     result = PolicyThresholdSelector().select(
-        (client,), ProtocolConfig(), (PolicyId.MISMATCH_ONLY,)
+        (client,), primary_protocol(), primary_statistics(), (PolicyId.MISMATCH_ONLY,)
     )
     assert result.for_client(PolicyId.MISMATCH_ONLY, client.client_id) == 0.75
 

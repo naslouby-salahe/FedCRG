@@ -1,0 +1,3 @@
+model_seeds: [11, 22, 33, 44, 55]
+attack_split_seed: 9001
+synthetic_seed: 123456

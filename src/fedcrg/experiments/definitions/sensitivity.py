@@ -192,6 +192,7 @@ class ExperimentVariantFactory:
             detector=config.detector,
             training=config.training,
             randomness=config.randomness,
+            statistics=config.statistics,
             policies=config.policies,
             outputs_root=config.outputs_root,
         )
@@ -212,6 +213,7 @@ class ExperimentVariantFactory:
             detector=config.detector,
             training=config.training,
             randomness=config.randomness,
+            statistics=config.statistics,
             policies=policies,
             outputs_root=config.outputs_root,
         )
@@ -608,7 +610,9 @@ class RunRealSensitivities:
                 adjusted = self.variants.protocol_variant(
                     fedcrg_only,
                     experiment_id=ExperimentId.MULTIPLICITY_SENSITIVITY,
-                    readiness_assurance=familywise_readiness_assurance(len(views.client_ids)),
+                    readiness_assurance=familywise_readiness_assurance(
+                        len(views.client_ids), config.statistics.familywise_alpha
+                    ),
                 )
                 readiness = tuple(self.evaluator.protocol_results(adjusted, views).values())
                 cells.append(MultiplicityCell(raw_procedure, readiness_results=readiness))

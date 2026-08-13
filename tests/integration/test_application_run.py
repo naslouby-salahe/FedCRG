@@ -5,10 +5,10 @@ import pytest
 from fedcrg.pipeline.run_experiment import RunExperiment
 from fedcrg.artifacts.manifests import RunManifestStore
 from fedcrg.config.dataset_config import DatasetConfig, SplitConfig
+from fedcrg.config.detector_config import AutoencoderConfig
 from fedcrg.config.experiment_config import ExperimentConfig
-from fedcrg.config.method_config import ProtocolConfig
-from fedcrg.config.training_config import AutoencoderConfig, RandomnessConfig, TrainingConfig
 from fedcrg.domain.enums import (
+    ComputeDeviceId,
     DatasetFeatureContractId,
     DatasetId,
     ExperimentId,
@@ -16,18 +16,26 @@ from fedcrg.domain.enums import (
     PolicyId,
 )
 from fedcrg.experiments.execution import ExperimentPlan
+from tests._fixtures import (
+    primary_protocol,
+    primary_randomness,
+    primary_statistics,
+    primary_training,
+)
 
 
 def _config(root: Path) -> ExperimentConfig:
     return ExperimentConfig(
         id=ExperimentId.COMPUTATIONAL_BENCHMARK,
-        protocol=ProtocolConfig(),
+        protocol=primary_protocol(),
         dataset=DatasetConfig(
             id=DatasetId.SYNTHETIC,
             feature_contract=DatasetFeatureContractId.SYNTHETIC,
             source_version="1",
+            parser_version="1",
             feature_count=2,
             minimum_clients=1,
+            expected_benign_counts={},
             split=SplitConfig(
                 train_benign=1,
                 reference_benign=1,
@@ -42,9 +50,17 @@ def _config(root: Path) -> ExperimentConfig:
             calibration_seeds=(1000,),
             primary_calibration_seed=1000,
         ),
-        detector=AutoencoderConfig(hidden_dims=(2,)),
-        training=TrainingConfig(rounds=1, local_epochs=1, batch_size=1),
-        randomness=RandomnessConfig(model_seeds=(11,)),
+        detector=AutoencoderConfig(hidden_dims=(2,), xavier_tanh_gain=5.0 / 3.0),
+        training=primary_training().model_copy(
+            update={
+                "rounds": 1,
+                "local_epochs": 1,
+                "batch_size": 1,
+                "device": ComputeDeviceId.CPU,
+            }
+        ),
+        randomness=primary_randomness(),
+        statistics=primary_statistics(),
         policies=(PolicyId.FEDCRG,),
         outputs_root=root,
     )

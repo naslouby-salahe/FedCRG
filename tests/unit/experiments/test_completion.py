@@ -106,7 +106,7 @@ def test_source_order_workload_reads_run_source_order_calibration_schema(tmp_pat
                 "evaluation": {},
             },
         )
-    result = ExperimentCompletionAuditor._source_order_workload(tmp_path)
+    result = ExperimentCompletionAuditor()._source_order_workload(tmp_path, Path("."))
     assert result.complete
     assert result.observed_cells == 10
     assert not result.problems

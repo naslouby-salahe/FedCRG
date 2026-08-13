@@ -126,7 +126,9 @@ class PublicationPackageBuilder:
             self._runs_table(
                 "Table 6 - Ablations",
                 primary_runs,
-                lambda: self.tables.ablations(primary_runs, table_root / "table_6_ablations.csv"),
+                lambda: self.tables.ablations(
+                    primary_runs, table_root / "table_6_ablations.csv", config
+                ),
                 "R1 ablation runs are unavailable",
             ),
             self._experiment_table(

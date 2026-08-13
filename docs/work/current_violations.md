@@ -28,27 +28,19 @@ matrix IDs (`docs/FedCRG Audit Matrix.md`).
 
 ## B. Configuration ownership (prompt §5, §9)
 
-- B1. Scientific defaults in Pydantic models:
-  - `ProtocolConfig` (method_config.py): alpha=0.01, rho=0.50, readiness_assurance=0.95,
-    mismatch_confidence=0.95.
-  - `TrainingConfig` (training_config.py): rounds=30, batch_size=64, lr 1e-3/1e-5,
-    adam_betas=(0.9,0.999), adam_epsilon=1e-8, weight_decay=0.0, client_fraction=1.0.
-  - `AutoencoderConfig.xavier_tanh_gain=5/3`; `RandomnessConfig` defaults from
-    domain/constants.py.
-  - `DatasetConfig.minimum_clients=1`, `expected_benign_counts={}` default.
-  - Make fields required; YAML must supply them. Matrix: K01-K06, K10.
-
-- B2. `src/fedcrg/domain/constants.py` exists with scientific seeds/counts duplicated
-  with YAML (seeds, parameter counts, byte counts). Delete; move to YAML or derive.
-  Matrix: K09, K11.
-
-- B3. No `configs/statistics/confirmatory.yaml`; `paired_bootstrap.py` and
-  `policy_contrasts.py` carry `replicates=10000`, `seed=424242` defaults; utility margin
-  0.03 hardcoded in `analysis/claim_gates.py` / `policy_contrasts.py`. Matrix: K06, M06,
-  M07, C14.
-
-- B4. Config file layout differs from target tree (see current_state.md item 6).
-  Matrix: K01-K04, E06.
+- B1. ~~Scientific defaults in Pydantic models~~ RESOLVED 2026-08-13: ProtocolConfig,
+  TrainingConfig, RandomnessConfig, DatasetConfig, StatisticsConfig, detector configs all
+  require scientific values from YAML; `tests/_fixtures.py` carries explicit regression
+  values for unit tests. Matrix: K01-K06, K10.
+- B2. ~~`src/fedcrg/domain/constants.py`~~ DELETED 2026-08-13; values moved to YAML
+  (seeds, calibration seeds, attack-split seed) or derived (autoencoder parameter/byte
+  counts from architecture). Matrix: K09, K11.
+- B3. ~~No `configs/statistics/confirmatory.yaml`~~ RESOLVED 2026-08-13: StatisticsConfig
+  + YAML; paired bootstrap/contrasts/claim gates/margin/familywise all config-resolved,
+  no hidden defaults. Matrix: K06, M06, M07, C14.
+- B4. ~~Config file layout differs from target tree~~ RESOLVED 2026-08-13:
+  `configs/method|training|randomness|statistics|detectors` layout matches target;
+  experiment YAMLs reference the new files; obsolete files deleted. Matrix: K01-K04, E06.
 
 ## C. Structure (prompt §4, §11, §13, §14)
 

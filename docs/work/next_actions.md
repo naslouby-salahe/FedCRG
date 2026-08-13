@@ -6,17 +6,9 @@ starting a batch; skip work already done.
 
 ## Batch 1 — Configuration ownership (matrix K01-K11, B1-B4)
 
-1. Create `configs/method/fedcrg.yaml` (move `configs/protocol/default.yaml`), delete
-   `configs/protocol/`.
-2. Create `configs/training/nbaiot_autoencoder.yaml`, `diad_autoencoder.yaml`,
-   `nbaiot_deep_svdd.yaml`; update experiment YAMLs to reference them (training values
-   move out of experiment files).
-3. Create `configs/randomness/primary.yaml`, `external_validation.yaml`, `synthetic.yaml`.
-4. Create `configs/statistics/confirmatory.yaml`.
-5. Make all scientific Pydantic fields required; delete `domain/constants.py`; move
-   seed registries to YAML; compute parameter/byte counts from architecture in
-   `evaluation/communication_metrics.py`.
-6. Update config loader/resolver, tests, contract tests.
+DONE 2026-08-13 (commit after b1): method/training/randomness/statistics YAML layout,
+required Pydantic fields, `domain/constants.py` deleted, parameter/byte counts derived,
+statistics threaded through analysis, `validate.py` structural-only, tests updated.
 
 ## Batch 2 — Vocabulary and PolicyId (matrix R04, E07, A1, A2)
 

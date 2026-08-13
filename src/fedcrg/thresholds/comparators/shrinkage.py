@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 
-from fedcrg.domain.constants import SHRINKAGE_N0_CANDIDATES
 from fedcrg.thresholds.evidence import BenignPolicyEvidence, empirical_quantile
 
 
@@ -14,10 +13,16 @@ def _estimated_fpr(scores: np.ndarray, threshold: float) -> float:
     return float(np.mean(np.asarray(scores, dtype=np.float64) > threshold))
 
 
-def tune_shrinkage(clients: tuple[BenignPolicyEvidence, ...], alpha: float) -> int:
-    best_n0 = SHRINKAGE_N0_CANDIDATES[0]
+def tune_shrinkage(
+    clients: tuple[BenignPolicyEvidence, ...],
+    alpha: float,
+    n0_candidates: tuple[int, ...],
+) -> int:
+    if not n0_candidates:
+        raise ValueError("Shrinkage tuning requires at least one candidate n0")
+    best_n0 = n0_candidates[0]
     best_error = float("inf")
-    for n0 in SHRINKAGE_N0_CANDIDATES:
+    for n0 in n0_candidates:
         errors: list[float] = []
         for client in clients:
             local = empirical_quantile(client.calibration_scores, alpha)

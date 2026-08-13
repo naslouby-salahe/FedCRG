@@ -16,6 +16,9 @@ from fedcrg.artifacts.paths import RunLayout
 from fedcrg.artifacts.manifests import RunManifestStore
 from fedcrg.artifacts.json_io import atomic_write_json
 from fedcrg.artifacts.integrity import ArtifactVerifier
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.config.resolve import ExperimentConfigResolver
+from fedcrg.config.statistics_config import StatisticsConfig
 from fedcrg.domain.enums import (
     ClaimLevel,
     ExperimentId,
@@ -115,9 +118,13 @@ class ClaimGateReport:
 class ClaimGateEvaluator:
     """Apply G0-G8 without outcome-conditioned redesign or hidden success criteria."""
 
-    def __init__(self) -> None:
-        self.completion = ExperimentCompletionAuditor()
-        self.verifier = ArtifactVerifier()
+    def __init__(
+        self,
+        completion: ExperimentCompletionAuditor | None = None,
+        verifier: ArtifactVerifier | None = None,
+    ) -> None:
+        self.completion = completion or ExperimentCompletionAuditor()
+        self.verifier = verifier or ArtifactVerifier()
         self.manifests = RunManifestStore()
 
     def evaluate(
@@ -126,8 +133,29 @@ class ClaimGateEvaluator:
         *,
         novelty_log: Path | None = None,
         repository_certified: bool = False,
+        repository_root: Path = Path("."),
+        statistics: StatisticsConfig | None = None,
+        named_calibration_seeds: dict[ExperimentId, int] | None = None,
     ) -> ClaimGateReport:
-        completion = {row.experiment_id: row for row in self.completion.audit(outputs_root)}
+        """Evaluate the claim gates against frozen evidence.
+
+        Statistical choices (utility margin, familywise alpha) come from the resolved
+        statistics configuration. Named calibration splits come from the frozen dataset
+        profiles.
+        """
+        primary_config = self._load_config(
+            repository_root, "configs/experiments/primary/nbaiot.yaml"
+        )
+        resolved_statistics = statistics or primary_config.statistics
+        named_seeds = named_calibration_seeds or {
+            ExperimentId.PRIMARY_NBAIOT: primary_config.dataset.primary_calibration_seed,
+            ExperimentId.EXTERNAL_DIAD: self._load_config(
+                repository_root, "configs/experiments/external/diad.yaml"
+            ).dataset.primary_calibration_seed,
+        }
+        completion = {
+            row.experiment_id: row for row in self.completion.audit(outputs_root, repository_root)
+        }
         run_dirs = tuple(self._completed_run_dirs(outputs_root / "runs"))
         records = load_federation_results(run_dirs)
         diagnostics: dict[str, str] = {}
@@ -153,21 +181,26 @@ class ClaimGateEvaluator:
             else "primary data/run integrity evidence is incomplete"
         )
 
-        g3 = self._reliability_claim(records, ExperimentId.PRIMARY_NBAIOT, 1000)
+        g3 = self._reliability_claim(
+            records,
+            ExperimentId.PRIMARY_NBAIOT,
+            named_seeds[ExperimentId.PRIMARY_NBAIOT],
+            resolved_statistics,
+        )
         diagnostics["G3"] = (
             "primary reliability benefit with locked utility margin is supported"
             if g3
             else "primary reliability/utility gate is not supported"
         )
 
-        g4 = self._two_component_value(records, run_dirs)
+        g4 = self._two_component_value(records, run_dirs, named_seeds)
         diagnostics["G4"] = (
             "mismatch evidence changes at least one decision and improves the readiness-only ablation"
             if g4
             else "two-component incremental-value gate is not supported"
         )
 
-        g5 = self._external_replication(records, completion)
+        g5 = self._external_replication(records, completion, resolved_statistics)
         diagnostics["G5"] = (
             "external reliability direction and utility margin replicate"
             if g5
@@ -314,12 +347,17 @@ class ClaimGateEvaluator:
             if row.experiment_id == experiment.value and row.calibration_seed == calibration_seed
         )
 
+    @staticmethod
+    def _load_config(repository_root: Path, relative: str) -> ExperimentConfig:
+        return ExperimentConfigResolver().resolve(repository_root / relative)
+
     @classmethod
     def _reliability_claim(
         cls,
         records: tuple[FederationResultRecord, ...],
         experiment: ExperimentId,
         calibration_seed: int,
+        statistics: StatisticsConfig,
     ) -> bool:
         selected = cls._cell_records(records, experiment, calibration_seed)
         seeds = {row.model_seed for row in selected if row.policy is PolicyId.FEDCRG}
@@ -351,7 +389,13 @@ class ClaimGateEvaluator:
                 }
                 and row.attack_balanced_macro_tpr is not None
             ]
-            if method is None or not anchors or not utility_margin_satisfied(method, max(anchors)):
+            if (
+                method is None
+                or not anchors
+                or not utility_margin_satisfied(
+                    method, max(anchors), statistics.utility_margin_allowance
+                )
+            ):
                 return False
         return bool(reliability_better)
 
@@ -359,10 +403,11 @@ class ClaimGateEvaluator:
         self,
         records: tuple[FederationResultRecord, ...],
         run_dirs: tuple[Path, ...],
+        named_seeds: dict[ExperimentId, int],
     ) -> bool:
         natural = (
-            (ExperimentId.PRIMARY_NBAIOT, 1000),
-            (ExperimentId.EXTERNAL_DIAD, 2000),
+            (ExperimentId.PRIMARY_NBAIOT, named_seeds[ExperimentId.PRIMARY_NBAIOT]),
+            (ExperimentId.EXTERNAL_DIAD, named_seeds[ExperimentId.EXTERNAL_DIAD]),
         )
         for experiment, calibration_seed in natural:
             selected = self._cell_records(records, experiment, calibration_seed)
@@ -413,12 +458,13 @@ class ClaimGateEvaluator:
         cls,
         records: tuple[FederationResultRecord, ...],
         completion: dict[ExperimentId, ExperimentCompletion],
+        statistics: StatisticsConfig,
     ) -> bool:
         r10 = completion.get(ExperimentId.EXTERNAL_DIAD)
         return bool(
             r10 is not None
             and r10.complete
-            and cls._reliability_claim(records, ExperimentId.EXTERNAL_DIAD, 2000)
+            and cls._reliability_claim(records, ExperimentId.EXTERNAL_DIAD, 2000, statistics)
         )
 
     @classmethod

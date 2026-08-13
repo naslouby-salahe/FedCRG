@@ -1,5 +1,5 @@
 id: readiness_theorem
-protocol: ../../protocol/default.yaml
+protocol: ../../method/fedcrg.yaml
 dataset:
   id: synthetic
   feature_contract: synthetic
@@ -8,6 +8,7 @@ dataset:
   feature_count: 1
   expected_clients: 1
   minimum_clients: 1
+  expected_benign_counts: {}
   split:
     train_benign: 1
     reference_benign: 1
@@ -24,10 +25,26 @@ detector:
   id: autoencoder
   hidden_dims: [1]
   activation: tanh
+  xavier_tanh_gain: 1.6666666666666667
+  zero_bias: true
 training:
   rounds: 1
   local_epochs: 1
   batch_size: 1
+  optimizer: adam
+  learning_rate_initial: 0.001
+  learning_rate_final: 0.00001
+  adam_betas: [0.9, 0.999]
+  adam_epsilon: 0.00000001
+  weight_decay: 0.0
+  client_fraction: 1.0
+  aggregation: equal_client_mean
+  mixed_precision: false
+  early_stopping: false
+  deterministic_algorithms: true
+  record_round20_score_correlation: false
   device: cpu
+randomness: ../../randomness/synthetic.yaml
+statistics: ../../statistics/confirmatory.yaml
 policies: [FEDCRG]
 outputs_root: outputs
