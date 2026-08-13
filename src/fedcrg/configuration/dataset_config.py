@@ -2,9 +2,27 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
 from fedcrg.domain.enums import DatasetFeatureContractId, DatasetId
+from fedcrg.domain.identifiers import ClientId
+
+
+class ExpectedBenignCounts(RootModel[dict[ClientId, int]]):
+    """Per-client expected benign row counts, keyed by the typed client id."""
+
+    @field_validator("root", mode="before")
+    @classmethod
+    def _coerce_client_keys(cls, value: object) -> dict[ClientId, int] | object:
+        if isinstance(value, dict) and all(isinstance(key, str) for key in value):
+            return {ClientId(key): item for key, item in value.items()}
+        return value
+
+    def count_for(self, client_id: ClientId) -> int | None:
+        return self.root.get(client_id)
+
+    def __len__(self) -> int:
+        return len(self.root)
 
 
 class SplitConfig(BaseModel):
@@ -51,7 +69,7 @@ class DatasetConfig(BaseModel):
     split: SplitConfig
     calibration_seeds: tuple[int, ...]
     primary_calibration_seed: int
-    expected_benign_counts: dict[str, int]
+    expected_benign_counts: ExpectedBenignCounts
 
     @model_validator(mode="after")
     def validate_dataset_contract(self) -> DatasetConfig:

@@ -429,7 +429,7 @@ class PrepareData:
 
     @staticmethod
     def _validate_nbaiot_count(config: ExperimentConfig, data: ClientData) -> None:
-        expected = config.dataset.expected_benign_counts.get(data.client_id.value)
+        expected = config.dataset.expected_benign_counts.count_for(data.client_id)
         if expected is None or len(data.benign) != expected:
             raise DataIntegrityError(
                 f"{FailureCode.DATASET_COUNT_MISMATCH.value}: {data.client_id} benign "

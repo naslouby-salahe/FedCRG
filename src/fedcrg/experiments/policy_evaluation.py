@@ -16,6 +16,7 @@ from fedcrg.domain.enums import (
     PolicyId,
 )
 from fedcrg.domain.identifiers import CalibrationSeed, ClientId, RunId, Sha256
+from fedcrg.domain.values import BinomialCounts
 from fedcrg.evaluation.attack_balanced_metrics import attack_balanced_tpr
 from fedcrg.evaluation.classification_metrics import (
     balanced_accuracy,
@@ -94,16 +95,16 @@ class EvaluatePolicies:
         self,
         config: ExperimentConfig,
         score_root: Path,
-        calibration_seed: CalibrationSeed | int | None = None,
+        calibration_seed: CalibrationSeed | None = None,
         mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
         prepared_root: Path | None = None,
     ) -> CalibrationScoreViews:
         descriptor = self.score_cache.load_descriptor(score_root)
         self._validate_score_identity(config, descriptor)
-        seed = CalibrationSeed(
-            config.dataset.primary_calibration_seed
+        seed = (
+            CalibrationSeed(config.dataset.primary_calibration_seed)
             if calibration_seed is None
-            else int(calibration_seed)
+            else calibration_seed
         )
         return self.views.build_from_cache(
             self.score_cache,
@@ -211,7 +212,7 @@ class EvaluatePolicies:
         self,
         config: ExperimentConfig,
         score_root: Path,
-        calibration_seed: CalibrationSeed | int | None = None,
+        calibration_seed: CalibrationSeed | None = None,
         mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
         prepared_root: Path | None = None,
         calibration_views: CalibrationScoreViews | None = None,
@@ -334,8 +335,7 @@ class EvaluatePolicies:
                         threshold,
                     ),
                     fpr_reference_interval=clopper_pearson_interval(
-                        cm.fp,
-                        cm.fp + cm.tn,
+                        BinomialCounts(cm.fp, cm.fp + cm.tn),
                         0.95,
                     ),
                 )

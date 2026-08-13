@@ -1,6 +1,6 @@
 """Closed domain identities used across the FedCRG implementation."""
 
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 
 
 class ProtocolId(StrEnum):
@@ -261,3 +261,10 @@ class ArtifactType(StrEnum):
     FIGURE = "figure"
     REPORT = "report"
     VERIFICATION = "verification"
+
+
+class SupervisedClassLabel(IntEnum):
+    """Binary class label carried by supervised-development evidence."""
+
+    BENIGN = 0
+    ATTACK = 1

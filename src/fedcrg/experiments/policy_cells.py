@@ -50,7 +50,7 @@ class PolicyCellMaterializer:
         self,
         config: ExperimentConfig,
         caches: FrozenCacheInputs,
-        calibration_seed: CalibrationSeed | int,
+        calibration_seed: CalibrationSeed,
         assignment_mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
     ) -> EvaluationBundle:
         self.validate_upstream(config, caches)
@@ -73,7 +73,7 @@ class PolicyCellMaterializer:
         policy: PolicyId,
         layout: RunLayout,
         caches: FrozenCacheInputs,
-        calibration_seed: CalibrationSeed | int,
+        calibration_seed: CalibrationSeed,
         assignment_mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
     ) -> FederationMetrics | None:
         bundle = self.evaluate_federation(config, caches, calibration_seed, assignment_mode)
@@ -93,11 +93,11 @@ class PolicyCellMaterializer:
         policy: PolicyId,
         layout: RunLayout,
         caches: FrozenCacheInputs,
-        calibration_seed: CalibrationSeed | int,
+        calibration_seed: CalibrationSeed,
         bundle: EvaluationBundle,
         assignment_mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
     ) -> FederationMetrics | None:
-        seed = CalibrationSeed(int(calibration_seed))
+        seed = calibration_seed
         self._copy_manifests(config, layout, caches, seed, assignment_mode)
         self._write_cache_references(config, layout, caches)
         descriptor = self.score_cache.load_descriptor(caches.score_root)
@@ -272,8 +272,8 @@ class FederationCellMaterializer:
         self,
         experiment_id: ExperimentId,
         config: ExperimentConfig,
-        model_seed: ModelSeed | int,
-        calibration_seed: CalibrationSeed | int,
+        model_seed: ModelSeed,
+        calibration_seed: CalibrationSeed,
         caches: FrozenCacheInputs,
         policies: tuple[PolicyId, ...] | None = None,
         assignment_mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
@@ -288,8 +288,8 @@ class FederationCellMaterializer:
                 + ", ".join(sorted(item.value for item in unknown))
             )
 
-        typed_model_seed = ModelSeed(int(model_seed))
-        typed_calibration_seed = CalibrationSeed(int(calibration_seed))
+        typed_model_seed = model_seed
+        typed_calibration_seed = calibration_seed
         bundle = self.policy_cells.evaluate_federation(
             config,
             caches,

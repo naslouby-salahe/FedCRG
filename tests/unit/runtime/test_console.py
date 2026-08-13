@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+from fedcrg.domain.enums import CampaignStatusValue, ExperimentId
 from fedcrg.runtime.console import render_cache_status, render_campaign_status
 
 
 def test_render_campaign_status_accepts_experiment_rows() -> None:
     render_campaign_status(
         "c1",
-        (("primary_nbaiot", "complete"), ("external_diad", "running")),
-        current_experiment="external_diad",
+        (
+            (ExperimentId.PRIMARY_NBAIOT, CampaignStatusValue.COMPLETE),
+            (ExperimentId.EXTERNAL_DIAD, CampaignStatusValue.RUNNING),
+        ),
+        current_experiment=ExperimentId.EXTERNAL_DIAD,
         current_stage="running external_diad",
         elapsed_seconds=12.0,
     )

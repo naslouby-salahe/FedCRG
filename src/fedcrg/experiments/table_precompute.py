@@ -9,7 +9,7 @@ from fedcrg.artifacts.json_io import atomic_write_json
 from fedcrg.configuration.experiment_config import ExperimentConfig
 from fedcrg.configuration.method_config import ProtocolConfig
 from fedcrg.domain.enums import DatasetId, ExperimentAxisId, ExperimentId
-from fedcrg.domain.values import OperatingBand
+from fedcrg.domain.values import BinomialCounts, OperatingBand
 from fedcrg.experiments.experiment_definition import get_experiment_definition
 from fedcrg.decision.mismatch_detection import (
     clopper_pearson_interval,
@@ -192,8 +192,7 @@ class ProtocolTablePrecomputer:
         highs: list[int] = []
         for exceedances in range(sample_count + 1):
             interval = clopper_pearson_interval(
-                exceedances,
-                sample_count,
+                BinomialCounts(exceedances, sample_count),
                 confidence,
             )
             if band.lower > 0.0 and interval.upper < band.lower:

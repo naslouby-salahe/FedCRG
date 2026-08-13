@@ -9,14 +9,14 @@ from torch import Tensor
 from torch.utils.data import DataLoader, TensorDataset
 
 from fedcrg.configuration.training_config import TrainingConfig
-from fedcrg.domain.identifiers import ClientId, Sha256
+from fedcrg.domain.identifiers import ClientId, ModelSeed, Sha256
 from fedcrg.detectors.autoencoder import Autoencoder
 from fedcrg.detectors.detector import DetectorModel
 from fedcrg.detectors.deep_svdd import DeepSvdd
 from fedcrg.federation.training_results import ClientRoundResult
 
 
-def epoch_seed(model_seed: int, client_id: ClientId, round_index: int, epoch: int) -> int:
+def epoch_seed(model_seed: ModelSeed, client_id: ClientId, round_index: int, epoch: int) -> int:
     text = f"fedcrg|training|{model_seed}|{client_id.value}|{round_index}|{epoch}"
     digest = hashlib.sha256(text.encode("utf-8")).digest()
     return int.from_bytes(digest[:8], "big", signed=False) & 0x7FFFFFFFFFFFFFFF
@@ -35,7 +35,7 @@ class FederatedClient:
         global_model: DetectorModel,
         config: TrainingConfig,
         learning_rate: float,
-        model_seed: int,
+        model_seed: ModelSeed,
         round_index: int,
     ) -> tuple[DetectorModel, ClientRoundResult]:
         model = global_model.clone().to(self.device)

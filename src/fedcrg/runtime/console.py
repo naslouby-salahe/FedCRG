@@ -6,13 +6,15 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from fedcrg.domain.enums import CampaignStatusValue, ExperimentId
+
 _console = Console()
 
 
 def render_campaign_status(
     campaign_id: str,
-    experiments: tuple[tuple[str, str], ...],
-    current_experiment: str | None,
+    experiments: tuple[tuple[ExperimentId, CampaignStatusValue], ...],
+    current_experiment: ExperimentId | None,
     current_stage: str | None,
     elapsed_seconds: float,
 ) -> None:
@@ -21,11 +23,14 @@ def render_campaign_status(
     table.add_column("experiment")
     table.add_column("status")
     for experiment_id, status in experiments:
-        table.add_row(experiment_id, status)
+        table.add_row(experiment_id.value, status.value)
     panel = Panel(
         table,
         title=f"stage: {current_stage or 'starting'}",
-        subtitle=f"current: {current_experiment or '-'} | elapsed {elapsed_seconds:.0f}s",
+        subtitle=(
+            f"current: {current_experiment.value if current_experiment else '-'} "
+            f"| elapsed {elapsed_seconds:.0f}s"
+        ),
     )
     _console.print(panel)
 

@@ -94,6 +94,22 @@ def capture_environment(repository_root: Path = Path(".")) -> EnvironmentSnapsho
 
 
 @dataclass(frozen=True, slots=True)
+class PackagePin:
+    """One pinned distribution as ``name==version`` for the environment lock."""
+
+    name: str
+    version: str
+
+    def __post_init__(self) -> None:
+        if not self.name or not self.version:
+            raise ValueError("Package pin requires both name and version")
+
+    @property
+    def requirement(self) -> str:
+        return f"{self.name}=={self.version}"
+
+
+@dataclass(frozen=True, slots=True)
 class EnvironmentLock:
     path: Path
     sha256: Sha256
@@ -112,7 +128,7 @@ class EnvironmentLocker:
             raise FileExistsError(
                 f"Environment lock already exists and must be versioned rather than overwritten: {path}"
             )
-        normalized: list[tuple[str, str]] = []
+        pins: list[PackagePin] = []
         for distribution in distributions:
             try:
                 version = metadata.version(distribution)
@@ -122,13 +138,12 @@ class EnvironmentLocker:
                 ) from exc
             package_metadata = metadata.metadata(distribution)
             raw_name = package_metadata["Name"] if "Name" in package_metadata else distribution
-            normalized_name = str(raw_name)
-            normalized.append((normalized_name, version))
-        normalized.sort(key=lambda item: item[0].lower())
-        content = "".join(f"{name}=={version}\n" for name, version in normalized)
+            pins.append(PackagePin(name=str(raw_name), version=version))
+        pins.sort(key=lambda pin: pin.name.lower())
+        content = "".join(f"{pin.requirement}\n" for pin in pins)
         atomic_write_text(path, content)
         return EnvironmentLock(
             path=path,
             sha256=Sha256(sha256_file(path)),
-            distributions=tuple(name for name, _ in normalized),
+            distributions=tuple(pin.name for pin in pins),
         )

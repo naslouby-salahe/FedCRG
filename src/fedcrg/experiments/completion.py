@@ -12,6 +12,7 @@ from fedcrg.artifacts.paths import RunLayout
 from fedcrg.configuration.experiment_config import ExperimentConfig
 from fedcrg.configuration.resolve import ExperimentConfigResolver
 from fedcrg.domain.enums import DatasetId, ExperimentId, ExperimentStatus, PolicyId
+from fedcrg.domain.identifiers import CalibrationSeed, ModelSeed
 from fedcrg.experiments.experiment_definition import (
     SECOND_DETECTOR_POLICIES,
     all_experiment_definitions,
@@ -148,8 +149,10 @@ class ExperimentCompletionAuditor:
                     self._real_sensitivity_workload(
                         outputs_root,
                         experiment_id,
-                        expected_model_seeds=primary.randomness.model_seeds,
-                        expected_calibration_seed=nbaiot_named,
+                        expected_model_seeds=tuple(
+                            ModelSeed(seed) for seed in primary.randomness.model_seeds
+                        ),
+                        expected_calibration_seed=CalibrationSeed(nbaiot_named),
                     )
                 )
             elif experiment_id in _SINGLE_SEED_SENSITIVITY_EXPERIMENTS:
@@ -157,7 +160,7 @@ class ExperimentCompletionAuditor:
                     self._single_seed_sensitivity_workload(
                         outputs_root,
                         experiment_id,
-                        expected_calibration_seed=nbaiot_named,
+                        expected_calibration_seed=CalibrationSeed(nbaiot_named),
                     )
                 )
             elif experiment_id is ExperimentId.SOURCE_ORDER_CALIBRATION:
@@ -326,14 +329,14 @@ class ExperimentCompletionAuditor:
     def _real_sensitivity_workload(
         outputs_root: Path,
         experiment_id: ExperimentId,
-        expected_model_seeds: tuple[int, ...],
-        expected_calibration_seed: int,
+        expected_model_seeds: tuple[ModelSeed, ...],
+        expected_calibration_seed: CalibrationSeed,
     ) -> ExperimentCompletion:
         """Reconcile a SensitivityEnvelope (experiment_id/model_seed/calibration_seed/cells)."""
         cells_root = outputs_root / "experiments" / experiment_id.value / "cells"
         files = tuple(sorted(cells_root.glob("*.json"))) if cells_root.exists() else ()
         problems: list[str] = []
-        identities: set[tuple[int, int]] = set()
+        identities: set[tuple[ModelSeed, CalibrationSeed]] = set()
         for path in files:
             payload = json.loads(path.read_text(encoding="utf-8"))
             if payload.get("experiment_id") != experiment_id.value:
@@ -343,9 +346,12 @@ class ExperimentCompletionAuditor:
             if not isinstance(cells, list) or not cells:
                 problems.append(f"{path.name}: sensitivity envelope has no cells")
                 continue
-            model_seed = int(payload.get("model_seed", -1))
-            calibration_seed = int(payload.get("calibration_seed", -1))
-            identities.add((model_seed, calibration_seed))
+            raw_model_seed = payload.get("model_seed", -1)
+            raw_calibration_seed = payload.get("calibration_seed", -1)
+            if not isinstance(raw_model_seed, int) or not isinstance(raw_calibration_seed, int):
+                problems.append(f"{path.name}: sensitivity envelope has non-integer seeds")
+                continue
+            identities.add((ModelSeed(raw_model_seed), CalibrationSeed(raw_calibration_seed)))
         expected = {(model_seed, expected_calibration_seed) for model_seed in expected_model_seeds}
         missing = expected - identities
         unexpected = identities - expected
@@ -365,13 +371,13 @@ class ExperimentCompletionAuditor:
     def _single_seed_sensitivity_workload(
         outputs_root: Path,
         experiment_id: ExperimentId,
-        expected_calibration_seed: int,
+        expected_calibration_seed: CalibrationSeed,
     ) -> ExperimentCompletion:
         """Reconcile a MultiplicityEnvelope/SourceOrderEnvelope: no model-seed axis."""
         cells_root = outputs_root / "experiments" / experiment_id.value / "cells"
         files = tuple(sorted(cells_root.glob("*.json"))) if cells_root.exists() else ()
         problems: list[str] = []
-        identities: set[int] = set()
+        identities: set[CalibrationSeed] = set()
         for path in files:
             payload = json.loads(path.read_text(encoding="utf-8"))
             if payload.get("experiment_id") != experiment_id.value:
@@ -381,7 +387,11 @@ class ExperimentCompletionAuditor:
             if not isinstance(cells, list) or not cells:
                 problems.append(f"{path.name}: sensitivity envelope has no cells")
                 continue
-            identities.add(int(payload.get("calibration_seed", -1)))
+            raw_seed = payload.get("calibration_seed", -1)
+            if not isinstance(raw_seed, int):
+                problems.append(f"{path.name}: sensitivity envelope has a non-integer seed")
+                continue
+            identities.add(CalibrationSeed(raw_seed))
         expected = {expected_calibration_seed}
         missing = expected - identities
         unexpected = identities - expected

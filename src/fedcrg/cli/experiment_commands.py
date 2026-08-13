@@ -10,6 +10,7 @@ import click
 
 from fedcrg.configuration.resolve import load_config
 from fedcrg.domain.enums import DetectorId, ExperimentId, PolicyId
+from fedcrg.domain.identifiers import CalibrationSeed, ModelSeed
 from fedcrg.experiments.planning import ExperimentPlanner
 
 
@@ -38,8 +39,8 @@ def validate_experiment(config_path: Path, experiment: str | None) -> None:
         .create(
             experiment_id,
             config,
-            model_seed=config.randomness.model_seeds[0],
-            calibration_seed=config.dataset.primary_calibration_seed,
+            model_seed=ModelSeed(config.randomness.model_seeds[0]),
+            calibration_seed=CalibrationSeed(config.dataset.primary_calibration_seed),
         )
         .definition
     )
@@ -70,8 +71,8 @@ def plan_experiment(config_path: Path, experiment: str | None) -> None:
     plan = ExperimentPlanner().create(
         experiment_id,
         config,
-        model_seed=config.randomness.model_seeds[0],
-        calibration_seed=config.dataset.primary_calibration_seed,
+        model_seed=ModelSeed(config.randomness.model_seeds[0]),
+        calibration_seed=CalibrationSeed(config.dataset.primary_calibration_seed),
     )
     click.echo(
         json.dumps(
@@ -124,11 +125,11 @@ def run_policy_cell(
     _, layout = RunExperiment().execute(
         experiment_id=experiment_id,
         config=config,
-        model_seed=model_seed,
-        calibration_seed=calibration_seed,
+        model_seed=ModelSeed(model_seed),
+        calibration_seed=CalibrationSeed(calibration_seed),
         policy=policy_id,
         runner=lambda _plan, run_layout: materializer.materialize(
-            config, policy_id, run_layout, caches, calibration_seed
+            config, policy_id, run_layout, caches, CalibrationSeed(calibration_seed)
         ),
     )
     click.echo(str(layout.root))
@@ -165,8 +166,8 @@ def materialize_federation_cell(
     result = FederationCellMaterializer().materialize(
         experiment_id,
         config,
-        model_seed,
-        calibration_seed,
+        ModelSeed(model_seed),
+        CalibrationSeed(calibration_seed),
         FrozenCacheInputs(prepared_root, model_path, training_manifest, score_root),
     )
     click.echo(
@@ -199,9 +200,9 @@ def execute_grid(
     config = load_config(config_path)
     experiment_id = ExperimentId(experiment) if experiment is not None else config.id
     calibration_seeds = (
-        (config.dataset.primary_calibration_seed,)
+        (CalibrationSeed(config.dataset.primary_calibration_seed),)
         if named_only
-        else config.dataset.calibration_seeds
+        else tuple(CalibrationSeed(seed) for seed in config.dataset.calibration_seeds)
     )
     execution = RunAllExperiments().execute(
         experiment_id,
@@ -266,7 +267,7 @@ def score_command(
         load_config(config_path),
         prepared_root,
         model_path,
-        model_seed,
+        ModelSeed(model_seed),
         training_manifest,
     )
     click.echo(str(score_root))
@@ -287,7 +288,8 @@ def evaluate_command(
 
     config = load_config(config_path)
     service = EvaluatePolicies()
-    bundle = service.evaluate_from_cache(config, score_root, calibration_seed=calibration_seed)
+    typed_seed = None if calibration_seed is None else CalibrationSeed(calibration_seed)
+    bundle = service.evaluate_from_cache(config, score_root, calibration_seed=typed_seed)
     atomic_write_json(output, service.to_serializable(bundle))
     click.echo(str(output))
 

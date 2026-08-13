@@ -54,7 +54,7 @@ class ComputeScores:
         config: ExperimentConfig,
         prepared_root: Path,
         model_path: Path,
-        model_seed: ModelSeed | int,
+        model_seed: ModelSeed,
         training_manifest: Path,
     ) -> Path:
         seed = ModelSeed(int(model_seed))

@@ -58,7 +58,7 @@ class RunAllExperiments:
         config: ExperimentConfig,
         prepared_root: Path,
         *,
-        calibration_seeds: tuple[int, ...] | None = None,
+        calibration_seeds: tuple[CalibrationSeed, ...] | None = None,
     ) -> ResearchExecution:
         preflight = self.preflight.run(config, prepared_root)
         workload = self._execute_workload(
@@ -75,21 +75,22 @@ class RunAllExperiments:
         config: ExperimentConfig,
         prepared_root: Path,
         *,
-        calibration_seeds: tuple[int, ...] | None = None,
+        calibration_seeds: tuple[CalibrationSeed, ...] | None = None,
     ) -> WorkloadExecution:
         """Execute the configured model/calibration grid without duplicate training or scoring."""
 
-        seed_values = calibration_seeds or config.dataset.calibration_seeds
+        seed_values = calibration_seeds or tuple(
+            CalibrationSeed(seed) for seed in config.dataset.calibration_seeds
+        )
         if not seed_values:
             raise ValueError("At least one calibration seed is required")
-        invalid = tuple(
-            seed for seed in seed_values if seed not in config.dataset.calibration_seeds
-        )
+        configured = {CalibrationSeed(seed) for seed in config.dataset.calibration_seeds}
+        invalid = tuple(seed for seed in seed_values if seed not in configured)
         if invalid:
             raise ValueError(
                 f"Calibration seeds are outside the frozen dataset registry: {invalid}"
             )
-        calibration_grid = tuple(CalibrationSeed(seed) for seed in seed_values)
+        calibration_grid = seed_values
 
         model_evidence: list[FrozenModelEvidence] = []
         run_directories: list[Path] = []

@@ -34,12 +34,12 @@ class FederatedTrainer:
         model: DetectorModel,
         datasets: Mapping[ClientId, TensorDataset],
         config: TrainingConfig,
-        model_seed: ModelSeed | int,
+        model_seed: ModelSeed,
     ) -> tuple[DetectorModel, TrainingResult]:
         if not datasets:
             raise ValueError("At least one federated client is required")
 
-        seed = ModelSeed(int(model_seed))
+        seed = model_seed
         self._configure_determinism(seed, config)
         device = resolve_compute_device(config.device)
         log_device_capabilities(_LOGGER)
@@ -141,7 +141,7 @@ class FederatedTrainer:
                 global_model=global_model,
                 config=config,
                 learning_rate=learning_rate,
-                model_seed=int(model_seed),
+                model_seed=model_seed,
                 round_index=round_index,
             )
             trained_models.append(trained_model)

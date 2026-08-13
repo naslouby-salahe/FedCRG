@@ -82,8 +82,8 @@ def load_federation_results(run_dirs: tuple[Path, ...]) -> tuple[FederationResul
 def confirmatory_contrasts(
     records: tuple[FederationResultRecord, ...],
     *,
-    named_calibration_seed: int,
-    expected_model_seeds: tuple[int, ...],
+    named_calibration_seed: CalibrationSeed,
+    expected_model_seeds: tuple[ModelSeed, ...],
     bootstrap_seed: int,
     bootstrap_replicates: int,
 ) -> tuple[PolicyContrastResult, ...]:
@@ -95,8 +95,10 @@ def confirmatory_contrasts(
         PolicyId.READINESS_ONLY,
         PolicyId.SHRINKAGE,
     )
-    selected = tuple(row for row in records if int(row.calibration_seed) == named_calibration_seed)
-    expected_seeds = {ModelSeed(seed) for seed in expected_model_seeds}
+    selected = tuple(
+        row for row in records if row.calibration_seed == named_calibration_seed
+    )
+    expected_seeds = set(expected_model_seeds)
     observed_method_seeds = {row.model_seed for row in selected if row.policy is PolicyId.FEDCRG}
     if observed_method_seeds != expected_seeds:
         raise ValueError(

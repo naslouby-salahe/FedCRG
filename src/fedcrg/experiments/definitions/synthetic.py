@@ -17,7 +17,7 @@ from fedcrg.domain.enums import (
     ExperimentId,
     SyntheticDistribution,
 )
-from fedcrg.domain.values import OperatingBand
+from fedcrg.domain.values import BinomialCounts, OperatingBand
 from fedcrg.experiments.experiment_definition import ExperimentDefinition, get_experiment_definition
 from fedcrg.decision.calibration_readiness import ReadinessPlanBuilder
 from fedcrg.decision.mismatch_detection import clopper_pearson_interval
@@ -186,7 +186,7 @@ def exact_mismatch_power(
     low_counts: list[int] = []
     high_counts: list[int] = []
     for exceedances in range(sample_count + 1):
-        interval = clopper_pearson_interval(exceedances, sample_count, 0.95)
+        interval = clopper_pearson_interval(BinomialCounts(exceedances, sample_count), 0.95)
         if interval.upper < band.lower:
             low_counts.append(exceedances)
         elif interval.lower > band.upper:

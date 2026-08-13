@@ -178,11 +178,8 @@ class CampaignRunner:
             self._record_telemetry(outputs_root)
             render_campaign_status(
                 campaign_id,
-                tuple(
-                    (entry.experiment_id.value, entry.status.value)
-                    for entry in current_status.experiments
-                ),
-                current_experiment=item.experiment_id.value,
+                tuple((entry.experiment_id, entry.status) for entry in current_status.experiments),
+                current_experiment=item.experiment_id,
                 current_stage=f"running {item.experiment_id.value}",
                 elapsed_seconds=time.monotonic() - started,
             )

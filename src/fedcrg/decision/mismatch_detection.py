@@ -11,18 +11,22 @@ from scipy.stats import binom
 
 from fedcrg.domain.enums import MismatchOutcome
 from fedcrg.domain.identifiers import ClientId
-from fedcrg.domain.values import ConfidenceInterval, OperatingBand
+from fedcrg.domain.values import BinomialCounts, ConfidenceInterval, OperatingBand
 from fedcrg.decision.results import MismatchEvidence
 
 
-def clopper_pearson_interval(x: int, n: int, confidence: float) -> ConfidenceInterval:
-    if n <= 0 or not 0 <= x <= n:
-        raise ValueError("Require n > 0 and 0 <= x <= n")
+def clopper_pearson_interval(counts: BinomialCounts, confidence: float) -> ConfidenceInterval:
     if not 0.0 < confidence < 1.0:
         raise ValueError("confidence must be in (0, 1)")
     tail = (1.0 - confidence) / 2.0
-    lower = 0.0 if x == 0 else float(special.betaincinv(x, n - x + 1, tail))
-    upper = 1.0 if x == n else float(special.betaincinv(x + 1, n - x, 1.0 - tail))
+    lower = (
+        0.0 if counts.x == 0 else float(special.betaincinv(counts.x, counts.n - counts.x + 1, tail))
+    )
+    upper = (
+        1.0
+        if counts.x == counts.n
+        else float(special.betaincinv(counts.x + 1, counts.n - counts.x, 1.0 - tail))
+    )
     return ConfidenceInterval(lower=lower, upper=upper)
 
 
@@ -59,13 +63,14 @@ class ReferenceMismatchEvaluator:
         if not np.isfinite(values).all() or not math.isfinite(reference_threshold):
             raise ValueError("Mismatch scores and threshold must be finite")
 
-        n = len(values)
-        x = int(np.count_nonzero(values > reference_threshold))
-        interval = clopper_pearson_interval(x, n, confidence)
+        counts = BinomialCounts(
+            x=int(np.count_nonzero(values > reference_threshold)), n=len(values)
+        )
+        interval = clopper_pearson_interval(counts, confidence)
         minimum = minimum_bidirectional_sample_count(band.lower, confidence)
         high_side_only = minimum is None
 
-        if minimum is not None and n < minimum:
+        if minimum is not None and counts.n < minimum:
             outcome = MismatchOutcome.INSUFFICIENT_EVIDENCE
         elif not high_side_only and interval.upper < band.lower:
             outcome = MismatchOutcome.LOW
@@ -75,14 +80,14 @@ class ReferenceMismatchEvaluator:
             outcome = MismatchOutcome.NO_MATERIAL_DIFFERENCE
 
         return MismatchEvidence(
-            sample_count=n,
-            exceedance_count=x,
-            estimated_fpr=x / n,
+            sample_count=counts.n,
+            exceedance_count=counts.x,
+            estimated_fpr=counts.exceedance_rate,
             interval=interval,
             outcome=outcome,
             minimum_sample_count=minimum,
-            p_low=(None if high_side_only else float(binom.cdf(x, n, band.lower))),
-            p_high=float(binom.sf(x - 1, n, band.upper)),
+            p_low=(None if high_side_only else float(binom.cdf(counts.x, counts.n, band.lower))),
+            p_high=float(binom.sf(counts.x - 1, counts.n, band.upper)),
             high_side_only=high_side_only,
         )
 
@@ -95,71 +100,90 @@ class FleetMismatchDecision:
     high_p_value: float
 
 
+@dataclass(frozen=True, slots=True)
+class DirectionalHypothesis:
+    """One directional mismatch hypothesis: client + claimed direction."""
+
+    client_id: ClientId
+    outcome: MismatchOutcome
+    p_value: float
+
+
+def _directional_p_values(
+    counts: BinomialCounts, band: OperatingBand
+) -> tuple[float | None, float]:
+    low = None if band.lower == 0.0 else float(binom.cdf(counts.x, counts.n, band.lower))
+    high = float(binom.sf(counts.x - 1, counts.n, band.upper))
+    return low, high
+
+
 def bonferroni_fleet_sensitivity(
-    counts: dict[ClientId, tuple[int, int]],
+    counts_by_client: dict[ClientId, BinomialCounts],
     band: OperatingBand,
     *,
     familywise_alpha: float,
 ) -> tuple[FleetMismatchDecision, ...]:
-    if not counts:
+    if not counts_by_client:
         return ()
-    confidence = 1.0 - familywise_alpha / len(counts)
+    confidence = 1.0 - familywise_alpha / len(counts_by_client)
     decisions: list[FleetMismatchDecision] = []
-    for client_id in sorted(counts):
-        x, n = counts[client_id]
-        interval = clopper_pearson_interval(x, n, confidence)
+    for client_id in sorted(counts_by_client):
+        counts = counts_by_client[client_id]
+        interval = clopper_pearson_interval(counts, confidence)
         outcome = MismatchOutcome.NO_MATERIAL_DIFFERENCE
         if band.lower > 0.0 and interval.upper < band.lower:
             outcome = MismatchOutcome.LOW
         elif interval.lower > band.upper:
             outcome = MismatchOutcome.HIGH
+        low, high = _directional_p_values(counts, band)
         decisions.append(
             FleetMismatchDecision(
                 client_id=client_id,
                 outcome=outcome,
-                low_p_value=(None if band.lower == 0.0 else float(binom.cdf(x, n, band.lower))),
-                high_p_value=float(binom.sf(x - 1, n, band.upper)),
+                low_p_value=low,
+                high_p_value=high,
             )
         )
     return tuple(decisions)
 
 
 def _holm_rejected(
-    hypotheses: list[tuple[float, tuple[ClientId, MismatchOutcome]]],
+    hypotheses: list[DirectionalHypothesis],
     alpha: float,
 ) -> set[tuple[ClientId, MismatchOutcome]]:
     rejected: set[tuple[ClientId, MismatchOutcome]] = set()
-    ordered = sorted(hypotheses, key=lambda item: (item[0], item[1][0], item[1][1].value))
+    ordered = sorted(
+        hypotheses,
+        key=lambda item: (item.p_value, item.client_id, item.outcome.value),
+    )
     total = len(ordered)
-    for index, (p_value, key) in enumerate(ordered):
+    for index, hypothesis in enumerate(ordered):
         threshold = alpha / (total - index)
-        if p_value <= threshold:
-            rejected.add(key)
+        if hypothesis.p_value <= threshold:
+            rejected.add((hypothesis.client_id, hypothesis.outcome))
         else:
             break
     return rejected
 
 
 def holm_directional_fleet_sensitivity(
-    counts: dict[ClientId, tuple[int, int]],
+    counts_by_client: dict[ClientId, BinomialCounts],
     band: OperatingBand,
     *,
     familywise_alpha: float,
 ) -> tuple[FleetMismatchDecision, ...]:
-    hypotheses: list[tuple[float, tuple[ClientId, MismatchOutcome]]] = []
+    hypotheses: list[DirectionalHypothesis] = []
     diagnostics: dict[ClientId, tuple[float | None, float]] = {}
-    for client_id in sorted(counts):
-        x, n = counts[client_id]
-        low = None if band.lower == 0.0 else float(binom.cdf(x, n, band.lower))
-        high = float(binom.sf(x - 1, n, band.upper))
+    for client_id in sorted(counts_by_client):
+        low, high = _directional_p_values(counts_by_client[client_id], band)
         diagnostics[client_id] = (low, high)
         if low is not None:
-            hypotheses.append((low, (client_id, MismatchOutcome.LOW)))
-        hypotheses.append((high, (client_id, MismatchOutcome.HIGH)))
+            hypotheses.append(DirectionalHypothesis(client_id, MismatchOutcome.LOW, low))
+        hypotheses.append(DirectionalHypothesis(client_id, MismatchOutcome.HIGH, high))
 
     rejected = _holm_rejected(hypotheses, familywise_alpha)
     decisions: list[FleetMismatchDecision] = []
-    for client_id in sorted(counts):
+    for client_id in sorted(counts_by_client):
         low_rejected = (client_id, MismatchOutcome.LOW) in rejected
         high_rejected = (client_id, MismatchOutcome.HIGH) in rejected
         if low_rejected and high_rejected:

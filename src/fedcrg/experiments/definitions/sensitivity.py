@@ -33,6 +33,7 @@ from fedcrg.domain.enums import (
     PolicyId,
 )
 from fedcrg.domain.identifiers import CalibrationSeed, ClientId
+from fedcrg.domain.values import BinomialCounts
 from fedcrg.evaluation.evaluation_results import EvaluationBundle
 from fedcrg.experiments.experiment_definition import ParameterSetting, get_experiment_definition
 from fedcrg.decision.calibration_readiness import familywise_readiness_assurance
@@ -309,7 +310,7 @@ class RunRealSensitivities:
     @staticmethod
     def _seed(
         config: ExperimentConfig,
-        calibration_seed: CalibrationSeed | int | None,
+        calibration_seed: CalibrationSeed | None,
     ) -> CalibrationSeed:
         return CalibrationSeed(
             config.dataset.primary_calibration_seed
@@ -441,7 +442,7 @@ class RunRealSensitivities:
         prepared_root: Path,
         model_seed: int,
         output: Path,
-        calibration_seed: CalibrationSeed | int | None = None,
+        calibration_seed: CalibrationSeed | None = None,
     ) -> Path:
         seed = self._seed(config, calibration_seed)
         definition = get_experiment_definition(ExperimentId.READINESS_SAMPLE_SIZE)
@@ -483,7 +484,7 @@ class RunRealSensitivities:
         prepared_root: Path,
         model_seed: int,
         output: Path,
-        calibration_seed: CalibrationSeed | int | None = None,
+        calibration_seed: CalibrationSeed | None = None,
     ) -> Path:
         seed = self._seed(config, calibration_seed)
         definition = get_experiment_definition(ExperimentId.MISMATCH_SAMPLE_SIZE)
@@ -525,7 +526,7 @@ class RunRealSensitivities:
         prepared_root: Path,
         model_seed: int,
         output: Path,
-        calibration_seed: CalibrationSeed | int | None = None,
+        calibration_seed: CalibrationSeed | None = None,
     ) -> Path:
         seed = self._seed(config, calibration_seed)
         return self._parameter_sweep(
@@ -546,7 +547,7 @@ class RunRealSensitivities:
         prepared_root: Path,
         model_seed: int,
         output: Path,
-        calibration_seed: CalibrationSeed | int | None = None,
+        calibration_seed: CalibrationSeed | None = None,
     ) -> Path:
         seed = self._seed(config, calibration_seed)
         return self._parameter_sweep(
@@ -567,7 +568,7 @@ class RunRealSensitivities:
         prepared_root: Path,
         model_seed: int,
         output: Path,
-        calibration_seed: CalibrationSeed | int | None = None,
+        calibration_seed: CalibrationSeed | None = None,
     ) -> Path:
         seed = self._seed(config, calibration_seed)
         return self._parameter_sweep(
@@ -587,7 +588,7 @@ class RunRealSensitivities:
         score_root: Path,
         prepared_root: Path,
         output: Path,
-        calibration_seed: CalibrationSeed | int | None = None,
+        calibration_seed: CalibrationSeed | None = None,
     ) -> Path:
         seed = self._seed(config, calibration_seed)
         definition = get_experiment_definition(ExperimentId.MULTIPLICITY_SENSITIVITY)
@@ -599,7 +600,7 @@ class RunRealSensitivities:
         )
         base_results = self.evaluator.protocol_results(fedcrg_only, views)
         counts = {
-            client_id: (
+            client_id: BinomialCounts(
                 result.mismatch.exceedance_count,
                 result.mismatch.sample_count,
             )
@@ -656,7 +657,7 @@ class RunRealSensitivities:
         score_root: Path,
         prepared_root: Path,
         output: Path,
-        calibration_seed: CalibrationSeed | int | None = None,
+        calibration_seed: CalibrationSeed | None = None,
     ) -> Path:
         seed = self._seed(config, calibration_seed)
         definition = get_experiment_definition(ExperimentId.SOURCE_ORDER_TEST)
@@ -713,7 +714,7 @@ class RunRealSensitivities:
         score_root: Path,
         prepared_root: Path,
         output: Path,
-        calibration_seed: CalibrationSeed | int | None = None,
+        calibration_seed: CalibrationSeed | None = None,
     ) -> Path:
         seed = self._seed(config, calibration_seed)
         definition = get_experiment_definition(ExperimentId.REAL_CONTAMINATION)
@@ -787,7 +788,7 @@ class RunSourceOrderCalibration:
         bundle = evaluator.evaluate_from_cache(
             config,
             score_root,
-            calibration_seed=config.dataset.primary_calibration_seed,
+            calibration_seed=CalibrationSeed(config.dataset.primary_calibration_seed),
             mode=CalibrationAssignmentMode.SOURCE_ORDER,
             prepared_root=prepared_root,
         )

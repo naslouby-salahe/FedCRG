@@ -152,7 +152,7 @@ class CalibrationScoreViewBuilder:
         cache: ScoreCache,
         score_root: Path,
         dataset: DatasetConfig,
-        calibration_seed: CalibrationSeed | int,
+        calibration_seed: CalibrationSeed,
         mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
         prepared_root: Path | None = None,
     ) -> CalibrationScoreViews:
@@ -179,7 +179,7 @@ class CalibrationScoreViewBuilder:
         self,
         scores: ScoreManifest,
         dataset: DatasetConfig,
-        calibration_seed: CalibrationSeed | int,
+        calibration_seed: CalibrationSeed,
         mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
         prepared_root: Path | None = None,
     ) -> CalibrationScoreViews:

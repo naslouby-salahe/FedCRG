@@ -9,7 +9,7 @@ from pathlib import Path
 from fedcrg.artifacts.json_io import JsonValue, as_json_int
 from fedcrg.configuration.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import CalibrationAssignmentMode, DataRole, DatasetId
-from fedcrg.domain.identifiers import ClientId
+from fedcrg.domain.identifiers import ClientId, Sha256
 from fedcrg.experiments.table_precompute import ProtocolTablePrecomputer
 
 
@@ -164,7 +164,7 @@ class PreparedDatasetAuditor:
             if not isinstance(roles, dict):
                 problems.append(f"{client}: calibration roles missing")
                 continue
-            hashes: set[str] = set()
+            hashes: set[Sha256] = set()
             total = 0
             for role, expected_count in expected_counts.items():
                 record = roles.get(role.value)
@@ -179,11 +179,12 @@ class PreparedDatasetAuditor:
                     problems.append(f"{client}/{role.value}: {count} rows != {expected_count}")
                 if len(digest) != 64:
                     problems.append(f"{client}/{role.value}: invalid row-id hash")
+                    continue
                 if digest in hashes:
                     problems.append(
                         f"{client}: duplicate calibration role hash suggests role reuse"
                     )
-                hashes.add(digest)
+                hashes.add(Sha256(digest))
                 total += max(count, 0)
             if total != config.dataset.split.reservoir_size:
                 problems.append(f"{client}: calibration roles do not cover the full reservoir")

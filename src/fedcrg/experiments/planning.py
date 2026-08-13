@@ -12,8 +12,8 @@ class ExperimentPlanner:
         self,
         experiment_id: ExperimentId,
         config: ExperimentConfig,
-        model_seed: ModelSeed | int,
-        calibration_seed: CalibrationSeed | int,
+        model_seed: ModelSeed,
+        calibration_seed: CalibrationSeed,
     ) -> ExperimentPlan:
         if config.id is not experiment_id:
             raise ValueError(

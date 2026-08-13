@@ -140,7 +140,7 @@ def hash_seed(text: str) -> int:
 def calibration_rng(
     dataset: DatasetId,
     client_id: ClientId,
-    seed: CalibrationSeed | int,
+    seed: CalibrationSeed,
 ) -> np.random.Generator:
     text = f"fedcrg|{dataset.value}|calibration|{int(seed)}|{client_id.value}"
     return np.random.Generator(np.random.PCG64(hash_seed(text)))
@@ -275,7 +275,7 @@ class CalibrationAssignmentBuilder:
         dataset: DatasetId,
         client_id: ClientId,
         config: DatasetConfig,
-        calibration_seed: CalibrationSeed | int,
+        calibration_seed: CalibrationSeed,
         mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
     ) -> CalibrationRoleAssignment:
         seed = CalibrationSeed(int(calibration_seed))
@@ -370,7 +370,7 @@ class DataSplitter:
         base_splits: ClientSplits,
         dataset: DatasetId,
         config: DatasetConfig,
-        calibration_seed: CalibrationSeed | int,
+        calibration_seed: CalibrationSeed,
         mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
     ) -> CalibrationRoleAssignment:
         return self.assignments.build(
@@ -387,7 +387,7 @@ class DataSplitter:
         base_splits: ClientSplits,
         dataset: DatasetId,
         config: DatasetConfig,
-        calibration_seed: CalibrationSeed | int,
+        calibration_seed: CalibrationSeed,
         mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
     ) -> dict[DataRole, pd.DataFrame]:
         assignment = self.calibration_assignment(

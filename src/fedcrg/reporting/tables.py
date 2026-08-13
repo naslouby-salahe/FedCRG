@@ -12,6 +12,7 @@ from fedcrg.artifacts.json_io import JsonValue, as_json_dict, to_json_value
 from fedcrg.artifacts.paths import RunLayout
 from fedcrg.configuration.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import ExperimentId, PolicyId
+from fedcrg.domain.identifiers import CalibrationSeed, ModelSeed
 
 
 class PublicationTableBuilder:
@@ -82,8 +83,10 @@ class PublicationTableBuilder:
         primary = tuple(row for row in records if row.experiment_id is ExperimentId.PRIMARY_NBAIOT)
         contrasts = confirmatory_contrasts(
             primary,
-            named_calibration_seed=config.dataset.primary_calibration_seed,
-            expected_model_seeds=config.randomness.model_seeds,
+            named_calibration_seed=CalibrationSeed(config.dataset.primary_calibration_seed),
+            expected_model_seeds=tuple(
+                ModelSeed(seed) for seed in config.randomness.model_seeds
+            ),
             bootstrap_seed=config.statistics.bootstrap_seed,
             bootstrap_replicates=config.statistics.bootstrap_replicates,
         )
