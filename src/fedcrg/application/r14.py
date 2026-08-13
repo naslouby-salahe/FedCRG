@@ -11,7 +11,10 @@ from fedcrg.artifacts.serialization import atomic_write_json
 from fedcrg.config.models import AutoencoderConfig, ExperimentConfig
 from fedcrg.core.enums import ActivationId, DatasetId, ExperimentId, PolicyId
 from fedcrg.core.ids import ClientId
-from fedcrg.data.r14_feature_contract import R14FeatureContract, derive_r14_feature_contract
+from fedcrg.data.feature_sensitivity import (
+    NumericSafeFeatureContract,
+    derive_numeric_safe_features,
+)
 
 _R14_POLICIES = (
     PolicyId.GLOBAL_QUANTILE,
@@ -24,12 +27,12 @@ _R14_POLICIES = (
 @dataclass(frozen=True, slots=True)
 class R14Specification:
     config: ExperimentConfig
-    feature_contract: R14FeatureContract
+    feature_contract: NumericSafeFeatureContract
     manifest_path: Path
 
 
 class R14FeatureSensitivityBuilder:
-    """Freeze R14 from eligible-client training schema before calibration/test outcomes."""
+    """Freeze R14 from eligible-client training schema before outcome evidence opens."""
 
     def build(
         self,
@@ -39,23 +42,22 @@ class R14FeatureSensitivityBuilder:
     ) -> R14Specification:
         if base_config.dataset.id is not DatasetId.DIAD:
             raise ValueError("R14 can only be derived from the DIAD natural-client dataset")
-        contract = derive_r14_feature_contract(training_frames)
-        encoder_dims = contract.architecture[1:5]
-        dataset = base_config.dataset.model_copy(update={"feature_count": contract.dimension})
+        contract = derive_numeric_safe_features(training_frames)
         detector = AutoencoderConfig(
-            hidden_dims=encoder_dims,
+            hidden_dims=contract.encoder_hidden_dims,
             activation=ActivationId.TANH,
             xavier_tanh_gain=5.0 / 3.0,
             zero_bias=True,
         )
-        config = base_config.model_copy(
-            update={
-                "id": ExperimentId.DIAD_FEATURE_SENSITIVITY,
-                "dataset": dataset,
-                "detector": detector,
-                "policies": _R14_POLICIES,
-            }
-        )
+        payload = base_config.model_dump(mode="python")
+        payload["id"] = ExperimentId.DIAD_FEATURE_SENSITIVITY
+        dataset = dict(payload["dataset"])
+        dataset["feature_count"] = contract.dimension
+        dataset["feature_names"] = contract.features
+        payload["dataset"] = dataset
+        payload["detector"] = detector.model_dump(mode="python")
+        payload["policies"] = _R14_POLICIES
+        config = ExperimentConfig.model_validate(payload)
         atomic_write_json(
             manifest_path,
             {
