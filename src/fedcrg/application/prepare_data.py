@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import os
 import shutil
 import uuid
-from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pandas as pd
 
+from fedcrg.artifacts.dataset import PreparedDatasetManifestStore
 from fedcrg.artifacts.hashing import sha256_file
+from fedcrg.artifacts.serialization import atomic_write_json
 from fedcrg.config.models import ExperimentConfig
 from fedcrg.core.enums import (
     CalibrationAssignmentMode,
@@ -22,16 +21,19 @@ from fedcrg.core.enums import (
     FailureCode,
 )
 from fedcrg.core.exceptions import DataIntegrityError
-from fedcrg.core.ids import ClientId
+from fedcrg.core.ids import CalibrationSeed, ClientId, Sha256
 from fedcrg.data.adapter import DatasetAdapter
 from fedcrg.data.datasets.diad import DiadAdapter
 from fedcrg.data.datasets.nbaiot import NBaiotAdapter
 from fedcrg.data.eligibility import ClientEligibilityEvaluator
 from fedcrg.data.manifests import (
     CalibrationAssignmentManifest,
+    CalibrationAssignmentReference,
     CalibrationRoleManifest,
     ClientCalibrationManifest,
+    ClientDatasetManifest,
     EligibilityManifest,
+    RoleArtifactManifest,
     SourceFileManifest,
     hash_row_ids,
     source_file_manifest,
@@ -46,24 +48,19 @@ from fedcrg.data.splitting import DataSplitter
 
 
 class PrepareData:
-    """Materialize one immutable, seed-independent cache per data specification.
-
-    Preparation is bounded-memory and staging-based. Natural clients are ingested
-    once, eligibility and train-only preprocessing statistics are frozen client by
-    client, and eligible base roles are staged on disk. After the global extrema are
-    known, those staged roles are transformed one client at a time and the completed
-    cache is atomically committed.
-    """
+    """Materialize one immutable, seed-independent cache per data specification."""
 
     def __init__(
         self,
         splitter: DataSplitter | None = None,
         preprocessor: FederatedPreprocessor | None = None,
         eligibility: ClientEligibilityEvaluator | None = None,
+        manifests: PreparedDatasetManifestStore | None = None,
     ) -> None:
         self.splitter = splitter or DataSplitter()
         self.preprocessor = preprocessor or FederatedPreprocessor()
         self.eligibility = eligibility or ClientEligibilityEvaluator()
+        self.manifests = manifests or PreparedDatasetManifestStore()
 
     @staticmethod
     def adapter(dataset: DatasetId, root: Path) -> DatasetAdapter:
@@ -125,34 +122,30 @@ class PrepareData:
                 eligible_clients=eligible_ids,
                 records=eligibility_records,
             )
-            self._write_eligibility(
-                staging_root,
-                config,
-                eligibility_manifest,
-            )
+            self._write_eligibility(staging_root, config, eligibility_manifest)
 
             if not eligible_ids:
                 self._write_dataset_manifest(
                     staging_root,
                     config,
                     sources,
-                    {},
                     (),
-                    {},
+                    (),
+                    (),
                 )
             else:
                 preprocessing = self.preprocessor.aggregate(
                     tuple(statistics[client_id] for client_id in eligible_ids),
                     config.dataset.id,
                 )
-                client_manifest, assignment_hashes = self._finalize_staged_clients(
+                clients, assignments = self._finalize_staged_clients(
                     staging_root,
                     config,
                     eligible_ids,
                     preprocessing,
                     include_source_order_assignment,
                 )
-                self._write_json(
+                atomic_write_json(
                     staging_root / "preprocessing.json",
                     preprocessing.to_dict(),
                 )
@@ -160,9 +153,9 @@ class PrepareData:
                     staging_root,
                     config,
                     sources,
-                    client_manifest,
+                    clients,
                     preprocessing.feature_columns,
-                    assignment_hashes,
+                    assignments,
                 )
             shutil.rmtree(staging_root / "_raw", ignore_errors=True)
             os.replace(staging_root, final_root)
@@ -181,8 +174,6 @@ class PrepareData:
         tuple[EligibilityRecord, ...],
         dict[ClientId, ClientPreprocessingStatistics],
     ]:
-        """Ingest each source client once and stage only eligible base roles."""
-
         records: list[EligibilityRecord] = []
         statistics: dict[ClientId, ClientPreprocessingStatistics] = {}
         seen: list[ClientId] = []
@@ -239,21 +230,23 @@ class PrepareData:
         eligible_ids: tuple[ClientId, ...],
         preprocessing: PreprocessingModel,
         include_source_order_assignment: bool,
-    ) -> tuple[dict[str, dict[str, object]], dict[str, str]]:
-        client_manifest: dict[str, dict[str, object]] = {}
-        seeded_assignments: dict[int, list[ClientCalibrationManifest]] = {
-            seed: [] for seed in config.dataset.calibration_seeds
+    ) -> tuple[
+        tuple[ClientDatasetManifest, ...],
+        tuple[CalibrationAssignmentReference, ...],
+    ]:
+        client_manifests: list[ClientDatasetManifest] = []
+        seeded_assignments: dict[CalibrationSeed, list[ClientCalibrationManifest]] = {
+            CalibrationSeed(seed): [] for seed in config.dataset.calibration_seeds
         }
         source_order_clients: list[ClientCalibrationManifest] = []
 
         for client_id in sorted(eligible_ids):
             splits = self._load_raw_splits(root, client_id)
-            client_manifest[client_id.value] = self._write_client_roles(
-                root,
-                splits,
-                preprocessing,
+            client_manifests.append(
+                self._write_client_roles(root, splits, preprocessing)
             )
-            for seed in config.dataset.calibration_seeds:
+            for seed_value in config.dataset.calibration_seeds:
+                seed = CalibrationSeed(seed_value)
                 seeded_assignments[seed].append(
                     self._client_assignment_manifest(
                         config,
@@ -267,27 +260,28 @@ class PrepareData:
                     self._client_assignment_manifest(
                         config,
                         splits,
-                        config.dataset.primary_calibration_seed,
+                        CalibrationSeed(config.dataset.primary_calibration_seed),
                         CalibrationAssignmentMode.SOURCE_ORDER,
                     )
                 )
 
-        return client_manifest, self._write_assignment_manifests(
+        references = self._write_assignment_manifests(
             root,
             config,
             seeded_assignments,
             source_order_clients,
         )
+        return tuple(client_manifests), references
 
     def _write_client_roles(
         self,
         root: Path,
         splits: ClientSplits,
         preprocessing: PreprocessingModel,
-    ) -> dict[str, object]:
+    ) -> ClientDatasetManifest:
         client_root = root / "clients" / splits.client_id.value
         client_root.mkdir(parents=True)
-        role_metadata: dict[str, object] = {}
+        roles: list[RoleArtifactManifest] = []
         for role, raw_frame in splits.roles.items():
             frame = preprocessing.transform(raw_frame, splits.client_id)
             path = client_root / f"{role.value}.csv.gz"
@@ -298,19 +292,25 @@ class PrepareData:
                 compression={"method": "gzip", "mtime": 0},
             )
             os.replace(temp, path)
-            role_metadata[role.value] = {
-                "rows": len(frame),
-                "row_id_hash": hash_row_ids(frame["row_id"].astype(str).tolist()),
-                "file": path.relative_to(root).as_posix(),
-                "sha256": sha256_file(path),
-            }
-        return role_metadata
+            roles.append(
+                RoleArtifactManifest(
+                    role=role,
+                    rows=len(frame),
+                    row_id_sha256=hash_row_ids(frame["row_id"].astype(str).tolist()),
+                    relative_path=PurePosixPath(path.relative_to(root).as_posix()),
+                    file_sha256=Sha256(sha256_file(path)),
+                )
+            )
+        return ClientDatasetManifest(
+            client_id=splits.client_id,
+            roles=tuple(sorted(roles, key=lambda item: item.role.value)),
+        )
 
     def _client_assignment_manifest(
         self,
         config: ExperimentConfig,
         splits: ClientSplits,
-        seed: int,
+        seed: CalibrationSeed,
         mode: CalibrationAssignmentMode,
     ) -> ClientCalibrationManifest:
         assignment = self.splitter.calibration_assignment(
@@ -320,44 +320,59 @@ class PrepareData:
             seed,
             mode,
         )
-        roles = {
-            role: CalibrationRoleManifest(
+        roles = tuple(
+            CalibrationRoleManifest(
+                role=role,
                 row_count=len(assignment.positions_for(role)),
                 row_id_sha256=assignment.row_id_hashes[role],
             )
-            for role in assignment.positions
-        }
+            for role in sorted(assignment.positions, key=lambda item: item.value)
+        )
         return ClientCalibrationManifest(splits.client_id, roles)
 
     def _write_assignment_manifests(
         self,
         root: Path,
         config: ExperimentConfig,
-        seeded: dict[int, list[ClientCalibrationManifest]],
+        seeded: dict[CalibrationSeed, list[ClientCalibrationManifest]],
         source_order: list[ClientCalibrationManifest],
-    ) -> dict[str, str]:
-        hashes: dict[str, str] = {}
+    ) -> tuple[CalibrationAssignmentReference, ...]:
+        references: list[CalibrationAssignmentReference] = []
         seeded_root = root / "splits" / "seeded"
         seeded_root.mkdir(parents=True)
-        for seed in config.dataset.calibration_seeds:
+        for seed_value in config.dataset.calibration_seeds:
+            seed = CalibrationSeed(seed_value)
             manifest = CalibrationAssignmentManifest(
                 seed,
-                CalibrationAssignmentMode.SEEDED_PERMUTATION.value,
+                CalibrationAssignmentMode.SEEDED_PERMUTATION,
                 tuple(seeded[seed]),
             )
-            path = seeded_root / f"c{seed}.json"
-            self._write_json(path, manifest.to_dict())
-            hashes[f"seeded:c{seed}"] = sha256_file(path)
+            path = seeded_root / f"c{int(seed)}.json"
+            atomic_write_json(path, manifest)
+            references.append(
+                CalibrationAssignmentReference(
+                    seed,
+                    CalibrationAssignmentMode.SEEDED_PERMUTATION,
+                    Sha256(sha256_file(path)),
+                )
+            )
         if source_order:
+            seed = CalibrationSeed(config.dataset.primary_calibration_seed)
             manifest = CalibrationAssignmentManifest(
-                config.dataset.primary_calibration_seed,
-                CalibrationAssignmentMode.SOURCE_ORDER.value,
+                seed,
+                CalibrationAssignmentMode.SOURCE_ORDER,
                 tuple(source_order),
             )
             path = root / "splits" / "source_order.json"
-            self._write_json(path, manifest.to_dict())
-            hashes["source_order"] = sha256_file(path)
-        return hashes
+            atomic_write_json(path, manifest)
+            references.append(
+                CalibrationAssignmentReference(
+                    seed,
+                    CalibrationAssignmentMode.SOURCE_ORDER,
+                    Sha256(sha256_file(path)),
+                )
+            )
+        return tuple(references)
 
     @staticmethod
     def _write_eligibility(
@@ -370,7 +385,7 @@ class PrepareData:
             if config.dataset.id is DatasetId.DIAD
             else "eligibility.json"
         )
-        PrepareData._write_json(root / name, manifest.to_dict())
+        atomic_write_json(root / name, manifest)
 
     @staticmethod
     def _validate_source_identity_count(
@@ -407,56 +422,30 @@ class PrepareData:
         root: Path,
         config: ExperimentConfig,
         source_manifests: tuple[SourceFileManifest, ...],
-        clients: dict[str, dict[str, object]],
+        clients: tuple[ClientDatasetManifest, ...],
         feature_columns: tuple[str, ...],
-        split_manifests: dict[str, str],
+        assignments: tuple[CalibrationAssignmentReference, ...],
     ) -> None:
-        deterministic_payload = {
-            "dataset_id": config.dataset.id.value,
-            "source_version": config.dataset.source_version,
-            "parser_version": config.dataset.parser_version,
-            "data_spec_hash": config.data_spec_hash,
-            "feature_names": list(feature_columns),
-            "clients": clients,
-            "source_files": [
-                {
-                    "relative_path": item.relative_path,
-                    "sha256": item.sha256.value,
-                    "size_bytes": item.size_bytes,
-                }
-                for item in source_manifests
-            ],
-            "calibration_assignments": dict(sorted(split_manifests.items())),
-            "external_replication_supported": (
-                True
-                if config.dataset.id is not DatasetId.DIAD
-                else len(clients) >= config.dataset.minimum_clients
-            ),
-            "dataset_level_code": (
-                None
-                if config.dataset.id is not DatasetId.DIAD
-                or len(clients) >= config.dataset.minimum_clients
-                else FailureCode.EXTERNAL_DATASET_INSUFFICIENT_CLIENTS.value
-            ),
-        }
-        canonical = json.dumps(
-            deterministic_payload,
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode("utf-8")
-        payload = {
-            **deterministic_payload,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "deterministic_payload_sha256": hashlib.sha256(canonical).hexdigest(),
-        }
-        self._write_json(root / "manifest.json", payload)
-
-    @staticmethod
-    def _write_json(path: Path, payload: object) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        temp = path.with_name(f".{path.name}.tmp")
-        temp.write_text(
-            json.dumps(payload, indent=2, sort_keys=True),
-            encoding="utf-8",
+        external_supported = (
+            True
+            if config.dataset.id is not DatasetId.DIAD
+            else len(clients) >= config.dataset.minimum_clients
         )
-        os.replace(temp, path)
+        code = (
+            None
+            if external_supported
+            else FailureCode.EXTERNAL_DATASET_INSUFFICIENT_CLIENTS
+        )
+        manifest = self.manifests.build(
+            dataset_id=config.dataset.id,
+            source_version=config.dataset.source_version,
+            parser_version=config.dataset.parser_version,
+            data_spec_hash=Sha256(config.data_spec_hash),
+            feature_names=feature_columns,
+            clients=clients,
+            source_files=source_manifests,
+            calibration_assignments=assignments,
+            external_replication_supported=external_supported,
+            dataset_level_code=code,
+        )
+        self.manifests.save(root / "manifest.json", manifest)
