@@ -42,11 +42,30 @@ class FedCRGProtocol:
     ) -> ReferenceThreshold:
         return self.reference_estimator.estimate(reference_scores, config.alpha)
 
-    def precompute_readiness(self, sample_count: int, config: ProtocolConfig) -> ReadinessPlan:
+    def precompute_readiness(
+        self,
+        sample_count: int,
+        config: ProtocolConfig,
+    ) -> ReadinessPlan:
+        """Populate a pre-data plan table entry before outcome evidence is inspected."""
+
         return self.readiness_cache.precompute(
             sample_count=sample_count,
             band=config.band,
             assurance=config.readiness_assurance,
+        )
+
+    def require_readiness(
+        self,
+        sample_count: int,
+        config: ProtocolConfig,
+    ) -> ReadinessPlan:
+        """Read a frozen plan; never optimize a rank during real-data evaluation."""
+
+        return self.readiness_cache.require(
+            sample_count,
+            config.band,
+            config.readiness_assurance,
         )
 
     def evaluate_client(
@@ -58,10 +77,9 @@ class FedCRGProtocol:
         config: ProtocolConfig,
         readiness_plan: ReadinessPlan | None = None,
     ) -> ClientProtocolResult:
-        plan = readiness_plan or self.readiness_cache.require(
+        plan = readiness_plan or self.require_readiness(
             len(calibration_scores),
-            config.band,
-            config.readiness_assurance,
+            config,
         )
         readiness = self.readiness_evaluator.evaluate(calibration_scores, plan)
         mismatch = self.mismatch_evaluator.evaluate(
