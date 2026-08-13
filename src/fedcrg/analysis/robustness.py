@@ -7,13 +7,14 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.stats import norm
 
+from fedcrg.core.enums import ExperimentAxisId
 from fedcrg.core.types import OperatingBand
 from fedcrg.protocol.readiness import ReadinessPlanBuilder
 
 
 @dataclass(frozen=True, slots=True)
 class RobustnessCell:
-    condition: str
+    axis: ExperimentAxisId
     value: float
     coverage: float
     repetitions: int
@@ -31,6 +32,8 @@ def temporal_dependence_stress(
     assurance: float,
     seed: int,
 ) -> RobustnessCell:
+    if not -1.0 < phi < 1.0:
+        raise ValueError("AR(1) phi must be strictly inside (-1,1)")
     plan = ReadinessPlanBuilder().build(sample_count, band, assurance)
     rng = np.random.Generator(np.random.PCG64(seed))
     inside = 0
@@ -43,7 +46,12 @@ def temporal_dependence_stress(
             series[index] = phi * series[index - 1] + scale * innovations[index]
         fpr = 1.0 - norm.cdf(_threshold(series, plan.rank))
         inside += int(band.lower <= fpr <= band.upper)
-    return RobustnessCell("ar1_phi", phi, inside / repetitions, repetitions)
+    return RobustnessCell(
+        ExperimentAxisId.PHI,
+        phi,
+        inside / repetitions,
+        repetitions,
+    )
 
 
 def calibration_shift_stress(
@@ -61,4 +69,9 @@ def calibration_shift_stress(
         threshold = _threshold(rng.normal(size=sample_count), plan.rank)
         future_fpr = 1.0 - norm.cdf(threshold, loc=mean_shift, scale=1.0)
         inside += int(band.lower <= future_fpr <= band.upper)
-    return RobustnessCell("mean_shift", mean_shift, inside / repetitions, repetitions)
+    return RobustnessCell(
+        ExperimentAxisId.MEAN_SHIFT,
+        mean_shift,
+        inside / repetitions,
+        repetitions,
+    )
