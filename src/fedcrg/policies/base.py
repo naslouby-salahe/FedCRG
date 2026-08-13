@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from fedcrg.core.ids import ClientId
+from fedcrg.core.ids import AttackGroupId, ClientId
 from fedcrg.protocol.results import ClientProtocolResult
 
 
@@ -63,11 +63,25 @@ class SupervisedDevelopmentEvidence:
 
 
 @dataclass(frozen=True, slots=True)
+class PolicySelectionInputs:
+    """All information permitted before final-test evidence is opened."""
+
+    benign: BenignPolicyEvidence
+    supervised: SupervisedDevelopmentEvidence
+
+    @property
+    def client_id(self) -> ClientId:
+        return self.benign.client_id
+
+
+@dataclass(frozen=True, slots=True)
 class FinalTestEvidence:
+    """Final-label evidence opened only after non-oracle thresholds are frozen."""
+
     benign: BenignPolicyEvidence
     benign_test_scores: np.ndarray
     attack_test_scores: np.ndarray
-    attack_test_groups: tuple[str, ...]
+    attack_test_groups: tuple[AttackGroupId, ...]
 
     def __post_init__(self) -> None:
         benign = np.asarray(self.benign_test_scores, dtype=np.float64)
@@ -80,17 +94,6 @@ class FinalTestEvidence:
             raise ValueError("Final test scores must be finite")
         object.__setattr__(self, "benign_test_scores", benign)
         object.__setattr__(self, "attack_test_scores", attack)
-
-
-@dataclass(frozen=True, slots=True)
-class ClientPolicyInputs:
-    benign: BenignPolicyEvidence
-    supervised: SupervisedDevelopmentEvidence
-    final_test: FinalTestEvidence
-
-    @property
-    def client_id(self) -> ClientId:
-        return self.benign.client_id
 
 
 def empirical_quantile(scores: np.ndarray, alpha: float = 0.01) -> float:
