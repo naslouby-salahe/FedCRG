@@ -60,9 +60,3 @@ def validate_score_manifest(manifest: ScoreManifest) -> None:
             raise ValueError(f"Final benign test is empty for {client_id}")
         if len(client.get(DataRole.ATTACK_TEST).values) == 0:
             raise ValueError(f"Final attack test is empty for {client_id}")
-
-
-def assert_same_cache_hash(*manifests: ScoreManifest) -> None:
-    hashes = {manifest.cache_sha256 for manifest in manifests}
-    if None in hashes or len(hashes) != 1:
-        raise ValueError("SCORE_CACHE_HASH_MISMATCH")
