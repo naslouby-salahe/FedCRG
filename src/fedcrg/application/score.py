@@ -10,6 +10,7 @@ import pandas as pd
 
 from fedcrg.application.train import TrainDetector, feature_columns
 from fedcrg.artifacts.hashing import sha256_file
+from fedcrg.artifacts.training import TrainingManifestStore
 from fedcrg.config.models import ExperimentConfig
 from fedcrg.core.enums import DataRole
 from fedcrg.core.ids import AttackGroupId, ClientId, ModelSeed, RowId, Sha256
@@ -30,8 +31,9 @@ _BASE_SCORE_ROLES = (
 class ComputeScores:
     """Score seed-independent base roles using bounded memory.
 
-    A training manifest is mandatory: scoring an arbitrary model file without proving
-    its training specification would break the frozen-detector provenance contract.
+    A typed training manifest is mandatory: scoring an arbitrary model file without
+    proving its training specification would break the frozen-detector provenance
+    contract.
     """
 
     def __init__(
@@ -39,10 +41,12 @@ class ComputeScores:
         computer: ScoreComputer | None = None,
         trainer: TrainDetector | None = None,
         cache: ScoreCache | None = None,
+        training_manifests: TrainingManifestStore | None = None,
     ) -> None:
         self.computer = computer or ScoreComputer()
         self.trainer = trainer or TrainDetector()
         self.cache = cache or ScoreCache()
+        self.training_manifests = training_manifests or TrainingManifestStore()
 
     def score_from_cache(
         self,
@@ -59,20 +63,24 @@ class ComputeScores:
         if prepared_manifest.get("data_spec_hash") != config.data_spec_hash:
             raise ValueError("Prepared dataset data-spec hash does not match scoring config")
 
-        training = json.loads(training_manifest.read_text(encoding="utf-8"))
-        if training.get("training_spec_hash") != config.training_spec_hash:
+        training = self.training_manifests.load(training_manifest)
+        if training.training_spec_hash != Sha256(config.training_spec_hash):
             raise ValueError("Frozen model belongs to another training specification")
-        if int(training.get("model_seed", -1)) != int(seed):
+        if training.data_spec_hash != Sha256(config.data_spec_hash):
+            raise ValueError("Frozen model belongs to another data specification")
+        if training.model_seed != seed:
             raise ValueError("Training manifest model seed does not match scoring request")
-        if training.get("model_file_sha256") != sha256_file(model_path):
+        if training.model_file_sha256 != Sha256(sha256_file(model_path)):
             raise ValueError("Frozen model file hash does not match training manifest")
-        if training.get("dataset_manifest_sha256") != sha256_file(manifest_path):
+        if training.dataset_manifest_sha256 != Sha256(sha256_file(manifest_path)):
             raise ValueError("Training manifest does not reference this prepared dataset manifest")
-        if training.get("preprocessing_sha256") != sha256_file(preprocessing_path):
+        if training.preprocessing_sha256 != Sha256(sha256_file(preprocessing_path)):
             raise ValueError("Training manifest does not reference this preprocessing artifact")
 
         model = self.trainer.load_model(config, model_path)
         model_hash = Sha256(model.state_hash())
+        if model_hash != training.result.final_model_hash:
+            raise ValueError("Frozen model state does not match the training result hash")
         identity = ScoreCacheIdentity(
             dataset=config.dataset.id,
             model_seed=seed,
@@ -95,13 +103,11 @@ class ComputeScores:
             self._validate_existing(config, seed, model_hash, score_root)
             return score_root
 
-        descriptor = self.cache.save_stream(
+        self.cache.save_stream(
             identity,
             self._score_roles(config, prepared_root, prepared_manifest, model),
             score_root,
         )
-        if not descriptor.cache_sha256.value:
-            raise RuntimeError("Score cache was not hash-finalized")
         return score_root
 
     def _score_roles(
