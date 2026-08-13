@@ -17,18 +17,19 @@ from fedcrg.domain.enums import (
     FailureCode,
 )
 from fedcrg.domain.identifiers import CalibrationSeed, ClientId, Sha256
-from fedcrg.data.manifests import (
-    CalibrationAssignmentManifest,
+from fedcrg.data.eligibility import EligibilityManifest, EligibilityRecord
+from fedcrg.data.prepare import (
     CalibrationAssignmentReference,
-    CalibrationRoleManifest,
-    ClientCalibrationManifest,
     ClientDatasetManifest,
-    EligibilityManifest,
     PreparedDatasetManifest,
     RoleArtifactManifest,
     SourceFileManifest,
 )
-from fedcrg.data.models import EligibilityRecord
+from fedcrg.data.splits import (
+    CalibrationAssignmentManifest,
+    CalibrationRoleManifest,
+    ClientCalibrationManifest,
+)
 
 
 class PreparedDatasetManifestStore:

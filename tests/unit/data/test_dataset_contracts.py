@@ -6,8 +6,8 @@ import pandas as pd
 from fedcrg.domain.constants import NBAIOT_CLIENT_IDS
 from fedcrg.domain.enums import DatasetId
 from fedcrg.domain.identifiers import ClientId
-from fedcrg.data.datasets.diad import DIAD_FEATURES, DiadAdapter
-from fedcrg.data.datasets.nbaiot import _CANONICAL_DEVICES, NBaiotAdapter
+from fedcrg.data.diad import DIAD_FEATURES, DiadAdapter
+from fedcrg.data.nbaiot import _CANONICAL_DEVICES, NBaiotAdapter
 
 
 def test_nbaiot_adapter_maps_exact_nine_clients_and_preserves_provenance(tmp_path: Path) -> None:

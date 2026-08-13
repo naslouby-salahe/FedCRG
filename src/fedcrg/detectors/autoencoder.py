@@ -6,7 +6,7 @@ import torch
 
 from fedcrg.config.training_config import AutoencoderConfig
 from fedcrg.domain.enums import ActivationId
-from fedcrg.detectors.base import DetectorModel
+from fedcrg.detectors.detector import DetectorModel
 
 
 def activation_module(activation: ActivationId) -> type[torch.nn.Module]:

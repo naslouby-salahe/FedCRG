@@ -7,11 +7,11 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from fedcrg.data.prepare import hash_row_ids
+from fedcrg.data.splits import ClientSplits
 from fedcrg.domain.enums import DataRole, DatasetId
 from fedcrg.domain.errors import DataIntegrityError
 from fedcrg.domain.identifiers import ClientId, Sha256
-from fedcrg.data.models import ClientSplits
-from fedcrg.data.manifests import hash_row_ids
 
 _METADATA = {
     "row_id",

@@ -4,8 +4,8 @@ import pandas as pd
 from fedcrg.config.dataset_config import DatasetConfig, SplitConfig
 from fedcrg.domain.enums import DataRole, DatasetFeatureContractId, DatasetId
 from fedcrg.domain.identifiers import ClientId
-from fedcrg.data.models import ClientData
-from fedcrg.data.splitting import DataSplitter
+from fedcrg.data.prepare import ClientData
+from fedcrg.data.splits import DataSplitter
 
 
 def _config() -> DatasetConfig:

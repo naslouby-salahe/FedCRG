@@ -6,7 +6,7 @@ import torch
 
 from fedcrg.config.training_config import DeepSvddConfig
 from fedcrg.domain.enums import ActivationId
-from fedcrg.detectors.base import DetectorModel
+from fedcrg.detectors.detector import DetectorModel
 
 
 class DeepSvdd(DetectorModel):

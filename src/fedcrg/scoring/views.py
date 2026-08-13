@@ -11,8 +11,7 @@ from fedcrg.artifacts.dataset import CalibrationAssignmentManifestStore
 from fedcrg.config.dataset_config import DatasetConfig
 from fedcrg.domain.enums import CalibrationAssignmentMode, DataRole, DatasetId
 from fedcrg.domain.identifiers import CalibrationSeed, ClientId
-from fedcrg.data.manifests import CalibrationAssignmentManifest
-from fedcrg.data.splitting import CalibrationAssignmentBuilder
+from fedcrg.data.splits import CalibrationAssignmentBuilder, CalibrationAssignmentManifest
 from fedcrg.scoring.cache import ScoreCache
 from fedcrg.scoring.models import RoleScores, ScoreManifest
 

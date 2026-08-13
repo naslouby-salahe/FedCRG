@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 
-from fedcrg.detectors.base import DetectorModel
+from fedcrg.detectors.detector import DetectorModel
 from fedcrg.federated.aggregation import EqualMeanAggregator
 
 

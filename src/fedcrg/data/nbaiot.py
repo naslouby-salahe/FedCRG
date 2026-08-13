@@ -8,14 +8,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from fedcrg.data.prepare import ClientData, DatasetAdapter, DatasetDiscovery
+from fedcrg.data.splits import stable_row_id
 from fedcrg.domain.constants import NBAIOT_EXPECTED_FEATURES
 from fedcrg.domain.enums import ChronologyStatus, DatasetId, FailureCode
 from fedcrg.domain.errors import DataIntegrityError
 from fedcrg.domain.identifiers import ClientId
-from fedcrg.data.adapter import DatasetAdapter
-from fedcrg.data.discovery import DatasetDiscovery
-from fedcrg.data.models import ClientData
-from fedcrg.data.splitting import stable_row_id
 
 
 _CANONICAL_DEVICES = {

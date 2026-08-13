@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from fedcrg.config.training_config import TrainingConfig
 from fedcrg.domain.identifiers import ClientId, Sha256
 from fedcrg.detectors.autoencoder import Autoencoder
-from fedcrg.detectors.base import DetectorModel
+from fedcrg.detectors.detector import DetectorModel
 from fedcrg.detectors.deep_svdd import DeepSvdd
 from fedcrg.federated.models import ClientRoundResult
 

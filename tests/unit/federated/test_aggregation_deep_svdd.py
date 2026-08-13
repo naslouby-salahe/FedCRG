@@ -2,7 +2,7 @@ import torch
 from fedcrg.config.training_config import AutoencoderConfig, DeepSvddConfig
 from fedcrg.detectors.autoencoder import Autoencoder
 from fedcrg.detectors.deep_svdd import DeepSvdd
-from fedcrg.detectors.factory import DetectorFactory
+from fedcrg.detectors.create_detector import create_detector
 from fedcrg.federated.aggregation import EqualMeanAggregator
 
 
@@ -27,9 +27,8 @@ def test_deep_svdd_center_and_score() -> None:
     assert model.anomaly_score(batch).shape == (4,)
 
 
-def test_detector_factory_builds_both_detectors() -> None:
-    factory = DetectorFactory()
-    assert isinstance(factory.create(2, AutoencoderConfig(hidden_dims=(1,))), Autoencoder)
+def test_create_detector_builds_both_detectors() -> None:
+    assert isinstance(create_detector(2, AutoencoderConfig(hidden_dims=(1,))), Autoencoder)
     assert isinstance(
-        factory.create(2, DeepSvddConfig(hidden_dims=(2,), embedding_dim=1)), DeepSvdd
+        create_detector(2, DeepSvddConfig(hidden_dims=(2,), embedding_dim=1)), DeepSvdd
     )

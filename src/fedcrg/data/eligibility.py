@@ -2,17 +2,41 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 
 from fedcrg.config.dataset_config import DatasetConfig
+from fedcrg.data.diad import DIAD_FEATURES
+from fedcrg.data.prepare import ClientData
 from fedcrg.domain.enums import (
+    ChronologyStatus,
     DatasetFeatureContractId,
     DatasetId,
     EligibilityStatus,
     FailureCode,
 )
-from fedcrg.data.datasets.diad import DIAD_FEATURES
-from fedcrg.data.models import ClientData, EligibilityRecord
+from fedcrg.domain.identifiers import ClientId
+
+
+@dataclass(frozen=True, slots=True)
+class EligibilityRecord:
+    client_id: ClientId
+    status: EligibilityStatus
+    benign_count: int
+    malicious_count: int
+    attack_development_capacity: int
+    primary_code: FailureCode | None
+    secondary_codes: tuple[FailureCode, ...]
+    chronology: ChronologyStatus
+
+
+@dataclass(frozen=True, slots=True)
+class EligibilityManifest:
+    dataset_id: DatasetId
+    discovered_clients: tuple[ClientId, ...]
+    eligible_clients: tuple[ClientId, ...]
+    records: tuple[EligibilityRecord, ...]
 
 
 _DIAD_PRECEDENCE = (

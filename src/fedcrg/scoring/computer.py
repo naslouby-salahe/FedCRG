@@ -7,7 +7,7 @@ import torch
 
 from fedcrg.domain.enums import ComputeDeviceId, DatasetId
 from fedcrg.domain.identifiers import ModelSeed, Sha256
-from fedcrg.detectors.base import DetectorModel
+from fedcrg.detectors.detector import DetectorModel
 from fedcrg.scoring.models import ClientScoreInput, ClientScoreSet, RoleScores, ScoreManifest
 
 

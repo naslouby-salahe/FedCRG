@@ -6,7 +6,7 @@ from collections.abc import Sequence
 
 import torch
 
-from fedcrg.detectors.base import DetectorModel
+from fedcrg.detectors.detector import DetectorModel
 
 
 def equal_client_mean(models: Sequence[DetectorModel]) -> dict[str, torch.Tensor]:

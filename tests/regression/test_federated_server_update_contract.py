@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from fedcrg.detectors.base import DetectorModel
+from fedcrg.detectors.detector import DetectorModel
 from fedcrg.federated.server import FederatedServer
 
 

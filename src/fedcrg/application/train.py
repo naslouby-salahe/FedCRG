@@ -26,9 +26,9 @@ from fedcrg.domain.constants import (
 )
 from fedcrg.domain.enums import DataRole, DatasetId, DetectorId, ExperimentId, FailureCode
 from fedcrg.domain.identifiers import ClientId, ModelSeed, Sha256
-from fedcrg.detectors.base import DetectorModel
+from fedcrg.detectors.detector import DetectorModel
 from fedcrg.detectors.deep_svdd import DeepSvdd
-from fedcrg.detectors.factory import DetectorFactory
+from fedcrg.detectors.create_detector import create_detector
 from fedcrg.federated.trainer import FederatedTrainer
 
 _METADATA_COLUMNS = {
@@ -63,18 +63,16 @@ class TrainDetector:
 
     def __init__(
         self,
-        factory: DetectorFactory | None = None,
         trainer: FederatedTrainer | None = None,
         manifests: TrainingManifestStore | None = None,
         dataset_manifests: PreparedDatasetManifestStore | None = None,
     ) -> None:
-        self.factory = factory or DetectorFactory()
         self.trainer = trainer or FederatedTrainer()
         self.manifests = manifests or TrainingManifestStore()
         self.dataset_manifests = dataset_manifests or PreparedDatasetManifestStore()
 
     def create_model(self, config: ExperimentConfig) -> DetectorModel:
-        return self.factory.create(config.dataset.feature_count, config.detector)
+        return create_detector(config.dataset.feature_count, config.detector)
 
     def _validate_architecture(self, config: ExperimentConfig, model: DetectorModel) -> None:
         if config.detector.id is not DetectorId.AUTOENCODER:

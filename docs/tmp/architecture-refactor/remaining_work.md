@@ -3,7 +3,7 @@
 Update this file as phases complete. Status values: TODO / IN_PROGRESS / DONE.
 
 - [x] Phase 1: domain + config          STATUS: DONE
-- [ ] Phase 2: data + detectors          STATUS: TODO
+- [x] Phase 2: data + detectors          STATUS: DONE
 - [ ] Phase 3: federation + scoring      STATUS: TODO
 - [ ] Phase 4: method + thresholds       STATUS: TODO
 - [ ] Phase 5: evaluation + analysis/reporting split   STATUS: TODO
@@ -54,6 +54,38 @@ Do not run full pytest/mypy/ruff after every micro-edit -- only at phase complet
   application/federation_cell.py, cli/research.py) -- to be fixed as those files migrate in
   later phases, must all be clean before final audit. Full pytest -n auto suite passes (129
   tests, unchanged pass count).
+
+## Phase 2 completion notes (data + detectors)
+- data/datasets/{nbaiot,diad}.py -> data/{nbaiot,diad}.py (package flattened, datasets/
+  subpackage and its re-exporting __init__.py deleted).
+- data/adapter.py, data/discovery.py, data/models.py (ClientData only -- other symbols split
+  out), and the manifest/hash helpers from data/manifests.py (SourceFileManifest,
+  CalibrationAssignmentReference, RoleArtifactManifest, ClientDatasetManifest,
+  PreparedDatasetManifest, hash_file, hash_row_ids, source_file_manifest) consolidated into
+  new data/prepare.py -- the dataset-adapter contract + prepared-cache provenance types.
+- data/splitting.py + data/integrity.py (validate_split_disjointness) + the splitting-domain
+  types from data/models.py (RoleFrame, ClientSplits, RolePositions,
+  CalibrationRoleAssignment) + the calibration-manifest types from data/manifests.py
+  (CalibrationRoleManifest, ClientCalibrationManifest, CalibrationAssignmentManifest)
+  consolidated into new data/splits.py.
+- EligibilityRecord (from data/models.py) and EligibilityManifest (from data/manifests.py)
+  moved into data/eligibility.py, colocated with ClientEligibilityEvaluator.
+- data/preprocessing.py and data/feature_sensitivity.py kept as-is, imports repointed.
+- data/audit.py deliberately left in place (imports already fixed by Phase 1's bulk sed) --
+  its true home is pipeline/preflight.py per migration_map.md, deferred to Phase 6 since its
+  only consumer (application/preflight.py) moves there too.
+- detectors/base.py -> detectors/detector.py (rename only, forbidden vague name fixed).
+  detectors/factory.py -> detectors/create_detector.py: DetectorFactory class dissolved into
+  a plain create_detector() function (prompt.md's target tree names the file
+  create_detector.py with no factory-class abstraction implied, and the class added no
+  behavior beyond one branch). application/train.py's TrainDetector no longer takes an
+  injectable `factory` parameter (no caller ever passed one).
+- Bulk-updated ~15 call sites across src/ and tests/ that imported the old data.models /
+  data.manifests / data.adapter / data.discovery / data.integrity / data.splitting /
+  data.datasets.* / detectors.base / detectors.factory paths.
+- Validation: ruff check/format clean; mypy (py312 override) shows 0 new errors -- same 7
+  pre-existing errors as Phase 1 baseline (minus 4 that were in files later touched here with
+  no new issues introduced); full pytest -n auto suite passes (129 tests, unchanged).
 
 ## Notes / open decisions to resolve during implementation
 - config/validate.py must not import thresholds/ (downward dependency violation in old

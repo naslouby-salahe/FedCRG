@@ -10,8 +10,7 @@ from fedcrg.config.method_config import ProtocolConfig
 from fedcrg.config.training_config import AutoencoderConfig, RandomnessConfig, TrainingConfig
 from fedcrg.domain.enums import DatasetFeatureContractId, DatasetId, ExperimentId, PolicyId
 from fedcrg.domain.identifiers import ClientId
-from fedcrg.data.adapter import DatasetAdapter
-from fedcrg.data.models import ClientData
+from fedcrg.data.prepare import DatasetAdapter, ClientData
 
 _NBAIOT_CLIENT_IDS = tuple(ClientId(f"nb{i:02d}") for i in range(1, 10))
 _FEATURE_COLUMNS = [f"f{i}" for i in range(1, 116)]

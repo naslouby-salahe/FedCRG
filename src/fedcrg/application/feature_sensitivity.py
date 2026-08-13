@@ -8,7 +8,7 @@ from fedcrg.artifacts.dataset import EligibilityManifestStore
 from fedcrg.artifacts.serialization import atomic_write_json
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import DatasetFeatureContractId, ExperimentId, PolicyId
-from fedcrg.data.datasets.diad import DiadAdapter
+from fedcrg.data.diad import DiadAdapter
 from fedcrg.data.feature_sensitivity import NumericSafeFeatureContract, derive_numeric_safe_features
 
 
@@ -89,7 +89,7 @@ class PrepareDiadFeatureSensitivity:
         feature_manifest: Path,
     ) -> tuple[ExperimentConfig, Path]:
         from fedcrg.application.prepare_data import PrepareData
-        from fedcrg.data.datasets.diad import DiadFeatureSensitivityAdapter
+        from fedcrg.data.diad import DiadFeatureSensitivityAdapter
 
         contract = BuildDiadFeatureSensitivityContract().build(
             data_root,

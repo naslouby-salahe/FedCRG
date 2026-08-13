@@ -15,8 +15,8 @@ from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import DataRole
 from fedcrg.domain.identifiers import AttackGroupId, ModelSeed, RowId, Sha256
 from fedcrg.runtime import get_logger
-from fedcrg.data.manifests import PreparedDatasetManifest
-from fedcrg.detectors.base import DetectorModel
+from fedcrg.data.prepare import PreparedDatasetManifest
+from fedcrg.detectors.detector import DetectorModel
 from fedcrg.scoring.cache import ScoreCache, ScoreCacheIdentity
 from fedcrg.scoring.computer import ScoreComputer
 from fedcrg.scoring.models import RoleScores

@@ -27,29 +27,36 @@ from fedcrg.domain.enums import (
 from fedcrg.domain.errors import DataIntegrityError
 from fedcrg.domain.identifiers import CalibrationSeed, ClientId, Sha256
 from fedcrg.runtime import get_logger
-from fedcrg.data.adapter import DatasetAdapter
-from fedcrg.data.datasets.diad import DiadAdapter
-from fedcrg.data.datasets.nbaiot import NBaiotAdapter
-from fedcrg.data.eligibility import ClientEligibilityEvaluator
-from fedcrg.data.manifests import (
-    CalibrationAssignmentManifest,
-    CalibrationAssignmentReference,
-    CalibrationRoleManifest,
-    ClientCalibrationManifest,
-    ClientDatasetManifest,
+from fedcrg.data.diad import DiadAdapter
+from fedcrg.data.eligibility import (
+    ClientEligibilityEvaluator,
     EligibilityManifest,
+    EligibilityRecord,
+)
+from fedcrg.data.nbaiot import NBaiotAdapter
+from fedcrg.data.prepare import (
+    CalibrationAssignmentReference,
+    ClientData,
+    ClientDatasetManifest,
+    DatasetAdapter,
     RoleArtifactManifest,
     SourceFileManifest,
     hash_row_ids,
     source_file_manifest,
 )
-from fedcrg.data.models import ClientData, ClientSplits, EligibilityRecord, RoleFrame
 from fedcrg.data.preprocessing import (
     ClientPreprocessingStatistics,
     FederatedPreprocessor,
     PreprocessingModel,
 )
-from fedcrg.data.splitting import DataSplitter
+from fedcrg.data.splits import (
+    CalibrationAssignmentManifest,
+    CalibrationRoleManifest,
+    ClientCalibrationManifest,
+    ClientSplits,
+    DataSplitter,
+    RoleFrame,
+)
 
 _LOGGER = get_logger(__name__)
 
