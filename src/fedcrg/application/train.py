@@ -131,6 +131,8 @@ class TrainDetector:
             raise ValueError("Prepared dataset data-spec hash does not match training config")
         if prepared_manifest.dataset_id is not config.dataset.id:
             raise ValueError("Prepared dataset identity does not match training config")
+        prepared_manifest_hash = Sha256(sha256_file(prepared_manifest_path))
+        preprocessing_hash = Sha256(sha256_file(preprocessing_path))
 
         datasets: dict[ClientId, TensorDataset] = {}
         training_rows: list[ClientTrainingCount] = []
@@ -170,7 +172,14 @@ class TrainDetector:
         model_path = model_root / "model.pt"
         manifest_path = model_root / "training.json"
         if model_path.exists() or manifest_path.exists():
-            self._validate_existing_cache(config, seed, model_path, manifest_path)
+            self._validate_existing_cache(
+                config,
+                seed,
+                model_path,
+                manifest_path,
+                prepared_manifest_hash,
+                preprocessing_hash,
+            )
             return model_path, manifest_path
 
         torch.manual_seed(int(seed))
@@ -202,8 +211,8 @@ class TrainDetector:
             model_seed=seed,
             data_spec_hash=Sha256(config.data_spec_hash),
             training_spec_hash=Sha256(config.training_spec_hash),
-            dataset_manifest_sha256=Sha256(sha256_file(prepared_manifest_path)),
-            preprocessing_sha256=Sha256(sha256_file(preprocessing_path)),
+            dataset_manifest_sha256=prepared_manifest_hash,
+            preprocessing_sha256=preprocessing_hash,
             model_file_sha256=Sha256(sha256_file(model_path)),
             deep_svdd_center_sha256=center_hash,
             training_rows=tuple(training_rows),
@@ -218,6 +227,8 @@ class TrainDetector:
         model_seed: ModelSeed,
         model_path: Path,
         manifest_path: Path,
+        prepared_manifest_hash: Sha256,
+        preprocessing_hash: Sha256,
     ) -> None:
         if not model_path.is_file() or not manifest_path.is_file():
             raise FileExistsError("Model cache is partially materialized")
@@ -228,6 +239,10 @@ class TrainDetector:
             raise ValueError("Existing model cache belongs to another data specification")
         if manifest.training_spec_hash != Sha256(config.training_spec_hash):
             raise ValueError("Existing model cache belongs to another training specification")
+        if manifest.dataset_manifest_sha256 != prepared_manifest_hash:
+            raise ValueError("Existing model cache was trained from a different prepared manifest")
+        if manifest.preprocessing_sha256 != preprocessing_hash:
+            raise ValueError("Existing model cache was trained with different preprocessing evidence")
         if manifest.model_file_sha256 != Sha256(sha256_file(model_path)):
             raise ValueError("Existing frozen-model hash does not match its manifest")
         if manifest.result.final_model_hash != Sha256(
