@@ -42,11 +42,17 @@ class SupervisedDevelopmentEvidence:
         guard = np.asarray(self.benign_guard_scores, dtype=np.float64)
         attack = np.asarray(self.attack_dev_scores, dtype=np.float64)
         if len(guard) != 500 or len(attack) != 500:
-            raise ValueError("Supervised development must be exactly 500 benign + 500 malicious scores")
+            raise ValueError(
+                "Supervised development must be exactly 500 benign + 500 malicious scores"
+            )
         if not np.isfinite(guard).all() or not np.isfinite(attack).all():
             raise ValueError("Supervised development scores must be finite")
         object.__setattr__(self, "benign_guard_scores", guard)
         object.__setattr__(self, "attack_dev_scores", attack)
+
+    @property
+    def client_id(self) -> ClientId:
+        return self.benign.client_id
 
     @property
     def scores(self) -> np.ndarray:
@@ -60,18 +66,6 @@ class SupervisedDevelopmentEvidence:
                 np.ones(len(self.attack_dev_scores), dtype=np.int64),
             )
         )
-
-
-@dataclass(frozen=True, slots=True)
-class PolicySelectionInputs:
-    """All information permitted before final-test evidence is opened."""
-
-    benign: BenignPolicyEvidence
-    supervised: SupervisedDevelopmentEvidence
-
-    @property
-    def client_id(self) -> ClientId:
-        return self.benign.client_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +93,11 @@ class FinalTestEvidence:
 def empirical_quantile(scores: np.ndarray, alpha: float = 0.01) -> float:
     values = np.sort(np.asarray(scores, dtype=np.float64), kind="stable")
     if values.ndim != 1 or len(values) == 0:
-        raise ValueError("Quantile thresholds require a non-empty one-dimensional array")
-    rank = min(len(values), int(np.ceil((len(values) + 1) * (1.0 - alpha))))
+        raise ValueError(
+            "Quantile thresholds require a non-empty one-dimensional array"
+        )
+    rank = min(
+        len(values),
+        int(np.ceil((len(values) + 1) * (1.0 - alpha))),
+    )
     return float(values[rank - 1])
