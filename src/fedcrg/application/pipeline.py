@@ -11,11 +11,12 @@ from fedcrg.application.score import ComputeScores
 from fedcrg.application.train import TrainDetector
 from fedcrg.config.models import ExperimentConfig
 from fedcrg.core.enums import ExperimentId
+from fedcrg.core.ids import CalibrationSeed, ModelSeed
 
 
 @dataclass(frozen=True, slots=True)
 class FrozenModelEvidence:
-    model_seed: int
+    model_seed: ModelSeed
     model_path: Path
     training_manifest: Path
     score_root: Path
@@ -51,16 +52,22 @@ class ExecuteFrozenWorkload:
     ) -> WorkloadExecution:
         """Execute the configured model/calibration grid without duplicate training or scoring."""
 
-        seeds = calibration_seeds or config.dataset.calibration_seeds
-        if not seeds:
+        seed_values = calibration_seeds or config.dataset.calibration_seeds
+        if not seed_values:
             raise ValueError("At least one calibration seed is required")
-        invalid = tuple(seed for seed in seeds if seed not in config.dataset.calibration_seeds)
+        invalid = tuple(
+            seed for seed in seed_values if seed not in config.dataset.calibration_seeds
+        )
         if invalid:
-            raise ValueError(f"Calibration seeds are outside the frozen dataset registry: {invalid}")
+            raise ValueError(
+                f"Calibration seeds are outside the frozen dataset registry: {invalid}"
+            )
+        calibration_grid = tuple(CalibrationSeed(seed) for seed in seed_values)
 
         model_evidence: list[FrozenModelEvidence] = []
         run_directories: list[Path] = []
-        for model_seed in config.randomness.model_seeds:
+        for model_seed_value in config.randomness.model_seeds:
+            model_seed = ModelSeed(model_seed_value)
             model_path, training_manifest = self.trainer.train_from_cache(
                 config,
                 prepared_root,
@@ -87,7 +94,7 @@ class ExecuteFrozenWorkload:
                 training_manifest=training_manifest,
                 score_root=score_root,
             )
-            for calibration_seed in seeds:
+            for calibration_seed in calibration_grid:
                 cell = self.federation_cells.materialize(
                     experiment_id=experiment_id,
                     config=config,
@@ -95,7 +102,9 @@ class ExecuteFrozenWorkload:
                     calibration_seed=calibration_seed,
                     caches=caches,
                 )
-                run_directories.extend(cell.run_directories.values())
+                run_directories.extend(
+                    entry.path for entry in cell.run_directories
+                )
 
         return WorkloadExecution(
             experiment_id=experiment_id,
