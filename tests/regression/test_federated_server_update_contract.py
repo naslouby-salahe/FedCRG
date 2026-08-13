@@ -4,7 +4,7 @@ import pytest
 import torch
 
 from fedcrg.detectors.detector import DetectorModel
-from fedcrg.federated.server import FederatedServer
+from fedcrg.federation.server import FederatedServer
 
 
 class TinyDetector(DetectorModel):

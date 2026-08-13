@@ -8,7 +8,8 @@ import torch
 from fedcrg.domain.enums import ComputeDeviceId, DatasetId
 from fedcrg.domain.identifiers import ModelSeed, Sha256
 from fedcrg.detectors.detector import DetectorModel
-from fedcrg.scoring.models import ClientScoreInput, ClientScoreSet, RoleScores, ScoreManifest
+from fedcrg.scoring.calibration_scores import ClientScoreInput, ClientScoreSet, RoleScores
+from fedcrg.scoring.score_records import ScoreManifest
 
 
 class ScoreComputer:

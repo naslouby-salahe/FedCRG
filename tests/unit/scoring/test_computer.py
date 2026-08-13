@@ -6,8 +6,8 @@ from fedcrg.config.training_config import AutoencoderConfig
 from fedcrg.domain.enums import DataRole, DatasetId
 from fedcrg.domain.identifiers import ClientId, ModelSeed, RowId, Sha256
 from fedcrg.detectors.autoencoder import Autoencoder
-from fedcrg.scoring.computer import ScoreComputer
-from fedcrg.scoring.models import ClientScoreInput, RoleScoreInput
+from fedcrg.scoring.compute import ScoreComputer
+from fedcrg.scoring.calibration_scores import ClientScoreInput, RoleScoreInput
 
 _SOME_HASH = Sha256("a" * 64)
 

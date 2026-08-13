@@ -13,7 +13,7 @@ from fedcrg.domain.identifiers import (
     Sha256,
 )
 from fedcrg.scoring.cache import ScoreCacheIdentity, ScoreRoleCacheRecord
-from fedcrg.scoring.models import RoleScores
+from fedcrg.scoring.calibration_scores import RoleScores
 
 
 def _field_type(cls: type[object], name: str) -> object:

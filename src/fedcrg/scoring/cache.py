@@ -29,8 +29,9 @@ from fedcrg.artifacts.serialization import (
 from fedcrg.domain.enums import DataRole, DatasetId
 from fedcrg.domain.errors import ImmutableRunError
 from fedcrg.domain.identifiers import AttackGroupId, ClientId, ModelSeed, RowId, Sha256
-from fedcrg.scoring.integrity import validate_score_manifest
-from fedcrg.scoring.models import ClientScoreSet, RoleScores, ScoreManifest
+from fedcrg.scoring.calibration_scores import ClientScoreSet, RoleScores
+from fedcrg.scoring.score_records import ScoreManifest
+from fedcrg.scoring.validation import validate_score_manifest
 
 # pandas-stubs' read_parquet overloads omit "pyarrow" from the engine Literal even
 # though pandas itself supports it; this cast documents that stub gap.

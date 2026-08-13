@@ -18,8 +18,8 @@ from fedcrg.runtime import get_logger
 from fedcrg.data.prepare import PreparedDatasetManifest
 from fedcrg.detectors.detector import DetectorModel
 from fedcrg.scoring.cache import ScoreCache, ScoreCacheIdentity
-from fedcrg.scoring.computer import ScoreComputer
-from fedcrg.scoring.models import RoleScores
+from fedcrg.scoring.compute import ScoreComputer
+from fedcrg.scoring.calibration_scores import RoleScores
 
 _LOGGER = get_logger(__name__)
 

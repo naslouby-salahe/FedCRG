@@ -4,7 +4,7 @@ Update this file as phases complete. Status values: TODO / IN_PROGRESS / DONE.
 
 - [x] Phase 1: domain + config          STATUS: DONE
 - [x] Phase 2: data + detectors          STATUS: DONE
-- [ ] Phase 3: federation + scoring      STATUS: TODO
+- [x] Phase 3: federation + scoring      STATUS: DONE
 - [ ] Phase 4: method + thresholds       STATUS: TODO
 - [ ] Phase 5: evaluation + analysis/reporting split   STATUS: TODO
 - [ ] Phase 6: application/ removed -> pipeline/ + experiments/definitions/   STATUS: TODO
@@ -86,6 +86,33 @@ Do not run full pytest/mypy/ruff after every micro-edit -- only at phase complet
 - Validation: ruff check/format clean; mypy (py312 override) shows 0 new errors -- same 7
   pre-existing errors as Phase 1 baseline (minus 4 that were in files later touched here with
   no new issues introduced); full pytest -n auto suite passes (129 tests, unchanged).
+
+## Phase 3 completion notes (federation + scoring)
+- federated/ package renamed to federation/ (git mv of the whole directory).
+  models.py -> training_results.py, sampling.py -> participation.py,
+  scheduling.py -> learning_rate.py, trainer.py -> training.py. client.py, server.py,
+  aggregation.py kept. tests/unit/federated/ -> tests/unit/federation/.
+- scoring/models.py split: RoleScoreInput/ClientScoreInput/RoleScores/ClientScoreSet (the
+  per-client/per-role score containers) merged with scoring/views.py's
+  ClientCalibrationScores/CalibrationScoreViews/CalibrationScoreViewBuilder/truncate_view into
+  new scoring/calibration_scores.py; ScoreManifest (the persistence-facing top record) moved
+  to new scoring/score_records.py. scoring/integrity.py -> scoring/validation.py.
+  scoring/computer.py -> scoring/compute.py.
+- Broke a would-be import cycle between calibration_scores.py (needs ScoreCache/ScoreManifest
+  only for method type hints) and cache.py/score_records.py (which need the score-container
+  types) using `if TYPE_CHECKING:` imports in calibration_scores.py -- standard pattern, not
+  a workaround-style local import.
+- scoring/__init__.py emptied (was the only non-empty package __init__.py in the repo,
+  re-exporting ScoreCache/ScoreManifest/CalibrationScoreViewBuilder/CalibrationScoreViews;
+  confirmed no caller imported the package directly rather than its submodules).
+- Bulk-updated all internal and test call sites for fedcrg.federated.* ->
+  fedcrg.federation.* and fedcrg.scoring.{models,views,integrity,computer} -> the new module
+  names above, including tests/contract/test_architecture_boundaries.py's forbidden-prefix
+  list.
+- Validation: ruff check/format clean; mypy (py312 override) shows the same pre-existing
+  errors as before (application/report.py, application/claims.py, application/
+  federation_cell.py, scoring/cache.py) -- none newly introduced, none in federation/ or
+  scoring/ itself; full pytest -n auto suite passes (129 tests, unchanged).
 
 ## Notes / open decisions to resolve during implementation
 - config/validate.py must not import thresholds/ (downward dependency violation in old

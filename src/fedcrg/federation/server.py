@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 
 from fedcrg.detectors.detector import DetectorModel
-from fedcrg.federated.aggregation import EqualMeanAggregator
+from fedcrg.federation.aggregation import EqualMeanAggregator
 
 
 class FederatedServer:

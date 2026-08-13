@@ -47,7 +47,7 @@ from fedcrg.protocol.mismatch import clopper_pearson_interval
 from fedcrg.protocol.results import ClientProtocolResult
 from fedcrg.protocol.service import FedCRGProtocol
 from fedcrg.scoring.cache import ScoreCache, ScoreCacheDescriptor
-from fedcrg.scoring.views import CalibrationScoreViewBuilder, CalibrationScoreViews
+from fedcrg.scoring.calibration_scores import CalibrationScoreViewBuilder, CalibrationScoreViews
 
 
 class EvaluatePolicies:

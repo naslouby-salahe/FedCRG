@@ -13,7 +13,7 @@ from fedcrg.domain.identifiers import ClientId, Sha256
 from fedcrg.detectors.autoencoder import Autoencoder
 from fedcrg.detectors.detector import DetectorModel
 from fedcrg.detectors.deep_svdd import DeepSvdd
-from fedcrg.federated.models import ClientRoundResult
+from fedcrg.federation.training_results import ClientRoundResult
 
 
 def epoch_seed(model_seed: int, client_id: ClientId, round_index: int, epoch: int) -> int:

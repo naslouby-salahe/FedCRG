@@ -7,7 +7,8 @@ import pytest
 from fedcrg.domain.enums import DataRole, DatasetId
 from fedcrg.domain.identifiers import ClientId, ModelSeed, RowId, Sha256
 from fedcrg.scoring.cache import ScoreCache
-from fedcrg.scoring.models import ClientScoreSet, RoleScores, ScoreManifest
+from fedcrg.scoring.calibration_scores import ClientScoreSet, RoleScores
+from fedcrg.scoring.score_records import ScoreManifest
 
 _CLIENT = ClientId("c1")
 _SOME_HASH = Sha256("a" * 64)

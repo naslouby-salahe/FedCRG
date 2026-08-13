@@ -15,7 +15,7 @@ from fedcrg.artifacts.serialization import (
 )
 from fedcrg.domain.enums import DatasetId, DetectorId
 from fedcrg.domain.identifiers import ClientId, ModelSeed, Sha256
-from fedcrg.federated.models import ClientRoundResult, RoundResult, TrainingResult
+from fedcrg.federation.training_results import ClientRoundResult, RoundResult, TrainingResult
 
 
 @dataclass(frozen=True, slots=True)

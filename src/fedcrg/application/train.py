@@ -29,7 +29,7 @@ from fedcrg.domain.identifiers import ClientId, ModelSeed, Sha256
 from fedcrg.detectors.detector import DetectorModel
 from fedcrg.detectors.deep_svdd import DeepSvdd
 from fedcrg.detectors.create_detector import create_detector
-from fedcrg.federated.trainer import FederatedTrainer
+from fedcrg.federation.training import FederatedTrainer
 
 _METADATA_COLUMNS = {
     "row_id",

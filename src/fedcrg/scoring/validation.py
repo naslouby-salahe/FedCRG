@@ -6,7 +6,7 @@ import numpy as np
 
 from fedcrg.domain.enums import DataRole
 from fedcrg.domain.identifiers import RowId
-from fedcrg.scoring.models import ScoreManifest
+from fedcrg.scoring.score_records import ScoreManifest
 
 _REQUIRED_BASE_ROLES = frozenset(
     {

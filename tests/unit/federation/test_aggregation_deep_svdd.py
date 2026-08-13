@@ -3,7 +3,7 @@ from fedcrg.config.training_config import AutoencoderConfig, DeepSvddConfig
 from fedcrg.detectors.autoencoder import Autoencoder
 from fedcrg.detectors.deep_svdd import DeepSvdd
 from fedcrg.detectors.create_detector import create_detector
-from fedcrg.federated.aggregation import EqualMeanAggregator
+from fedcrg.federation.aggregation import EqualMeanAggregator
 
 
 def test_equal_mean_aggregation() -> None:

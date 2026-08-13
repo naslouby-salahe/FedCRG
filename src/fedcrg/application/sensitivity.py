@@ -37,10 +37,10 @@ from fedcrg.protocol.mismatch import (
 from fedcrg.protocol.readiness import familywise_readiness_assurance
 from fedcrg.protocol.results import ClientProtocolResult
 from fedcrg.scoring.cache import ScoreCache
-from fedcrg.scoring.models import RoleScores
-from fedcrg.scoring.views import (
+from fedcrg.scoring.calibration_scores import (
     CalibrationScoreViews,
     ClientCalibrationScores,
+    RoleScores,
     truncate_view,
 )
 

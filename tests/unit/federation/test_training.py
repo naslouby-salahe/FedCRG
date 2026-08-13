@@ -5,8 +5,8 @@ from torch.utils.data import TensorDataset
 from fedcrg.config.training_config import AutoencoderConfig, TrainingConfig
 from fedcrg.domain.identifiers import ClientId
 from fedcrg.detectors.autoencoder import Autoencoder
-from fedcrg.federated.scheduling import cosine_learning_rate
-from fedcrg.federated.trainer import FederatedTrainer
+from fedcrg.federation.learning_rate import cosine_learning_rate
+from fedcrg.federation.training import FederatedTrainer
 
 
 def test_learning_rate_uses_configured_endpoints() -> None:

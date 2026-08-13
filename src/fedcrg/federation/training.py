@@ -14,11 +14,11 @@ from fedcrg.config.training_config import TrainingConfig
 from fedcrg.domain.identifiers import ClientId, ModelSeed, Sha256
 from fedcrg.runtime import get_logger
 from fedcrg.detectors.detector import DetectorModel
-from fedcrg.federated.client import FederatedClient
-from fedcrg.federated.models import RoundResult, TrainingResult
-from fedcrg.federated.sampling import ClientSampler
-from fedcrg.federated.scheduling import cosine_learning_rate
-from fedcrg.federated.server import FederatedServer
+from fedcrg.federation.client import FederatedClient
+from fedcrg.federation.training_results import RoundResult, TrainingResult
+from fedcrg.federation.participation import ClientSampler
+from fedcrg.federation.learning_rate import cosine_learning_rate
+from fedcrg.federation.server import FederatedServer
 
 _LOGGER = get_logger(__name__)
 

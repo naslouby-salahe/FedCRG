@@ -75,7 +75,7 @@ def test_domain_is_dependency_free_from_outer_layers() -> None:
         "fedcrg.data",
         "fedcrg.detectors",
         "fedcrg.experiments",
-        "fedcrg.federated",
+        "fedcrg.federation",
         "fedcrg.metrics",
         "fedcrg.policies",
         "fedcrg.protocol",
@@ -106,7 +106,7 @@ def test_protocol_does_not_depend_on_application_cli_or_artifact_io() -> None:
 def test_cli_never_imports_statistical_or_training_implementation_directly() -> None:
     forbidden_prefixes = (
         "fedcrg.protocol",
-        "fedcrg.federated",
+        "fedcrg.federation",
         "fedcrg.detectors",
         "fedcrg.policies",
         "fedcrg.metrics",
