@@ -14,8 +14,8 @@ from fedcrg.artifacts.references import CacheReference, CacheReferenceStore
 from fedcrg.artifacts.serialization import atomic_write_json
 from fedcrg.config.models import ExperimentConfig
 from fedcrg.core.enums import CalibrationAssignmentMode, DatasetId, PolicyId
-from fedcrg.core.ids import Sha256
-from fedcrg.metrics.results import EvaluationBundle
+from fedcrg.core.ids import CalibrationSeed, RunId, Sha256
+from fedcrg.metrics.results import EvaluationBundle, FederationMetrics
 from fedcrg.scoring.cache import ScoreCache
 
 
@@ -28,7 +28,7 @@ class FrozenCacheInputs:
 
 
 class PolicyCellMaterializer:
-    """Create one policy run while sharing a federation-level evaluation across policies."""
+    """Create policy evidence while sharing one frozen federation evaluation."""
 
     def __init__(
         self,
@@ -44,18 +44,18 @@ class PolicyCellMaterializer:
         self,
         config: ExperimentConfig,
         caches: FrozenCacheInputs,
-        calibration_seed: int,
+        calibration_seed: CalibrationSeed | int,
         assignment_mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
     ) -> EvaluationBundle:
         self.validate_upstream(config, caches)
-        scores = self.score_cache.load(caches.score_root)
-        if scores.data_spec_hash != Sha256(config.data_spec_hash):
+        descriptor = self.score_cache.load_descriptor(caches.score_root)
+        if descriptor.identity.data_spec_hash != Sha256(config.data_spec_hash):
             raise ValueError("SCORE_CACHE_HASH_MISMATCH: data specification differs")
-        if scores.training_spec_hash != Sha256(config.training_spec_hash):
+        if descriptor.identity.training_spec_hash != Sha256(config.training_spec_hash):
             raise ValueError("SCORE_CACHE_HASH_MISMATCH: training specification differs")
-        return self.evaluator.evaluate(
+        return self.evaluator.evaluate_from_cache(
             config,
-            scores,
+            caches.score_root,
             calibration_seed=calibration_seed,
             mode=assignment_mode,
             prepared_root=caches.prepared_root,
@@ -67,10 +67,12 @@ class PolicyCellMaterializer:
         policy: PolicyId,
         layout: RunLayout,
         caches: FrozenCacheInputs,
-        calibration_seed: int,
+        calibration_seed: CalibrationSeed | int,
         assignment_mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
-    ) -> object:
-        bundle = self.evaluate_federation(config, caches, calibration_seed, assignment_mode)
+    ) -> FederationMetrics | None:
+        bundle = self.evaluate_federation(
+            config, caches, calibration_seed, assignment_mode
+        )
         return self.materialize_precomputed(
             config,
             policy,
@@ -87,20 +89,26 @@ class PolicyCellMaterializer:
         policy: PolicyId,
         layout: RunLayout,
         caches: FrozenCacheInputs,
-        calibration_seed: int,
+        calibration_seed: CalibrationSeed | int,
         bundle: EvaluationBundle,
         assignment_mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
-    ) -> object:
-        self._copy_manifests(config, layout, caches, calibration_seed, assignment_mode)
+    ) -> FederationMetrics | None:
+        seed = CalibrationSeed(int(calibration_seed))
+        self._copy_manifests(config, layout, caches, seed, assignment_mode)
         self._write_cache_references(config, layout, caches)
-        scores = self.score_cache.load(caches.score_root)
-        self.evaluator.write_policy_artifacts(layout.root, layout.root.name, policy, bundle)
+        descriptor = self.score_cache.load_descriptor(caches.score_root)
+        self.evaluator.write_policy_artifacts(
+            layout.root,
+            RunId(layout.root.name),
+            policy,
+            bundle,
+        )
         atomic_write_json(
             layout.reports / "evaluation_summary.json",
             {
-                "calibration_seed": calibration_seed,
-                "calibration_assignment": assignment_mode.value,
-                "score_cache_sha256": scores.cache_sha256.value if scores.cache_sha256 else None,
+                "calibration_seed": int(seed),
+                "calibration_assignment": assignment_mode,
+                "score_cache_sha256": descriptor.cache_sha256,
                 "evaluation": self.evaluator.to_serializable(bundle),
             },
         )
@@ -119,11 +127,16 @@ class PolicyCellMaterializer:
         missing = tuple(path for path in required if not path.is_file())
         if missing:
             raise FileNotFoundError(
-                "Missing frozen upstream artifact(s): " + ", ".join(str(path) for path in missing)
+                "Missing frozen upstream artifact(s): "
+                + ", ".join(str(path) for path in missing)
             )
-        prepared = json.loads((caches.prepared_root / "manifest.json").read_text(encoding="utf-8"))
+        prepared = json.loads(
+            (caches.prepared_root / "manifest.json").read_text(encoding="utf-8")
+        )
         training = json.loads(caches.training_manifest.read_text(encoding="utf-8"))
-        score = json.loads((caches.score_root / ScoreCache.manifest_filename).read_text(encoding="utf-8"))
+        score = json.loads(
+            (caches.score_root / ScoreCache.manifest_filename).read_text(encoding="utf-8")
+        )
         expected = (
             ("prepared dataset", prepared.get("data_spec_hash"), config.data_spec_hash),
             ("training", training.get("data_spec_hash"), config.data_spec_hash),
@@ -133,9 +146,13 @@ class PolicyCellMaterializer:
         )
         for name, observed, wanted in expected:
             if observed != wanted:
-                raise ValueError(f"{name} provenance hash does not match the requested cell")
+                raise ValueError(
+                    f"{name} provenance hash does not match the requested cell"
+                )
         if training.get("model_file_sha256") != sha256_file(caches.model_path):
             raise ValueError("Frozen model hash does not match its training manifest")
+        if score.get("model_hash") != training.get("final_model_hash"):
+            raise ValueError("Score-cache model state does not match training result")
 
     @staticmethod
     def _copy(source: Path, destination: Path) -> None:
@@ -149,25 +166,47 @@ class PolicyCellMaterializer:
         config: ExperimentConfig,
         layout: RunLayout,
         caches: FrozenCacheInputs,
-        calibration_seed: int,
+        calibration_seed: CalibrationSeed,
         assignment_mode: CalibrationAssignmentMode,
     ) -> None:
-        self._copy(caches.prepared_root / "manifest.json", layout.data / "dataset_manifest.json")
-        self._copy(caches.prepared_root / "preprocessing.json", layout.data / "preprocessing.json")
-        eligibility_name = "diad_eligibility.json" if config.dataset.id is DatasetId.DIAD else "eligibility.json"
+        self._copy(
+            caches.prepared_root / "manifest.json",
+            layout.data / "dataset_manifest.json",
+        )
+        self._copy(
+            caches.prepared_root / "preprocessing.json",
+            layout.data / "preprocessing.json",
+        )
+        eligibility_name = (
+            "diad_eligibility.json"
+            if config.dataset.id is DatasetId.DIAD
+            else "eligibility.json"
+        )
         eligibility_source = caches.prepared_root / eligibility_name
         if eligibility_source.exists():
             self._copy(eligibility_source, layout.data / "eligibility.json")
             if eligibility_name != "eligibility.json":
                 self._copy(eligibility_source, layout.data / eligibility_name)
         assignment_source = (
-            caches.prepared_root / "splits" / "seeded" / f"c{calibration_seed}.json"
+            caches.prepared_root
+            / "splits"
+            / "seeded"
+            / f"c{int(calibration_seed)}.json"
             if assignment_mode is CalibrationAssignmentMode.SEEDED_PERMUTATION
             else caches.prepared_root / "splits" / "source_order.json"
         )
-        self._copy(assignment_source, layout.data / "calibration_assignment.json")
-        self._copy(caches.training_manifest, layout.training / "training.json")
-        self._copy(caches.score_root / ScoreCache.manifest_filename, layout.scores / "manifest.json")
+        self._copy(
+            assignment_source,
+            layout.data / "calibration_assignment.json",
+        )
+        self._copy(
+            caches.training_manifest,
+            layout.training / "training.json",
+        )
+        self._copy(
+            caches.score_root / ScoreCache.manifest_filename,
+            layout.scores / "manifest.json",
+        )
 
     def _write_cache_references(
         self,
@@ -181,5 +220,8 @@ class PolicyCellMaterializer:
         )
         self.references.save(
             layout.score_reference,
-            CacheReference.build(caches.score_root / ScoreCache.filename, config.outputs_root),
+            CacheReference.build(
+                caches.score_root / ScoreCache.filename,
+                config.outputs_root,
+            ),
         )
