@@ -27,7 +27,7 @@ matrix IDs (`docs/FedCRG Audit Matrix.md`).
   (seeds, calibration seeds, attack-split seed) or derived (autoencoder parameter/byte
   counts from architecture). Matrix: K09, K11.
 - B3. ~~No `configs/statistics/confirmatory.yaml`~~ RESOLVED 2026-08-13: StatisticsConfig
-  + YAML; paired bootstrap/contrasts/claim gates/margin/familywise all config-resolved,
+  + YAML; paired bootstrap/contrasts/margin/familywise all config-resolved,
   no hidden defaults. Matrix: K06, M06, M07, C14.
 - B4. ~~Config file layout differs from target tree~~ RESOLVED 2026-08-13:
   `configs/method|training|randomness|statistics|detectors` layout matches target;

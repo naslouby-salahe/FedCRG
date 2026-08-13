@@ -54,7 +54,7 @@ DONE 2026-08-13: consolidated to `cli/app.py` (root, doctor, monitor, config),
 `experiment_commands.py` (experiment validate|plan|run-policy-cell|
 materialize-federation-cell|execute-grid, train, score, evaluate, synthetic,
 robustness, sensitivity, benchmark, campaign run|status|list),
-`analysis_commands.py` (claims, tables, verify), `report_commands.py` (report,
+`analysis_commands.py` (tables, verify), `report_commands.py` (report,
 results build|verify); entry point `cli.app:cli`; all 14 legacy files deleted.
 
 ## Batch 8 — Makefile, Nox, CI, typing (matrix R10, R11, T03, T07, E2)

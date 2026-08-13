@@ -1,4 +1,4 @@
-"""Equal-client federation aggregation and utility-margin evaluation."""
+"""Equal-client federation aggregation."""
 
 from __future__ import annotations
 
@@ -6,21 +6,12 @@ import numpy as np
 
 from fedcrg.domain.enums import PolicyEvaluationStatus, PolicyId
 from fedcrg.domain.identifiers import ClientId
-from fedcrg.evaluation.evaluation_results import (
-    FederationMetrics,
-    PolicyEvaluation,
-    UtilityAssessment,
-)
+from fedcrg.evaluation.evaluation_results import FederationMetrics, PolicyEvaluation
 
 
 def _mean_defined(values: list[float | None]) -> float | None:
     defined = [value for value in values if value is not None]
     return float(np.mean(defined)) if defined else None
-
-
-def utility_margin_satisfied(method_value: float, anchor_value: float, margin: float) -> bool:
-    """The single locked utility-preservation comparison, shared by every caller."""
-    return method_value - anchor_value >= margin
 
 
 def aggregate_policy(
@@ -60,31 +51,6 @@ def aggregate_policy(
     )
 
 
-def utility_anchor(federations: tuple[FederationMetrics, ...]) -> float | None:
-    anchors = {
-        PolicyId.GLOBAL_QUANTILE,
-        PolicyId.LOCAL_QUANTILE,
-        PolicyId.SHRINKAGE,
-    }
-    values = [
-        item.attack_balanced_macro_tpr
-        for item in federations
-        if item.policy in anchors and item.attack_balanced_macro_tpr is not None
-    ]
-    return max(values) if values else None
-
-
-def utility_preserved(federations: tuple[FederationMetrics, ...], margin: float) -> bool | None:
-    anchor = utility_anchor(federations)
-    method = next(
-        (item.attack_balanced_macro_tpr for item in federations if item.policy is PolicyId.FEDCRG),
-        None,
-    )
-    if anchor is None or method is None:
-        return None
-    return utility_margin_satisfied(method, anchor, margin)
-
-
 def assert_ranking_metric_invariance(
     evaluations: tuple[PolicyEvaluation, ...], tolerance: float
 ) -> None:
@@ -99,23 +65,3 @@ def assert_ranking_metric_invariance(
             raise RuntimeError(f"Ranking AUROC changed across policies for {client_id}")
         if auprc_values and max(auprc_values) - min(auprc_values) > tolerance:
             raise RuntimeError(f"Ranking AUPRC changed across policies for {client_id}")
-
-
-def assess_utility(federations: tuple[FederationMetrics, ...], margin: float) -> UtilityAssessment:
-    anchor = utility_anchor(federations)
-    method = next(
-        (item.attack_balanced_macro_tpr for item in federations if item.policy is PolicyId.FEDCRG),
-        None,
-    )
-    difference = None if anchor is None or method is None else method - anchor
-    return UtilityAssessment(
-        anchor=anchor,
-        method_value=method,
-        difference=difference,
-        margin=margin,
-        preserved=(
-            None
-            if anchor is None or method is None
-            else utility_margin_satisfied(method, anchor, margin)
-        ),
-    )

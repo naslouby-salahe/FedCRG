@@ -15,7 +15,8 @@ Snapshot 2026-08-13, branch `main`, working tree clean.
   ledger.
 - Score cache is streaming, immutable, hash-finalized Parquet; calibration assignments
   are views over the reservoir; artifact verification by hash exists.
-- Claim gates G0-G8, policy contrasts, paired bootstrap, split stability exist.
+- Claim gates G0-G8 removed 2026-08-13 at maintainer request (out of scope);
+  policy contrasts, paired bootstrap, split stability remain.
 
 ## Structural deviations from the target architecture (prompt.md §4)
 

@@ -66,12 +66,3 @@ class EvaluationBundle:
     federations: tuple[FederationMetrics, ...]
     protocol_results: tuple[ClientEvaluationResult, ...]
     shrinkage_n0: int | None
-
-
-@dataclass(frozen=True, slots=True)
-class UtilityAssessment:
-    anchor: float | None
-    method_value: float | None
-    difference: float | None
-    margin: float
-    preserved: bool | None

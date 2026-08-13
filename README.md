@@ -26,7 +26,7 @@ src/fedcrg/
   evaluation/            client/federation reliability and utility metrics
   experiments/           one execution spine: runner, preflight, verification,
                          campaign, table precompute, and the S1-S6/R1-R14 catalogue
-  analysis/              statistics, contrasts, stability, claim gates
+  analysis/              statistics, contrasts, stability
   artifacts/             immutable layouts, manifests, hashes, environment evidence
   reporting/             publication tables/figures, reports, results bundles
   runtime/               structured logging, resource monitoring, CUDA guards
@@ -99,7 +99,6 @@ The high-level research application path performs a prepared-data audit and free
 - Federated preprocessing is fitted from benign training rows only; DIAD imputation is client-local and min/max scaling exchanges extrema rather than centralizing rows.
 - Every score cache is float64, hash-finalized, and immutable before threshold-policy evaluation.
 - Global-threshold uncertainty procedures must recompute the shared threshold inside a resampled federation; already-computed client metrics are not treated as independent observations.
-- Negative/non-replicating scientific results remain reportable. Claim strength is reduced; the method is not redesigned on the same confirmatory outcomes.
 
 ## Implementation is not experimental completion
 

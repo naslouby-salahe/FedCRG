@@ -261,10 +261,3 @@ class ArtifactType(StrEnum):
     FIGURE = "figure"
     REPORT = "report"
     VERIFICATION = "verification"
-
-
-class ClaimLevel(StrEnum):
-    METHOD_BENEFIT = "method_benefit"
-    DATASET_LIMITED_BENEFIT = "dataset_limited_benefit"
-    CHARACTERIZATION = "characterization"
-    INVALID = "invalid"

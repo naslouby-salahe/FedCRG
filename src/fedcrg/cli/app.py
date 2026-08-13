@@ -12,7 +12,7 @@ import pandas
 import scipy
 import torch
 
-from fedcrg.cli.analysis_commands import analysis_group, claims_group, tables_group, verify_command
+from fedcrg.cli.analysis_commands import analysis_group, tables_group, verify_command
 from fedcrg.cli.data_commands import data_group, environment_group
 from fedcrg.cli.experiment_commands import (
     benchmark_command,
@@ -120,7 +120,6 @@ def validate_config(config_path: Path) -> None:
     click.echo(json.dumps({"valid": True, "config_hash": config.config_hash}, indent=2))
 
 
-cli.add_command(claims_group)
 cli.add_command(data_group)
 cli.add_command(environment_group)
 cli.add_command(tables_group)
