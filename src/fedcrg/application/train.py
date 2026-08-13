@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 from pathlib import Path
 
@@ -11,6 +10,7 @@ import pandas as pd
 import torch
 from torch.utils.data import TensorDataset
 
+from fedcrg.artifacts.dataset import PreparedDatasetManifestStore
 from fedcrg.artifacts.hashing import sha256_file
 from fedcrg.artifacts.training import (
     ClientTrainingCount,
@@ -66,10 +66,12 @@ class TrainDetector:
         factory: DetectorFactory | None = None,
         trainer: FederatedTrainer | None = None,
         manifests: TrainingManifestStore | None = None,
+        dataset_manifests: PreparedDatasetManifestStore | None = None,
     ) -> None:
         self.factory = factory or DetectorFactory()
         self.trainer = trainer or FederatedTrainer()
         self.manifests = manifests or TrainingManifestStore()
+        self.dataset_manifests = dataset_manifests or PreparedDatasetManifestStore()
 
     def create_model(self, config: ExperimentConfig) -> DetectorModel:
         return self.factory.create(config.dataset.feature_count, config.detector)
@@ -124,22 +126,20 @@ class TrainDetector:
 
         prepared_manifest_path = prepared_root / "manifest.json"
         preprocessing_path = prepared_root / "preprocessing.json"
-        prepared_manifest = json.loads(
-            prepared_manifest_path.read_text(encoding="utf-8")
-        )
-        if prepared_manifest.get("data_spec_hash") != config.data_spec_hash:
+        prepared_manifest = self.dataset_manifests.load(prepared_manifest_path)
+        if prepared_manifest.data_spec_hash != Sha256(config.data_spec_hash):
             raise ValueError("Prepared dataset data-spec hash does not match training config")
+        if prepared_manifest.dataset_id is not config.dataset.id:
+            raise ValueError("Prepared dataset identity does not match training config")
 
         datasets: dict[ClientId, TensorDataset] = {}
         training_rows: list[ClientTrainingCount] = []
-        for client_value in sorted(prepared_manifest["clients"]):
-            client_id = ClientId(str(client_value))
-            path = (
-                prepared_root
-                / "clients"
-                / client_id.value
-                / f"{DataRole.TRAIN.value}.csv.gz"
-            )
+        for client_manifest in prepared_manifest.clients:
+            client_id = client_manifest.client_id
+            train_role = client_manifest.role(DataRole.TRAIN)
+            path = prepared_root / Path(train_role.relative_path)
+            if Sha256(sha256_file(path)) != train_role.file_sha256:
+                raise ValueError(f"Prepared training file hash mismatch for {client_id.value}")
             frame = pd.read_csv(path)
             if len(frame) != config.dataset.split.train_benign:
                 raise ValueError(
@@ -147,6 +147,8 @@ class TrainDetector:
                     f"{config.dataset.split.train_benign}"
                 )
             columns = feature_columns(frame, config.dataset.feature_count)
+            if tuple(columns) != prepared_manifest.feature_names:
+                raise ValueError("Training feature order differs from frozen dataset manifest")
             tensor = torch.as_tensor(
                 frame[columns].to_numpy(dtype="float32"),
                 dtype=torch.float32,
@@ -228,7 +230,9 @@ class TrainDetector:
             raise ValueError("Existing model cache belongs to another training specification")
         if manifest.model_file_sha256 != Sha256(sha256_file(model_path)):
             raise ValueError("Existing frozen-model hash does not match its manifest")
-        if manifest.result.final_model_hash != Sha256(self.load_model(config, model_path).state_hash()):
+        if manifest.result.final_model_hash != Sha256(
+            self.load_model(config, model_path).state_hash()
+        ):
             raise ValueError("Existing model state hash does not match training result")
 
     def load_model(self, config: ExperimentConfig, model_path: Path) -> DetectorModel:
