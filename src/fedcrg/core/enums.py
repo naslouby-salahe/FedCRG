@@ -13,6 +13,13 @@ class DatasetId(StrEnum):
     SYNTHETIC = "synthetic"
 
 
+class DatasetFeatureContractId(StrEnum):
+    NBAIOT_LOCKED_115 = "nbaiot_locked_115"
+    DIAD_LOCKED_86 = "diad_locked_86"
+    DIAD_TRAINING_NUMERIC_SAFE = "diad_training_numeric_safe"
+    SYNTHETIC = "synthetic"
+
+
 class DetectorId(StrEnum):
     AUTOENCODER = "autoencoder"
     DEEP_SVDD = "deep_svdd"
@@ -105,7 +112,6 @@ class EligibilityStatus(StrEnum):
 
 class ActivationId(StrEnum):
     TANH = "tanh"
-    RELU = "relu"
 
 
 class ComputeDeviceId(StrEnum):
@@ -198,6 +204,66 @@ class ExperimentId(StrEnum):
     DIAD_FEATURE_SENSITIVITY = "diad_feature_sensitivity"
 
 
+class ExperimentCode(StrEnum):
+    S1 = "S1"
+    S2 = "S2"
+    S3 = "S3"
+    S4 = "S4"
+    S5 = "S5"
+    S6 = "S6"
+    R1 = "R1"
+    R2 = "R2"
+    R3 = "R3"
+    R4 = "R4"
+    R5 = "R5"
+    R6 = "R6"
+    R7 = "R7"
+    R8 = "R8"
+    R9 = "R9"
+    R10 = "R10"
+    R11 = "R11"
+    R12 = "R12"
+    R13 = "R13"
+    R14 = "R14"
+
+
+class ExperimentAxisId(StrEnum):
+    DISTRIBUTION = "distribution"
+    CALIBRATION_N = "calibration_n"
+    REPETITIONS = "repetitions"
+    ALPHA = "alpha"
+    PHI = "phi"
+    MEAN_SHIFT = "mean_shift"
+    FRACTION = "fraction"
+    DIRECTION = "direction"
+    MISMATCH_N = "mismatch_n"
+    TRUE_FPR = "true_fpr"
+    RHO = "rho"
+    READINESS_ASSURANCE = "readiness_assurance"
+    PROCEDURE = "procedure"
+    BLOCKS = "blocks"
+    ASSIGNMENT = "assignment"
+    WARMUPS = "warmups"
+
+
+class SyntheticDistribution(StrEnum):
+    NORMAL = "normal"
+    LOGNORMAL = "lognormal"
+    GAMMA_SHAPE_2 = "gamma2"
+    NORMAL_MIXTURE = "normal_mixture"
+
+
+class ContaminationDirection(StrEnum):
+    HIGH = "high"
+    LOW = "low"
+
+
+class MultiplicityProcedure(StrEnum):
+    BONFERRONI_READINESS = "bonferroni_readiness"
+    BONFERRONI_MISMATCH = "bonferroni_mismatch"
+    HOLM_DIRECTIONAL = "holm_directional"
+
+
 class ExperimentType(StrEnum):
     SYNTHETIC = "synthetic"
     PRIMARY = "primary"
@@ -210,7 +276,7 @@ class ExperimentType(StrEnum):
 class ExperimentStatus(StrEnum):
     PENDING = "pending"
     VALIDATING = "validating"
-    READY = "READY"
+    READY = "ready"
     RUNNING = "running"
     VERIFYING = "verifying"
     COMPLETE = "complete"
