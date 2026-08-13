@@ -69,13 +69,14 @@ def robustness_group() -> None:
     """Run mandatory outcome-independent robustness checks."""
 
 
-@robustness_group.command(name="second-detector")
+@robustness_group.command(name="deep-svdd")
 @click.option(
     "--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True
 )
 @click.option("--prepared-root", type=click.Path(path_type=Path, exists=True), required=True)
 @click.option("--model-seed", type=int, required=True)
-def second_detector(config_path: Path, prepared_root: Path, model_seed: int) -> None:
+def train_deep_svdd(config_path: Path, prepared_root: Path, model_seed: int) -> None:
+    """Train the mandatory outcome-independent Deep-SVDD second score generator."""
     model, manifest = RunRobustness().train_second_detector(
         load_config(config_path), prepared_root, model_seed
     )
