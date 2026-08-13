@@ -19,8 +19,14 @@ def tables_group() -> None:
 
 
 @tables_group.command(name="precompute-readiness")
-@click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True)
-@click.option("--output", type=click.Path(path_type=Path), default=Path("outputs/cache/precomputed/readiness_plans.json"))
+@click.option(
+    "--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True
+)
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path),
+    default=Path("outputs/cache/precomputed/readiness_plans.json"),
+)
 def precompute_readiness(config_path: Path, output: Path) -> None:
     config = load_config(config_path)
     readiness_path, _mismatch_path = ProtocolTablePrecomputer().precompute(config, output.parent)
@@ -33,8 +39,12 @@ def synthetic_group() -> None:
 
 
 @synthetic_group.command(name="run")
-@click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True)
-@click.option("--experiment", type=click.Choice(["S1", "S2", "S3", "S4", "S5", "S6"]), required=True)
+@click.option(
+    "--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True
+)
+@click.option(
+    "--experiment", type=click.Choice(["S1", "S2", "S3", "S4", "S5", "S6"]), required=True
+)
 @click.option("--output", type=click.Path(path_type=Path), required=True)
 def synthetic_run(config_path: Path, experiment: str, output: Path) -> None:
     config = load_config(config_path)
@@ -60,17 +70,27 @@ def robustness_group() -> None:
 
 
 @robustness_group.command(name="second-detector")
-@click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True)
+@click.option(
+    "--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True
+)
 @click.option("--prepared-root", type=click.Path(path_type=Path, exists=True), required=True)
 @click.option("--model-seed", type=int, required=True)
 def second_detector(config_path: Path, prepared_root: Path, model_seed: int) -> None:
-    model, manifest = RunRobustness().train_second_detector(load_config(config_path), prepared_root, model_seed)
+    model, manifest = RunRobustness().train_second_detector(
+        load_config(config_path), prepared_root, model_seed
+    )
     click.echo(f"model={model}\nmanifest={manifest}")
 
 
 @click.command(name="benchmark")
-@click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True)
-@click.option("--output", type=click.Path(path_type=Path), default=Path("outputs/reports/latest/benchmark.json"))
+@click.option(
+    "--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True
+)
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path),
+    default=Path("outputs/reports/latest/benchmark.json"),
+)
 def benchmark_command(config_path: Path, output: Path) -> None:
     config = load_config(config_path)
     path = RunBenchmark().run_on_synthetic_evidence(config, output)
@@ -86,10 +106,16 @@ _MODEL_SEED_SENSITIVITIES = frozenset({"R2", "R3", "R4", "R5", "R6"})
 
 
 @sensitivity_group.command(name="run")
-@click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True)
+@click.option(
+    "--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True
+)
 @click.option("--score-root", type=click.Path(path_type=Path, exists=True), required=True)
 @click.option("--prepared-root", type=click.Path(path_type=Path, exists=True), required=True)
-@click.option("--experiment", type=click.Choice(["R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9"]), required=True)
+@click.option(
+    "--experiment",
+    type=click.Choice(["R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9"]),
+    required=True,
+)
 @click.option("--model-seed", type=int, default=None)
 @click.option("--calibration-seed", type=int, default=None)
 @click.option("--output", type=click.Path(path_type=Path), required=True)

@@ -83,9 +83,7 @@ class PrepareData:
 
         discovered = adapter.discover_clients()
         self._validate_source_identity_count(config, discovered)
-        sources = tuple(
-            source_file_manifest(path, adapter.root) for path in adapter.source_files()
-        )
+        sources = tuple(source_file_manifest(path, adapter.root) for path in adapter.source_files())
 
         final_root = (
             config.outputs_root
@@ -99,9 +97,7 @@ class PrepareData:
                 f"Prepared dataset cache already exists and is immutable: {final_root}"
             )
         final_root.parent.mkdir(parents=True, exist_ok=True)
-        staging_root = final_root.parent / (
-            f".{final_root.name}.staging-{uuid.uuid4().hex}"
-        )
+        staging_root = final_root.parent / (f".{final_root.name}.staging-{uuid.uuid4().hex}")
         staging_root.mkdir()
 
         try:
@@ -239,9 +235,7 @@ class PrepareData:
 
         for client_id in sorted(eligible_ids):
             splits = self._load_raw_splits(root, client_id)
-            client_manifests.append(
-                self._write_client_roles(root, splits, preprocessing)
-            )
+            client_manifests.append(self._write_client_roles(root, splits, preprocessing))
             for seed_value in config.dataset.calibration_seeds:
                 seed = CalibrationSeed(seed_value)
                 seeded_assignments[seed].append(
@@ -378,9 +372,7 @@ class PrepareData:
         manifest: EligibilityManifest,
     ) -> None:
         name = (
-            "diad_eligibility.json"
-            if config.dataset.id is DatasetId.DIAD
-            else "eligibility.json"
+            "diad_eligibility.json" if config.dataset.id is DatasetId.DIAD else "eligibility.json"
         )
         atomic_write_json(root / name, manifest)
 
@@ -428,11 +420,7 @@ class PrepareData:
             if config.dataset.id is not DatasetId.DIAD
             else len(clients) >= config.dataset.minimum_clients
         )
-        code = (
-            None
-            if external_supported
-            else FailureCode.EXTERNAL_DATASET_INSUFFICIENT_CLIENTS
-        )
+        code = None if external_supported else FailureCode.EXTERNAL_DATASET_INSUFFICIENT_CLIENTS
         manifest = self.manifests.build(
             dataset_id=config.dataset.id,
             source_version=config.dataset.source_version,

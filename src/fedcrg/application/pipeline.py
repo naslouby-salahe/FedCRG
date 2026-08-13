@@ -102,9 +102,7 @@ class ExecuteFrozenWorkload:
                     calibration_seed=calibration_seed,
                     caches=caches,
                 )
-                run_directories.extend(
-                    entry.path for entry in cell.run_directories
-                )
+                run_directories.extend(entry.path for entry in cell.run_directories)
 
         return WorkloadExecution(
             experiment_id=experiment_id,

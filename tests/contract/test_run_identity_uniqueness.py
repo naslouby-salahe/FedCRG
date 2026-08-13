@@ -25,12 +25,8 @@ def test_run_id_maps_distinct_configs_to_distinct_evidence_directories() -> None
     contract = derive_numeric_safe_features({ClientId("diad_example0001"): training})
     r14 = r14_config(external, contract)
 
-    confirmatory_id = RunIdentityFactory.for_policy_cell(
-        external, 11, 2000, PolicyId.FEDCRG
-    )
-    sensitivity_id = RunIdentityFactory.for_policy_cell(
-        r14, 11, 2000, PolicyId.FEDCRG
-    )
+    confirmatory_id = RunIdentityFactory.for_policy_cell(external, 11, 2000, PolicyId.FEDCRG)
+    sensitivity_id = RunIdentityFactory.for_policy_cell(r14, 11, 2000, PolicyId.FEDCRG)
 
     assert external.config_hash != r14.config_hash
     assert confirmatory_id != sensitivity_id

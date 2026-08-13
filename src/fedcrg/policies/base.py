@@ -93,9 +93,7 @@ class FinalTestEvidence:
 def empirical_quantile(scores: np.ndarray, alpha: float = 0.01) -> float:
     values = np.sort(np.asarray(scores, dtype=np.float64), kind="stable")
     if values.ndim != 1 or len(values) == 0:
-        raise ValueError(
-            "Quantile thresholds require a non-empty one-dimensional array"
-        )
+        raise ValueError("Quantile thresholds require a non-empty one-dimensional array")
     rank = min(
         len(values),
         int(np.ceil((len(values) + 1) * (1.0 - alpha))),

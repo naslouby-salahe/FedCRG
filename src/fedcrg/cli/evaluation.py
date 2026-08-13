@@ -14,7 +14,9 @@ from fedcrg.scoring.cache import ScoreCache
 
 
 @click.command(name="evaluate")
-@click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True)
+@click.option(
+    "--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True
+)
 @click.option("--score-root", type=click.Path(path_type=Path, exists=True), required=True)
 @click.option("--output", type=click.Path(path_type=Path), default=Path("outputs/evaluation.json"))
 def evaluate_command(config_path: Path, score_root: Path, output: Path) -> None:

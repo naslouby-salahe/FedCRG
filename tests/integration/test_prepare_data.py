@@ -4,7 +4,15 @@ import numpy as np
 import pandas as pd
 
 from fedcrg.application.prepare_data import PrepareData
-from fedcrg.config.models import AutoencoderConfig, DatasetConfig, ExperimentConfig, ProtocolConfig, RandomnessConfig, SplitConfig, TrainingConfig
+from fedcrg.config.models import (
+    AutoencoderConfig,
+    DatasetConfig,
+    ExperimentConfig,
+    ProtocolConfig,
+    RandomnessConfig,
+    SplitConfig,
+    TrainingConfig,
+)
 from fedcrg.core.enums import DatasetFeatureContractId, DatasetId, ExperimentId, PolicyId
 from fedcrg.core.ids import ClientId
 from fedcrg.data.adapter import DatasetAdapter
@@ -28,7 +36,10 @@ class FakeAdapter(DatasetAdapter):
     def load_client(self, client_id: ClientId) -> ClientData:
         offset = float(_NBAIOT_CLIENT_IDS.index(client_id))
         benign = pd.DataFrame(
-            {"f1": np.arange(18, dtype=float) + offset, **{name: np.full(18, 5.0) for name in _FEATURE_COLUMNS[1:]}}
+            {
+                "f1": np.arange(18, dtype=float) + offset,
+                **{name: np.full(18, 5.0) for name in _FEATURE_COLUMNS[1:]},
+            }
         )
         attack = pd.DataFrame(
             {
@@ -57,7 +68,17 @@ def _config(root: Path) -> ExperimentConfig:
             expected_clients=9,
             minimum_clients=9,
             expected_benign_counts={client.value: 18 for client in _NBAIOT_CLIENT_IDS},
-            split=SplitConfig(train_benign=4, reference_benign=2, mismatch_benign=2, calibration_benign=2, benign_guard=2, min_benign_test=4, attack_dev=4, min_attack_test=4, min_attack_test_per_group=2),
+            split=SplitConfig(
+                train_benign=4,
+                reference_benign=2,
+                mismatch_benign=2,
+                calibration_benign=2,
+                benign_guard=2,
+                min_benign_test=4,
+                attack_dev=4,
+                min_attack_test=4,
+                min_attack_test_per_group=2,
+            ),
             calibration_seeds=(1000,),
             primary_calibration_seed=1000,
         ),

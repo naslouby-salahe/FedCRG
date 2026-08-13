@@ -214,11 +214,7 @@ class CalibrationScoreViewBuilder:
         if not isinstance(roles, list):
             raise ValueError(f"Assignment manifest roles are malformed for {client_id.value}")
         record = next(
-            (
-                item
-                for item in roles
-                if isinstance(item, dict) and item.get("role") == role.value
-            ),
+            (item for item in roles if isinstance(item, dict) and item.get("role") == role.value),
             None,
         )
         if not isinstance(record, dict):

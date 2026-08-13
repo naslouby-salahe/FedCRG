@@ -36,16 +36,21 @@ def cli() -> None:
 
 @cli.command(name="doctor")
 def doctor() -> None:
-    click.echo(json.dumps({
-        "python": platform.python_version(),
-        "numpy": numpy.__version__,
-        "scipy": scipy.__version__,
-        "pandas": pandas.__version__,
-        "torch": torch.__version__,
-        "cuda_available": torch.cuda.is_available(),
-        "cuda": torch.version.cuda,
-        "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
-    }, indent=2))
+    click.echo(
+        json.dumps(
+            {
+                "python": platform.python_version(),
+                "numpy": numpy.__version__,
+                "scipy": scipy.__version__,
+                "pandas": pandas.__version__,
+                "torch": torch.__version__,
+                "cuda_available": torch.cuda.is_available(),
+                "cuda": torch.version.cuda,
+                "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+            },
+            indent=2,
+        )
+    )
 
 
 @cli.group(name="config")
@@ -54,7 +59,9 @@ def config_group() -> None:
 
 
 @config_group.command(name="validate")
-@click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True)
+@click.option(
+    "--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True
+)
 def validate_config(config_path: Path) -> None:
     config = load_config(config_path)
     click.echo(json.dumps({"valid": True, "config_hash": config.config_hash}, indent=2))

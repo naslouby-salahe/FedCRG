@@ -21,7 +21,13 @@ def _is_frozen_dataclass(node: ast.ClassDef) -> bool:
         if not isinstance(decorator, ast.Call):
             continue
         target = decorator.func
-        name = target.id if isinstance(target, ast.Name) else target.attr if isinstance(target, ast.Attribute) else ""
+        name = (
+            target.id
+            if isinstance(target, ast.Name)
+            else target.attr
+            if isinstance(target, ast.Attribute)
+            else ""
+        )
         if name != "dataclass":
             continue
         for keyword in decorator.keywords:
@@ -34,8 +40,7 @@ def _annotation_uses_mutable_container(annotation: ast.expr | None) -> bool:
     if annotation is None:
         return False
     return any(
-        isinstance(node, ast.Name) and node.id in _MUTABLE_NAMES
-        for node in ast.walk(annotation)
+        isinstance(node, ast.Name) and node.id in _MUTABLE_NAMES for node in ast.walk(annotation)
     )
 
 
@@ -50,7 +55,9 @@ def test_frozen_domain_models_do_not_embed_mutable_containers() -> None:
             if not isinstance(node, ast.ClassDef) or not _is_frozen_dataclass(node):
                 continue
             for statement in node.body:
-                if isinstance(statement, ast.AnnAssign) and _annotation_uses_mutable_container(statement.annotation):
+                if isinstance(statement, ast.AnnAssign) and _annotation_uses_mutable_container(
+                    statement.annotation
+                ):
                     violations.append(
                         f"{path.relative_to(ROOT)}:{statement.lineno} "
                         f"{node.name}.{getattr(statement.target, 'id', '?')}"

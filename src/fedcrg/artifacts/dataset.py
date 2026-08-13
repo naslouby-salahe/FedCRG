@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path, PurePosixPath
 
 from fedcrg.artifacts.serialization import atomic_write_json, to_json_value
@@ -74,7 +74,7 @@ class PreparedDatasetManifestStore:
             calibration_assignments=calibration_assignments,
             external_replication_supported=external_replication_supported,
             dataset_level_code=dataset_level_code,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             deterministic_payload_sha256=Sha256(hashlib.sha256(canonical).hexdigest()),
         )
 
@@ -128,9 +128,7 @@ class PreparedDatasetManifestStore:
             external_replication_supported=bool(raw["external_replication_supported"]),
             dataset_level_code=None if code is None else FailureCode(str(code)),
             created_at=datetime.fromisoformat(str(raw["created_at"])),
-            deterministic_payload_sha256=Sha256(
-                str(raw["deterministic_payload_sha256"])
-            ),
+            deterministic_payload_sha256=Sha256(str(raw["deterministic_payload_sha256"])),
         )
         rebuilt = self.build(
             dataset_id=manifest.dataset_id,
@@ -157,21 +155,15 @@ class EligibilityManifestStore:
         raw = json.loads(path.read_text(encoding="utf-8"))
         return EligibilityManifest(
             dataset_id=DatasetId(str(raw["dataset_id"])),
-            discovered_clients=tuple(
-                ClientId(str(value)) for value in raw["discovered_clients"]
-            ),
-            eligible_clients=tuple(
-                ClientId(str(value)) for value in raw["eligible_clients"]
-            ),
+            discovered_clients=tuple(ClientId(str(value)) for value in raw["discovered_clients"]),
+            eligible_clients=tuple(ClientId(str(value)) for value in raw["eligible_clients"]),
             records=tuple(
                 EligibilityRecord(
                     client_id=ClientId(str(item["client_id"])),
                     status=EligibilityStatus(str(item["status"])),
                     benign_count=int(item["benign_count"]),
                     malicious_count=int(item["malicious_count"]),
-                    attack_development_capacity=int(
-                        item["attack_development_capacity"]
-                    ),
+                    attack_development_capacity=int(item["attack_development_capacity"]),
                     primary_code=(
                         None
                         if item["primary_code"] is None

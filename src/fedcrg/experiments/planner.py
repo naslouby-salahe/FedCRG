@@ -28,9 +28,7 @@ class ExperimentPlanner:
         if int(typed_model_seed) not in config.randomness.model_seeds:
             raise ValueError(f"Model seed {int(typed_model_seed)} is not configured")
         if int(typed_calibration_seed) not in config.dataset.calibration_seeds:
-            raise ValueError(
-                f"Calibration seed {int(typed_calibration_seed)} is not configured"
-            )
+            raise ValueError(f"Calibration seed {int(typed_calibration_seed)} is not configured")
         definition = self.registry.get(experiment_id)
         if definition.policies and not set(config.policies).issubset(definition.policies):
             extra = set(config.policies) - set(definition.policies)

@@ -49,8 +49,7 @@ def summarize_state_stability(states: tuple[DecisionState, ...]) -> StateStabili
     if not states:
         raise ValueError("State stability requires at least one state")
     transitions = sum(
-        left is not right
-        for left, right in zip(states[:-1], states[1:], strict=True)
+        left is not right for left, right in zip(states[:-1], states[1:], strict=True)
     )
     counts = {state: states.count(state) for state in DecisionState}
     total = len(states)

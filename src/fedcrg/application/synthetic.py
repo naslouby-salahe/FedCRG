@@ -55,9 +55,13 @@ class RunSyntheticExperiments:
         return tuple(int(value) for value in values)
 
     @staticmethod
-    def _float_values(definition: ExperimentDefinition, axis: ExperimentAxisId) -> tuple[float, ...]:
+    def _float_values(
+        definition: ExperimentDefinition, axis: ExperimentAxisId
+    ) -> tuple[float, ...]:
         values = definition.axis(axis).values
-        if not all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in values):
+        if not all(
+            isinstance(value, (int, float)) and not isinstance(value, bool) for value in values
+        ):
             raise TypeError(f"{definition.protocol_code.value}/{axis.value} must contain numbers")
         return tuple(float(value) for value in values)
 
@@ -98,9 +102,7 @@ class RunSyntheticExperiments:
                 f"{definition.protocol_code.value} trial ledger mismatch: "
                 f"{actual_trials} != {definition.workload.monte_carlo_trials}"
             )
-        if definition.workload.exact_cells and (
-            len(cells) != definition.workload.exact_cells
-        ):
+        if definition.workload.exact_cells and (len(cells) != definition.workload.exact_cells):
             raise RuntimeError(
                 f"{definition.protocol_code.value} exact-cell ledger mismatch: "
                 f"{len(cells)} != {definition.workload.exact_cells}"

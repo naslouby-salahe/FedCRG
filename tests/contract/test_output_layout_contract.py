@@ -7,7 +7,9 @@ from fedcrg.core.ids import RunId
 
 
 def test_run_layout_has_one_canonical_evidence_namespace(tmp_path: Path) -> None:
-    run_id = RunId("nbaiot__ae__ms11__cs1000__a10000__r5000__ga9500__gb9500__fedcrg__cfg0123456789ab")
+    run_id = RunId(
+        "nbaiot__ae__ms11__cs1000__a10000__r5000__ga9500__gb9500__fedcrg__cfg0123456789ab"
+    )
     layout = RunLayout.for_run(tmp_path, run_id)
 
     assert layout.root == tmp_path / "runs" / run_id.value

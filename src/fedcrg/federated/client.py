@@ -54,9 +54,7 @@ class FederatedClient:
 
         for local_epoch in range(config.local_epochs):
             generator = torch.Generator()
-            generator.manual_seed(
-                epoch_seed(model_seed, self.client_id, round_index, local_epoch)
-            )
+            generator.manual_seed(epoch_seed(model_seed, self.client_id, round_index, local_epoch))
             loader = DataLoader(
                 self.dataset,
                 batch_size=config.batch_size,
@@ -106,6 +104,4 @@ class FederatedClient:
     def _assert_finite_parameters(model: DetectorModel) -> None:
         for name, parameter in model.named_parameters():
             if not torch.isfinite(parameter).all():
-                raise FloatingPointError(
-                    f"TRAINING_NUMERICAL_FAILURE: non-finite parameter {name}"
-                )
+                raise FloatingPointError(f"TRAINING_NUMERICAL_FAILURE: non-finite parameter {name}")

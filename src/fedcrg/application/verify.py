@@ -81,7 +81,11 @@ class VerifyOutputs:
                 cells = payload.get("cells")
                 if not isinstance(cells, list) or not cells:
                     problems.append("mismatch cutoff table has no cells")
-                lower = payload.get("band", {}).get("lower") if isinstance(payload.get("band"), dict) else None
+                lower = (
+                    payload.get("band", {}).get("lower")
+                    if isinstance(payload.get("band"), dict)
+                    else None
+                )
                 confidence = payload.get("confidence")
                 expected_minimum = payload.get("minimum_bidirectional_sample_count")
                 if isinstance(lower, (int, float)) and isinstance(confidence, (int, float)):

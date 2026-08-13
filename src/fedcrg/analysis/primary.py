@@ -51,7 +51,11 @@ def load_federation_results(run_dirs: tuple[Path, ...]) -> tuple[FederationResul
         manifest_path = run_dir / "manifest.json"
         federation_path = run_dir / "metrics" / "federation.json"
         config_path = run_dir / "run_config.json"
-        if not manifest_path.is_file() or not federation_path.is_file() or not config_path.is_file():
+        if (
+            not manifest_path.is_file()
+            or not federation_path.is_file()
+            or not config_path.is_file()
+        ):
             continue
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         federation = json.loads(federation_path.read_text(encoding="utf-8"))
@@ -94,30 +98,18 @@ def confirmatory_contrasts(
         PolicyId.READINESS_ONLY,
         PolicyId.SHRINKAGE,
     )
-    selected = tuple(
-        row for row in records if row.calibration_seed == named_calibration_seed
-    )
+    selected = tuple(row for row in records if row.calibration_seed == named_calibration_seed)
     expected_seeds = {11, 22, 33, 44, 55}
-    observed_method_seeds = {
-        row.model_seed for row in selected if row.policy is PolicyId.FEDCRG
-    }
+    observed_method_seeds = {row.model_seed for row in selected if row.policy is PolicyId.FEDCRG}
     if observed_method_seeds != expected_seeds:
         raise ValueError(
             "Confirmatory contrasts require exactly model seeds 11,22,33,44,55 "
             f"for FedCRG, observed {sorted(observed_method_seeds)}"
         )
-    method_by_seed = {
-        row.model_seed: row
-        for row in selected
-        if row.policy is PolicyId.FEDCRG
-    }
+    method_by_seed = {row.model_seed: row for row in selected if row.policy is PolicyId.FEDCRG}
     results: list[PolicyContrastResult] = []
     for comparator in comparators:
-        comparator_by_seed = {
-            row.model_seed: row
-            for row in selected
-            if row.policy is comparator
-        }
+        comparator_by_seed = {row.model_seed: row for row in selected if row.policy is comparator}
         if set(comparator_by_seed) != expected_seeds:
             raise ValueError(
                 f"Confirmatory comparator {comparator.value} is missing paired model seeds"
@@ -139,9 +131,7 @@ def confirmatory_contrasts(
             )
             comparator_mean = describe(right).mean
             relative = (
-                bootstrap.observed_difference / comparator_mean
-                if comparator_mean > 0.0
-                else None
+                bootstrap.observed_difference / comparator_mean if comparator_mean > 0.0 else None
             )
             metrics.append(
                 ContrastMetricResult(

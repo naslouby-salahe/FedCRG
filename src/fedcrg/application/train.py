@@ -189,9 +189,7 @@ class TrainDetector:
         if isinstance(model, DeepSvdd):
             model.initialize_center([dataset.tensors[0] for dataset in datasets.values()])
             center_hash = Sha256(
-                hashlib.sha256(
-                    model.center.detach().cpu().numpy().tobytes()
-                ).hexdigest()
+                hashlib.sha256(model.center.detach().cpu().numpy().tobytes()).hexdigest()
             )
 
         final_model, result = self.trainer.train(
@@ -242,7 +240,9 @@ class TrainDetector:
         if manifest.dataset_manifest_sha256 != prepared_manifest_hash:
             raise ValueError("Existing model cache was trained from a different prepared manifest")
         if manifest.preprocessing_sha256 != preprocessing_hash:
-            raise ValueError("Existing model cache was trained with different preprocessing evidence")
+            raise ValueError(
+                "Existing model cache was trained with different preprocessing evidence"
+            )
         if manifest.model_file_sha256 != Sha256(sha256_file(model_path)):
             raise ValueError("Existing frozen-model hash does not match its manifest")
         if manifest.result.final_model_hash != Sha256(

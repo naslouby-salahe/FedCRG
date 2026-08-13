@@ -12,7 +12,11 @@ from fedcrg.core.enums import (
 )
 from fedcrg.core.ids import ClientId
 from fedcrg.core.types import ConfidenceInterval
-from fedcrg.policies.base import BenignPolicyEvidence, SupervisedDevelopmentEvidence, empirical_quantile
+from fedcrg.policies.base import (
+    BenignPolicyEvidence,
+    SupervisedDevelopmentEvidence,
+    empirical_quantile,
+)
 from fedcrg.policies.registry import FederationPolicySelector
 from fedcrg.protocol.results import (
     CalibrationReadiness,
@@ -62,7 +66,9 @@ def _protocol_result(client_id: ClientId, shift: float, mismatch: bool) -> Clien
         DecisionState.PERSONALIZED if mismatch else DecisionState.REFERENCE_RETAINED,
         0.82 + shift if mismatch else 0.75,
         ThresholdSource.LOCAL_CALIBRATION if mismatch else ThresholdSource.REFERENCE,
-        DecisionReason.LOCAL_PERSONALIZATION_ADMITTED if mismatch else DecisionReason.NO_MATERIAL_DIFFERENCE,
+        DecisionReason.LOCAL_PERSONALIZATION_ADMITTED
+        if mismatch
+        else DecisionReason.NO_MATERIAL_DIFFERENCE,
         tie_count=1,
     )
     return ClientProtocolResult(client_id, reference, readiness, evidence, decision)

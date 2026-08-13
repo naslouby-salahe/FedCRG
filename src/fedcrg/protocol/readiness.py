@@ -108,8 +108,7 @@ class ReadinessPlanCache:
         assurance: float,
     ) -> str:
         return (
-            f"n={sample_count}|a={band.lower:.17g}|b={band.upper:.17g}|"
-            f"assurance={assurance:.17g}"
+            f"n={sample_count}|a={band.lower:.17g}|b={band.upper:.17g}|assurance={assurance:.17g}"
         )
 
     def precompute(
@@ -140,8 +139,7 @@ class ReadinessPlanCache:
         except KeyError as exc:
             raise FileNotFoundError(
                 "Required pre-data readiness plan is absent. Run the protocol "
-                "precomputation command before evaluating real scores: "
-                + key
+                "precomputation command before evaluating real scores: " + key
             ) from exc
 
     def _save(self, path: Path) -> None:
@@ -205,11 +203,7 @@ class ReadinessPlanCache:
             if (
                 regenerated.rank != plan.rank
                 or regenerated.state is not plan.state
-                or abs(
-                    regenerated.coverage_probability
-                    - plan.coverage_probability
-                )
-                > 1e-12
+                or abs(regenerated.coverage_probability - plan.coverage_probability) > 1e-12
             ):
                 raise ValueError("Readiness-plan table failed formula regeneration")
             plans[expected_key] = plan
@@ -226,9 +220,7 @@ class CalibrationReadinessEvaluator:
     ) -> CalibrationReadiness:
         values = np.asarray(scores, dtype=np.float64)
         if values.ndim != 1 or len(values) != plan.sample_count:
-            raise ValueError(
-                "Observed calibration size does not match the frozen readiness plan"
-            )
+            raise ValueError("Observed calibration size does not match the frozen readiness plan")
         if not np.isfinite(values).all():
             raise ValueError("Calibration scores must be finite")
         diagnostics = continuity_diagnostics(values, plan.rank)
@@ -261,11 +253,7 @@ def continuity_diagnostics(
     unique = np.unique(ordered)
     duplicate_count = int(len(ordered) - len(unique))
     positive_spacing = np.diff(unique)
-    minimum_spacing = (
-        None
-        if len(positive_spacing) == 0
-        else float(np.min(positive_spacing))
-    )
+    minimum_spacing = None if len(positive_spacing) == 0 else float(np.min(positive_spacing))
     return ContinuityDiagnostics(
         unique_score_fraction=float(len(unique) / len(ordered)),
         duplicate_count=duplicate_count,

@@ -90,7 +90,9 @@ class ExperimentConfigResolver:
                 dataset=dataset,
                 detector=detector,
                 training=TrainingConfig.model_validate(_mapping(root["training"], "training")),
-                randomness=RandomnessConfig.model_validate(_mapping(root.get("randomness", {}), "randomness")),
+                randomness=RandomnessConfig.model_validate(
+                    _mapping(root.get("randomness", {}), "randomness")
+                ),
                 policies=tuple(policies_raw),
                 outputs_root=Path(outputs_raw),
             )

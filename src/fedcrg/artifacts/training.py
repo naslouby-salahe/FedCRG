@@ -47,9 +47,7 @@ class TrainingManifestStore:
             final_model_hash=Sha256(str(result_raw["final_model_hash"])),
             trainable_parameter_count=int(result_raw["trainable_parameter_count"]),
             model_payload_bytes=int(result_raw["model_payload_bytes"]),
-            total_model_communication_bytes=int(
-                result_raw["total_model_communication_bytes"]
-            ),
+            total_model_communication_bytes=int(result_raw["total_model_communication_bytes"]),
             round20_training_score_correlation=(
                 None
                 if result_raw["round20_training_score_correlation"] is None
@@ -98,9 +96,7 @@ class TrainingManifestStore:
         return RoundResult(
             round_index=int(raw["round_index"]),
             learning_rate=float(raw["learning_rate"]),
-            selected_clients=tuple(
-                ClientId(str(value)) for value in raw["selected_clients"]
-            ),
+            selected_clients=tuple(ClientId(str(value)) for value in raw["selected_clients"]),
             client_results=clients,
             mean_client_loss=float(raw["mean_client_loss"]),
             minimum_client_loss=float(raw["minimum_client_loss"]),

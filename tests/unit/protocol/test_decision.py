@@ -1,4 +1,9 @@
-from fedcrg.core.enums import CalibrationReadinessState, DecisionState, MismatchOutcome, ThresholdSource
+from fedcrg.core.enums import (
+    CalibrationReadinessState,
+    DecisionState,
+    MismatchOutcome,
+    ThresholdSource,
+)
 from fedcrg.core.types import ConfidenceInterval, OperatingBand
 from fedcrg.protocol.decision import ThresholdDecisionEngine
 from fedcrg.protocol.results import (
@@ -15,7 +20,14 @@ def _reference() -> ReferenceThreshold:
 
 
 def _readiness(ready: bool = True, ties: int = 1) -> CalibrationReadiness:
-    plan = ReadinessPlan(sample_count=100, rank=99, coverage_probability=0.99 if ready else 0.5, state=CalibrationReadinessState.READY if ready else CalibrationReadinessState.NOT_READY, band=OperatingBand(0.005, 0.015), assurance=0.95)
+    plan = ReadinessPlan(
+        sample_count=100,
+        rank=99,
+        coverage_probability=0.99 if ready else 0.5,
+        state=CalibrationReadinessState.READY if ready else CalibrationReadinessState.NOT_READY,
+        band=OperatingBand(0.005, 0.015),
+        assurance=0.95,
+    )
     diagnostics = ContinuityDiagnostics(
         unique_score_fraction=1.0,
         duplicate_count=0,
@@ -30,25 +42,44 @@ def _mismatch(outcome: MismatchOutcome) -> MismatchEvidence:
 
 
 def test_no_material_difference_always_retains_reference() -> None:
-    decision = ThresholdDecisionEngine().decide(_reference(), _readiness(), _mismatch(MismatchOutcome.NO_MATERIAL_DIFFERENCE))
+    decision = ThresholdDecisionEngine().decide(
+        _reference(), _readiness(), _mismatch(MismatchOutcome.NO_MATERIAL_DIFFERENCE)
+    )
     assert decision.state is DecisionState.REFERENCE_RETAINED
     assert decision.source is ThresholdSource.REFERENCE
     assert decision.threshold == 1.0
 
 
 def test_insufficient_evidence_never_personalizes() -> None:
-    decision = ThresholdDecisionEngine().decide(_reference(), _readiness(), _mismatch(MismatchOutcome.INSUFFICIENT_EVIDENCE))
+    decision = ThresholdDecisionEngine().decide(
+        _reference(), _readiness(), _mismatch(MismatchOutcome.INSUFFICIENT_EVIDENCE)
+    )
     assert decision.state is DecisionState.MISMATCH_EVIDENCE_INSUFFICIENT
     assert decision.source is ThresholdSource.REFERENCE
 
 
 def test_personalization_requires_difference_and_ready_calibration() -> None:
-    assert ThresholdDecisionEngine().decide(_reference(), _readiness(), _mismatch(MismatchOutcome.HIGH)).state is DecisionState.PERSONALIZED
+    assert (
+        ThresholdDecisionEngine()
+        .decide(_reference(), _readiness(), _mismatch(MismatchOutcome.HIGH))
+        .state
+        is DecisionState.PERSONALIZED
+    )
 
 
 def test_not_ready_calibration_retains_reference() -> None:
-    assert ThresholdDecisionEngine().decide(_reference(), _readiness(ready=False), _mismatch(MismatchOutcome.HIGH)).state is DecisionState.CALIBRATION_DEFICIT
+    assert (
+        ThresholdDecisionEngine()
+        .decide(_reference(), _readiness(ready=False), _mismatch(MismatchOutcome.HIGH))
+        .state
+        is DecisionState.CALIBRATION_DEFICIT
+    )
 
 
 def test_calibration_tie_blocks_personalization() -> None:
-    assert ThresholdDecisionEngine().decide(_reference(), _readiness(ties=2), _mismatch(MismatchOutcome.HIGH)).state is DecisionState.ASSUMPTION_VIOLATION
+    assert (
+        ThresholdDecisionEngine()
+        .decide(_reference(), _readiness(ties=2), _mismatch(MismatchOutcome.HIGH))
+        .state
+        is DecisionState.ASSUMPTION_VIOLATION
+    )

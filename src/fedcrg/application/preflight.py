@@ -35,9 +35,7 @@ class ResearchPreflight:
     def run(self, config: ExperimentConfig, prepared_root: Path) -> PreflightResult:
         audit = self.data_auditor.audit(prepared_root, config)
         if not audit.valid:
-            raise RuntimeError(
-                "Prepared-data preflight failed: " + ", ".join(audit.problems)
-            )
+            raise RuntimeError("Prepared-data preflight failed: " + ", ".join(audit.problems))
         readiness, mismatch = self.table_precomputer.precompute(config)
         return PreflightResult(
             prepared_data=audit,

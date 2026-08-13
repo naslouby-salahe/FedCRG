@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 import pandas as pd
 
@@ -65,24 +65,16 @@ class PublicationPackageBuilder:
 
         runs = tuple(self._completed_runs(outputs_root / "runs"))
         primary_runs = tuple(
-            path
-            for path in runs
-            if self._manifest_value(path, "experiment_id") == "primary_nbaiot"
+            path for path in runs if self._manifest_value(path, "experiment_id") == "primary_nbaiot"
         )
         external_runs = tuple(
-            path
-            for path in runs
-            if self._manifest_value(path, "experiment_id") == "external_diad"
+            path for path in runs if self._manifest_value(path, "experiment_id") == "external_diad"
         )
         named_primary = tuple(
-            path
-            for path in primary_runs
-            if self._manifest_value(path, "calibration_seed") == 1000
+            path for path in primary_runs if self._manifest_value(path, "calibration_seed") == 1000
         )
         named_external = tuple(
-            path
-            for path in external_runs
-            if self._manifest_value(path, "calibration_seed") == 2000
+            path for path in external_runs if self._manifest_value(path, "calibration_seed") == 2000
         )
 
         tables = (
@@ -125,8 +117,7 @@ class PublicationPackageBuilder:
                     tuple(
                         path
                         for path in named_primary
-                        if self._manifest_value(path, "policy_id")
-                        == PolicyId.FEDCRG.value
+                        if self._manifest_value(path, "policy_id") == PolicyId.FEDCRG.value
                     ),
                     table_root / "table_5_admission_states.csv",
                 ),
@@ -135,9 +126,7 @@ class PublicationPackageBuilder:
             self._runs_table(
                 "Table 6 - Ablations",
                 primary_runs,
-                lambda: self.tables.ablations(
-                    primary_runs, table_root / "table_6_ablations.csv"
-                ),
+                lambda: self.tables.ablations(primary_runs, table_root / "table_6_ablations.csv"),
                 "R1 ablation runs are unavailable",
             ),
             self._experiment_table(
@@ -163,9 +152,7 @@ class PublicationPackageBuilder:
         figures = (
             self._figure(
                 "Figure 1 - Decision architecture",
-                lambda: decision_architecture(
-                    figure_root / "figure_1_decision_architecture.png"
-                ),
+                lambda: decision_architecture(figure_root / "figure_1_decision_architecture.png"),
             ),
             self._frame_figure(
                 "Figure 2 - Readiness frontier",
@@ -326,9 +313,7 @@ class PublicationPackageBuilder:
         if not path.is_file():
             return ()
         return tuple(
-            json.loads(line)
-            for line in path.read_text(encoding="utf-8").splitlines()
-            if line
+            json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line
         )
 
     @staticmethod
@@ -369,9 +354,7 @@ class PublicationPackageBuilder:
             if policy not in selected:
                 continue
             for row in cls._jsonl(run / "metrics" / "metric_record.jsonl"):
-                rows.append(
-                    {"client_id": row["client_id"], "policy": policy, "fpr": row["fpr"]}
-                )
+                rows.append({"client_id": row["client_id"], "policy": policy, "fpr": row["fpr"]})
         if not rows:
             return pd.DataFrame()
         frame = pd.DataFrame.from_records(rows)
@@ -394,14 +377,10 @@ class PublicationPackageBuilder:
             )
         if not rows:
             return pd.DataFrame()
-        frame = pd.DataFrame.from_records(rows).dropna(
-            subset=["mebe", "attack_balanced_macro_tpr"]
-        )
+        frame = pd.DataFrame.from_records(rows).dropna(subset=["mebe", "attack_balanced_macro_tpr"])
         if frame.empty:
             return frame
-        return frame.groupby("policy", as_index=False)[
-            ["mebe", "attack_balanced_macro_tpr"]
-        ].mean()
+        return frame.groupby("policy", as_index=False)[["mebe", "attack_balanced_macro_tpr"]].mean()
 
     @staticmethod
     def _sensitivity_cell_files(outputs_root: Path, code: str) -> tuple[Path, ...]:
@@ -484,9 +463,7 @@ class PublicationPackageBuilder:
         for run in runs:
             policy = str(cls._manifest_value(run, "policy_id"))
             for row in cls._jsonl(run / "metrics" / "metric_record.jsonl"):
-                rows.append(
-                    {"client_id": row["client_id"], "policy": policy, "fpr": row["fpr"]}
-                )
+                rows.append({"client_id": row["client_id"], "policy": policy, "fpr": row["fpr"]})
         if not rows:
             return pd.DataFrame()
         frame = pd.DataFrame.from_records(rows)

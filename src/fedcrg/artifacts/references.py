@@ -19,7 +19,7 @@ class CacheReference:
     sha256: Sha256
 
     @classmethod
-    def build(cls, file_path: Path, outputs_root: Path) -> "CacheReference":
+    def build(cls, file_path: Path, outputs_root: Path) -> CacheReference:
         resolved_file = file_path.resolve()
         resolved_outputs = outputs_root.resolve()
         try:

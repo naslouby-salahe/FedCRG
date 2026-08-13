@@ -26,7 +26,9 @@ class RunIdentityFactory:
         rho_bp = round(config.protocol.rho * 10_000)
         assurance_bp = round(config.protocol.readiness_assurance * 10_000)
         confidence_bp = round(config.protocol.mismatch_confidence * 10_000)
-        detector = "ae" if config.detector.id is DetectorId.AUTOENCODER else config.detector.id.value
+        detector = (
+            "ae" if config.detector.id is DetectorId.AUTOENCODER else config.detector.id.value
+        )
         prefix = (
             f"{config.dataset.id.value}__{detector}__ms{int(model_seed)}__"
             f"cs{int(calibration_seed)}__a{alpha_ppm}__r{rho_bp}__"

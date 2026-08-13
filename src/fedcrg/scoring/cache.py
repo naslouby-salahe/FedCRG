@@ -13,7 +13,7 @@ import shutil
 import uuid
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Iterable
+from collections.abc import Iterable
 
 import numpy as np
 import pandas as pd
@@ -331,14 +331,12 @@ class ScoreCache:
             typed_client_id = ClientId(str(client_id))
             for role_value, role_frame in client_frame.groupby("phase", sort=True):
                 role = DataRole(str(role_value))
-                role_scores = self._role_scores_from_frame(
-                    typed_client_id, role, role_frame
-                )
-                expected = self._record_lookup(records, typed_client_id, role).score_array_sha256.value
+                role_scores = self._role_scores_from_frame(typed_client_id, role, role_frame)
+                expected = self._record_lookup(
+                    records, typed_client_id, role
+                ).score_array_sha256.value
                 if role_scores.sha256.value != expected:
-                    raise ValueError(
-                        f"SCORE_CACHE_HASH_MISMATCH: {client_id}/{role.value}"
-                    )
+                    raise ValueError(f"SCORE_CACHE_HASH_MISMATCH: {client_id}/{role.value}")
                 score_list.append(role_scores)
             clients.append(ClientScoreSet(typed_client_id, tuple(score_list)))
 
@@ -404,10 +402,7 @@ class ScoreCache:
         group_values = frame["attack_family_test_only"]
         groups = None
         if group_values.notna().any():
-            groups = tuple(
-                AttackGroupId(str(value))
-                for value in group_values.dropna().astype(str)
-            )
+            groups = tuple(AttackGroupId(str(value)) for value in group_values.dropna().astype(str))
             if len(groups) != len(frame):
                 raise ValueError(
                     f"Attack-group metadata is incomplete for {client_id.value}/{role.value}"

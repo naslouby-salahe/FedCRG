@@ -8,7 +8,8 @@ from dataclasses import fields, is_dataclass
 from datetime import date, datetime
 from enum import Enum
 from pathlib import PurePath
-from typing import Mapping, TypeAlias
+from typing import TypeAlias
+from collections.abc import Mapping
 
 from fedcrg.core.ids import AttackGroupId, ClientId, RowId, RunId, Sha256
 
@@ -39,15 +40,9 @@ def to_json_value(value: object) -> JsonValue:
     if isinstance(value, (datetime, date)):
         return value.isoformat()
     if is_dataclass(value) and not isinstance(value, type):
-        return {
-            field.name: to_json_value(getattr(value, field.name))
-            for field in fields(value)
-        }
+        return {field.name: to_json_value(getattr(value, field.name)) for field in fields(value)}
     if isinstance(value, Mapping):
-        return {
-            _json_key(key): to_json_value(item)
-            for key, item in value.items()
-        }
+        return {_json_key(key): to_json_value(item) for key, item in value.items()}
     if isinstance(value, (tuple, list, set, frozenset)):
         return [to_json_value(item) for item in value]
     model_dump = getattr(value, "model_dump", None)

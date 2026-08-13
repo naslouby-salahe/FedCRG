@@ -69,12 +69,7 @@ class EvaluatePolicies:
 
     @staticmethod
     def _protocol(config: ExperimentConfig) -> FedCRGProtocol:
-        cache_path = (
-            config.outputs_root
-            / "cache"
-            / "precomputed"
-            / "readiness_plans.json"
-        )
+        cache_path = config.outputs_root / "cache" / "precomputed" / "readiness_plans.json"
         return FedCRGProtocol.with_persistent_readiness_cache(cache_path)
 
     @staticmethod
@@ -360,8 +355,7 @@ class EvaluatePolicies:
             aggregate_policy(policy, client_rows)
             for policy in config.policies
             if any(
-                row.policy is policy
-                and row.status is PolicyEvaluationStatus.EVALUATED
+                row.policy is policy and row.status is PolicyEvaluationStatus.EVALUATED
                 for row in client_rows
             )
         )
@@ -379,9 +373,7 @@ class EvaluatePolicies:
         policy: PolicyId,
         bundle: EvaluationBundle,
     ) -> tuple[Path, Path]:
-        protocol_by_client = {
-            item.client_id: item for item in bundle.protocol_results
-        }
+        protocol_by_client = {item.client_id: item for item in bundle.protocol_results}
         threshold_records: list[ThresholdRecord] = []
         metric_records: list[MetricRecord] = []
         for row in bundle.clients:

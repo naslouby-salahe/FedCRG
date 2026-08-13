@@ -63,8 +63,6 @@ def assess_claim_level(evidence: ClaimGateEvidence) -> ClaimAssessment:
         level = ClaimLevel.CHARACTERIZATION
 
     release_blockers = (
-        ()
-        if gates["G0"]
-        else ("G0: submission-week novelty recheck is not current",)
+        () if gates["G0"] else ("G0: submission-week novelty recheck is not current",)
     )
     return ClaimAssessment(level, failed, release_blockers)

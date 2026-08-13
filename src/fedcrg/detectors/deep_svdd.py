@@ -35,7 +35,9 @@ class DeepSvdd(DetectorModel):
         if not batches:
             raise ValueError("At least one batch is required to initialize the center")
         with torch.no_grad():
-            client_means = torch.stack([self.forward(batch).mean(dim=0) for batch in batches], dim=0)
+            client_means = torch.stack(
+                [self.forward(batch).mean(dim=0) for batch in batches], dim=0
+            )
             self.center.copy_(client_means.mean(dim=0))
 
     def anomaly_score(self, batch: torch.Tensor) -> torch.Tensor:

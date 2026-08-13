@@ -268,9 +268,7 @@ def definitions() -> tuple[ExperimentDefinition, ...]:
             id=ExperimentId.ASSURANCE_SENSITIVITY,
             protocol_code=ExperimentCode.R6,
             type=ExperimentType.SENSITIVITY,
-            axes=(
-                axis(ExperimentAxisId.READINESS_ASSURANCE, 0.90, 0.95, 0.99),
-            ),
+            axes=(axis(ExperimentAxisId.READINESS_ASSURANCE, 0.90, 0.95, 0.99),),
             dependencies=(primary,),
             policies=ALL_POLICIES,
             description="Readiness-assurance sensitivity",
@@ -304,9 +302,7 @@ def definitions() -> tuple[ExperimentDefinition, ...]:
             id=ExperimentId.REAL_CONTAMINATION,
             protocol_code=ExperimentCode.R9,
             type=ExperimentType.ROBUSTNESS,
-            axes=(
-                axis(ExperimentAxisId.FRACTION, 0.001, 0.005, 0.01, 0.02, 0.05),
-            ),
+            axes=(axis(ExperimentAxisId.FRACTION, 0.001, 0.005, 0.01, 0.02, 0.05),),
             dependencies=(primary,),
             policies=(PolicyId.FEDCRG,),
             description="Real-score calibration contamination sensitivity",

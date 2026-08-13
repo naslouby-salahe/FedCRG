@@ -1,6 +1,10 @@
 from pathlib import Path
 
-from fedcrg.analysis.communication import model_communication, preprocessing_communication, threshold_policy_communication
+from fedcrg.analysis.communication import (
+    model_communication,
+    preprocessing_communication,
+    threshold_policy_communication,
+)
 from fedcrg.analysis.stability import summarize_state_stability, summarize_threshold_stability
 from fedcrg.config.resolver import ExperimentConfigResolver
 from fedcrg.core.enums import DecisionState, PolicyId
@@ -32,6 +36,13 @@ def test_stability_summaries_are_explicit() -> None:
     threshold = summarize_threshold_stability((1.0, 2.0, 3.0))
     assert threshold.count == 3
     assert threshold.iqr == 1.0
-    states = summarize_state_stability((DecisionState.REFERENCE_RETAINED, DecisionState.REFERENCE_RETAINED, DecisionState.PERSONALIZED, DecisionState.PERSONALIZED))
+    states = summarize_state_stability(
+        (
+            DecisionState.REFERENCE_RETAINED,
+            DecisionState.REFERENCE_RETAINED,
+            DecisionState.PERSONALIZED,
+            DecisionState.PERSONALIZED,
+        )
+    )
     assert states.transition_count == 1
     assert states.transition_frequency == 1 / 3

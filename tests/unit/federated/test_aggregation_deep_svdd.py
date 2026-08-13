@@ -10,11 +10,14 @@ def test_equal_mean_aggregation() -> None:
     a = Autoencoder(2, AutoencoderConfig(hidden_dims=(1,)))
     b = a.clone()
     with torch.no_grad():
-        for param in a.parameters(): param.fill_(1.0)
-        for param in b.parameters(): param.fill_(3.0)
+        for param in a.parameters():
+            param.fill_(1.0)
+        for param in b.parameters():
+            param.fill_(3.0)
     target = a.clone()
     EqualMeanAggregator().aggregate_into(target, [a, b])
-    for param in target.parameters(): assert torch.allclose(param, torch.full_like(param, 2.0))
+    for param in target.parameters():
+        assert torch.allclose(param, torch.full_like(param, 2.0))
 
 
 def test_deep_svdd_center_and_score() -> None:
@@ -27,4 +30,6 @@ def test_deep_svdd_center_and_score() -> None:
 def test_detector_factory_builds_both_detectors() -> None:
     factory = DetectorFactory()
     assert isinstance(factory.create(2, AutoencoderConfig(hidden_dims=(1,))), Autoencoder)
-    assert isinstance(factory.create(2, DeepSvddConfig(hidden_dims=(2,), embedding_dim=1)), DeepSvdd)
+    assert isinstance(
+        factory.create(2, DeepSvddConfig(hidden_dims=(2,), embedding_dim=1)), DeepSvdd
+    )

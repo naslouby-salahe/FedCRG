@@ -18,8 +18,12 @@ def experiment_group() -> None:
 
 
 @experiment_group.command(name="plan")
-@click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True)
-@click.option("--experiment", type=click.Choice([item.value for item in ExperimentId]), default=None)
+@click.option(
+    "--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True
+)
+@click.option(
+    "--experiment", type=click.Choice([item.value for item in ExperimentId]), default=None
+)
 def plan_experiment(config_path: Path, experiment: str | None) -> None:
     config = load_config(config_path)
     experiment_id = ExperimentId(experiment) if experiment is not None else config.id
@@ -29,18 +33,27 @@ def plan_experiment(config_path: Path, experiment: str | None) -> None:
         model_seed=config.randomness.model_seeds[0],
         calibration_seed=config.dataset.primary_calibration_seed,
     )
-    click.echo(json.dumps({
-        "experiment": plan.definition.id.value,
-        "config_hash": plan.config_hash.value,
-        "model_seed": plan.model_seed,
-        "calibration_seed": plan.calibration_seed,
-        "dependencies": [item.value for item in plan.definition.dependencies],
-    }, indent=2))
+    click.echo(
+        json.dumps(
+            {
+                "experiment": plan.definition.id.value,
+                "config_hash": plan.config_hash.value,
+                "model_seed": plan.model_seed,
+                "calibration_seed": plan.calibration_seed,
+                "dependencies": [item.value for item in plan.definition.dependencies],
+            },
+            indent=2,
+        )
+    )
 
 
 @experiment_group.command(name="run-policy-cell")
-@click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True)
-@click.option("--experiment", type=click.Choice([item.value for item in ExperimentId]), default=None)
+@click.option(
+    "--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True
+)
+@click.option(
+    "--experiment", type=click.Choice([item.value for item in ExperimentId]), default=None
+)
 @click.option("--policy", type=click.Choice([item.value for item in PolicyId]), required=True)
 @click.option("--model-seed", type=int, required=True)
 @click.option("--calibration-seed", type=int, required=True)
@@ -62,6 +75,7 @@ def run_policy_cell(
     """Materialize one immutable pre-registered policy cell from frozen caches."""
     from fedcrg.application.policy_cell import FrozenCacheInputs, PolicyCellMaterializer
     from fedcrg.application.run_experiment import RunExperiment
+
     config = load_config(config_path)
     experiment_id = ExperimentId(experiment) if experiment is not None else config.id
     policy_id = PolicyId(policy)
@@ -81,8 +95,12 @@ def run_policy_cell(
 
 
 @experiment_group.command(name="materialize-federation-cell")
-@click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True)
-@click.option("--experiment", type=click.Choice([item.value for item in ExperimentId]), default=None)
+@click.option(
+    "--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True
+)
+@click.option(
+    "--experiment", type=click.Choice([item.value for item in ExperimentId]), default=None
+)
 @click.option("--model-seed", type=int, required=True)
 @click.option("--calibration-seed", type=int, required=True)
 @click.option("--prepared-root", type=click.Path(path_type=Path, exists=True), required=True)
@@ -102,6 +120,7 @@ def materialize_federation_cell(
     """Evaluate one federation once and materialize every configured policy run."""
     from fedcrg.application.federation_cell import FederationCellMaterializer
     from fedcrg.application.policy_cell import FrozenCacheInputs
+
     config = load_config(config_path)
     experiment_id = ExperimentId(experiment) if experiment is not None else config.id
     result = FederationCellMaterializer().materialize(
@@ -120,9 +139,13 @@ def materialize_federation_cell(
 
 
 @experiment_group.command(name="execute-grid")
-@click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True)
+@click.option(
+    "--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True
+)
 @click.option("--prepared-root", type=click.Path(path_type=Path, exists=True), required=True)
-@click.option("--experiment", type=click.Choice([item.value for item in ExperimentId]), default=None)
+@click.option(
+    "--experiment", type=click.Choice([item.value for item in ExperimentId]), default=None
+)
 @click.option("--named-only", is_flag=True, default=False)
 def execute_grid(
     config_path: Path,

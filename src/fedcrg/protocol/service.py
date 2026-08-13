@@ -32,7 +32,7 @@ class FedCRGProtocol:
         self.readiness_cache = readiness_cache or ReadinessPlanCache()
 
     @classmethod
-    def with_persistent_readiness_cache(cls, path: Path) -> "FedCRGProtocol":
+    def with_persistent_readiness_cache(cls, path: Path) -> FedCRGProtocol:
         return cls(readiness_cache=ReadinessPlanCache(path))
 
     def estimate_reference(

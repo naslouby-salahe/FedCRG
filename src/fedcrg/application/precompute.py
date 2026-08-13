@@ -52,8 +52,7 @@ class ProtocolTablePrecomputer:
 
         mismatch_definition = self.registry.get(ExperimentId.MISMATCH_POWER)
         mismatch_counts = tuple(
-            int(value)
-            for value in mismatch_definition.axis(ExperimentAxisId.MISMATCH_N).values
+            int(value) for value in mismatch_definition.axis(ExperimentAxisId.MISMATCH_N).values
         )
         mismatch_rows = tuple(
             self._mismatch_cutoffs(
@@ -110,9 +109,11 @@ class ProtocolTablePrecomputer:
             assurance=config.protocol.readiness_assurance,
         )
 
-        for value in self.registry.get(ExperimentId.READINESS_SAMPLE_SIZE).axis(
-            ExperimentAxisId.CALIBRATION_N
-        ).values:
+        for value in (
+            self.registry.get(ExperimentId.READINESS_SAMPLE_SIZE)
+            .axis(ExperimentAxisId.CALIBRATION_N)
+            .values
+        ):
             add(
                 int(value),
                 alpha=config.protocol.alpha,
@@ -120,9 +121,9 @@ class ProtocolTablePrecomputer:
                 assurance=config.protocol.readiness_assurance,
             )
 
-        for value in self.registry.get(ExperimentId.TOLERANCE_SENSITIVITY).axis(
-            ExperimentAxisId.RHO
-        ).values:
+        for value in (
+            self.registry.get(ExperimentId.TOLERANCE_SENSITIVITY).axis(ExperimentAxisId.RHO).values
+        ):
             add(
                 primary_n,
                 alpha=config.protocol.alpha,
@@ -130,9 +131,9 @@ class ProtocolTablePrecomputer:
                 assurance=config.protocol.readiness_assurance,
             )
 
-        for value in self.registry.get(ExperimentId.TARGET_FPR_REAL).axis(
-            ExperimentAxisId.ALPHA
-        ).values:
+        for value in (
+            self.registry.get(ExperimentId.TARGET_FPR_REAL).axis(ExperimentAxisId.ALPHA).values
+        ):
             add(
                 primary_n,
                 alpha=float(value),
@@ -140,9 +141,11 @@ class ProtocolTablePrecomputer:
                 assurance=config.protocol.readiness_assurance,
             )
 
-        for value in self.registry.get(ExperimentId.ASSURANCE_SENSITIVITY).axis(
-            ExperimentAxisId.READINESS_ASSURANCE
-        ).values:
+        for value in (
+            self.registry.get(ExperimentId.ASSURANCE_SENSITIVITY)
+            .axis(ExperimentAxisId.READINESS_ASSURANCE)
+            .values
+        ):
             add(
                 primary_n,
                 alpha=config.protocol.alpha,
@@ -155,8 +158,7 @@ class ProtocolTablePrecomputer:
             alpha=config.protocol.alpha,
             rho=config.protocol.rho,
             assurance=familywise_readiness_assurance(
-                config.dataset.expected_clients
-                or config.dataset.minimum_clients
+                config.dataset.expected_clients or config.dataset.minimum_clients
             ),
         )
 
@@ -175,10 +177,7 @@ class ProtocolTablePrecomputer:
                 rho=config.protocol.rho,
                 assurance=config.protocol.readiness_assurance,
             )
-        return tuple(
-            (key[0], protocol)
-            for key, protocol in sorted(cells.items())
-        )
+        return tuple((key[0], protocol) for key, protocol in sorted(cells.items()))
 
     @staticmethod
     def _mismatch_cutoffs(

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Callable, Generic, TypeAlias, TypeVar
+from datetime import datetime, UTC
+from typing import Generic, TypeAlias, TypeVar
+from collections.abc import Callable
 
 from fedcrg.core.enums import (
     ArtifactType,
@@ -139,7 +140,7 @@ class ExperimentExecution(Generic[TResult]):
 
         assert_transition(self.status, status)
         self.status = status
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if status is ExperimentStatus.RUNNING:
             self.started_at = now
         if status in {

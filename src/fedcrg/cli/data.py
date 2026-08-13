@@ -16,7 +16,9 @@ def data_group() -> None:
 
 
 @data_group.command(name="prepare")
-@click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True)
+@click.option(
+    "--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True
+)
 @click.option("--data-root", type=click.Path(path_type=Path, exists=True), required=True)
 def prepare_data(config_path: Path, data_root: Path) -> None:
     cache_root = PrepareData().prepare(load_config(config_path), data_root)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 import numpy as np
 
@@ -71,7 +71,9 @@ class RunBenchmark:
             "reference_mismatch_interval": lambda: mismatch_evaluator.evaluate(
                 mismatch, reference.value, config.protocol.band, config.protocol.mismatch_confidence
             ),
-            "policy_decision": lambda: decision_engine.decide(reference, readiness, mismatch_result),
+            "policy_decision": lambda: decision_engine.decide(
+                reference, readiness, mismatch_result
+            ),
         }
         return self.run(config, operations, output, repository_root)
 

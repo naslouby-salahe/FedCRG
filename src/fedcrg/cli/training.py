@@ -13,7 +13,9 @@ from fedcrg.cli.shared import load_config
 
 
 @click.command(name="train")
-@click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True)
+@click.option(
+    "--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True
+)
 @click.option("--prepared-root", type=click.Path(path_type=Path, exists=True), required=True)
 @click.option("--model-seed", type=int, required=True)
 def train_command(config_path: Path, prepared_root: Path, model_seed: int) -> None:
@@ -24,7 +26,9 @@ def train_command(config_path: Path, prepared_root: Path, model_seed: int) -> No
 
 
 @click.command(name="score")
-@click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True)
+@click.option(
+    "--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True
+)
 @click.option("--prepared-root", type=click.Path(path_type=Path, exists=True), required=True)
 @click.option("--model", "model_path", type=click.Path(path_type=Path, exists=True), required=True)
 @click.option(

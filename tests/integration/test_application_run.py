@@ -4,8 +4,22 @@ import pytest
 
 from fedcrg.application.run_experiment import RunExperiment
 from fedcrg.artifacts.manifest import RunManifestStore
-from fedcrg.config.models import AutoencoderConfig, DatasetConfig, ExperimentConfig, ProtocolConfig, RandomnessConfig, SplitConfig, TrainingConfig
-from fedcrg.core.enums import DatasetFeatureContractId, DatasetId, ExperimentId, ExperimentStatus, PolicyId
+from fedcrg.config.models import (
+    AutoencoderConfig,
+    DatasetConfig,
+    ExperimentConfig,
+    ProtocolConfig,
+    RandomnessConfig,
+    SplitConfig,
+    TrainingConfig,
+)
+from fedcrg.core.enums import (
+    DatasetFeatureContractId,
+    DatasetId,
+    ExperimentId,
+    ExperimentStatus,
+    PolicyId,
+)
 from fedcrg.experiments.models import ExperimentPlan
 
 
@@ -19,7 +33,17 @@ def _config(root: Path) -> ExperimentConfig:
             source_version="1",
             feature_count=2,
             minimum_clients=1,
-            split=SplitConfig(train_benign=1, reference_benign=1, mismatch_benign=1, calibration_benign=1, benign_guard=0, min_benign_test=1, attack_dev=1, min_attack_test=1, min_attack_test_per_group=1),
+            split=SplitConfig(
+                train_benign=1,
+                reference_benign=1,
+                mismatch_benign=1,
+                calibration_benign=1,
+                benign_guard=0,
+                min_benign_test=1,
+                attack_dev=1,
+                min_attack_test=1,
+                min_attack_test_per_group=1,
+            ),
             calibration_seeds=(1000,),
             primary_calibration_seed=1000,
         ),
@@ -53,6 +77,8 @@ def test_run_application_records_failed_status(tmp_path: Path) -> None:
         raise RuntimeError("boom")
 
     with pytest.raises(RuntimeError, match="boom"):
-        service.execute(ExperimentId.COMPUTATIONAL_BENCHMARK, config, 11, 1000, PolicyId.FEDCRG, fail)
+        service.execute(
+            ExperimentId.COMPUTATIONAL_BENCHMARK, config, 11, 1000, PolicyId.FEDCRG, fail
+        )
     runs = list((tmp_path / "runs").iterdir())
     assert RunManifestStore().load(runs[0] / "manifest.json").status is ExperimentStatus.FAILED

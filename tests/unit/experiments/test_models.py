@@ -19,7 +19,10 @@ def test_primary_execution_completes() -> None:
 
 def test_runner_failure_is_recorded() -> None:
     executor = ExperimentExecutor()
-    def fail(plan): raise RuntimeError("boom")
+
+    def fail(plan):
+        raise RuntimeError("boom")
+
     execution = executor.execute(_plan(ExperimentId.PRIMARY_NBAIOT), fail)
     assert execution.status is ExperimentStatus.FAILED
     assert "boom" in execution.error
@@ -35,4 +38,6 @@ def test_dependency_order_includes_prerequisites() -> None:
     resolver = DependencyResolver(ExperimentRegistry())
     order = resolver.order((ExperimentId.DIAD_FEATURE_SENSITIVITY,))
     assert order.index(ExperimentId.PRIMARY_NBAIOT) < order.index(ExperimentId.EXTERNAL_DIAD)
-    assert order.index(ExperimentId.EXTERNAL_DIAD) < order.index(ExperimentId.DIAD_FEATURE_SENSITIVITY)
+    assert order.index(ExperimentId.EXTERNAL_DIAD) < order.index(
+        ExperimentId.DIAD_FEATURE_SENSITIVITY
+    )

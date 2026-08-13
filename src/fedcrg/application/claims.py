@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 
 import numpy as np
@@ -169,14 +169,10 @@ class ClaimGateEvaluator:
             return False
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-            performed = datetime.fromisoformat(
-                str(payload["performed_at"]).replace("Z", "+00:00")
-            )
+            performed = datetime.fromisoformat(str(payload["performed_at"]).replace("Z", "+00:00"))
             if performed.tzinfo is None:
-                performed = performed.replace(tzinfo=timezone.utc)
-            age_days = (
-                datetime.now(timezone.utc) - performed.astimezone(timezone.utc)
-            ).total_seconds() / 86400
+                performed = performed.replace(tzinfo=UTC)
+            age_days = (datetime.now(UTC) - performed.astimezone(UTC)).total_seconds() / 86400
             queries = payload.get("queries")
             sources = payload.get("sources_checked")
             closer = bool(payload.get("closer_method_found", False))
@@ -208,8 +204,10 @@ class ClaimGateEvaluator:
             return False
         payload = json.loads(path.read_text(encoding="utf-8"))
         cells = payload.get("cells")
-        return isinstance(cells, list) and bool(cells) and all(
-            isinstance(cell, dict) and cell.get("accepted") is True for cell in cells
+        return (
+            isinstance(cells, list)
+            and bool(cells)
+            and all(isinstance(cell, dict) and cell.get("accepted") is True for cell in cells)
         )
 
     def _data_integrity(
@@ -239,8 +237,7 @@ class ClaimGateEvaluator:
         return tuple(
             row
             for row in records
-            if row.experiment_id == experiment.value
-            and row.calibration_seed == calibration_seed
+            if row.experiment_id == experiment.value and row.calibration_seed == calibration_seed
         )
 
     @classmethod
@@ -255,27 +252,18 @@ class ClaimGateEvaluator:
         if not seeds:
             return False
         method_mebe = [row.mebe for row in selected if row.policy is PolicyId.FEDCRG]
-        global_mebe = [
-            row.mebe for row in selected if row.policy is PolicyId.GLOBAL_QUANTILE
-        ]
-        local_mebe = [
-            row.mebe for row in selected if row.policy is PolicyId.LOCAL_QUANTILE
-        ]
+        global_mebe = [row.mebe for row in selected if row.policy is PolicyId.GLOBAL_QUANTILE]
+        local_mebe = [row.mebe for row in selected if row.policy is PolicyId.LOCAL_QUANTILE]
         if not method_mebe or not global_mebe or not local_mebe:
             return False
         method_mean = float(np.mean(method_mebe))
-        reliability_better = (
-            method_mean < float(np.mean(global_mebe))
-            or method_mean < float(np.mean(local_mebe))
+        reliability_better = method_mean < float(np.mean(global_mebe)) or method_mean < float(
+            np.mean(local_mebe)
         )
         for seed in seeds:
             rows = [row for row in selected if row.model_seed == seed]
             method = next(
-                (
-                    row.attack_balanced_macro_tpr
-                    for row in rows
-                    if row.policy is PolicyId.FEDCRG
-                ),
+                (row.attack_balanced_macro_tpr for row in rows if row.policy is PolicyId.FEDCRG),
                 None,
             )
             anchors = [
@@ -311,9 +299,7 @@ class ClaimGateEvaluator:
             method_mebe = float(np.mean([row.mebe for row in method]))
             readiness_mebe = float(np.mean([row.mebe for row in readiness]))
             method_bvr = float(np.mean([row.band_violation_rate for row in method]))
-            readiness_bvr = float(
-                np.mean([row.band_violation_rate for row in readiness])
-            )
+            readiness_bvr = float(np.mean([row.band_violation_rate for row in readiness]))
             if not (method_mebe < readiness_mebe or method_bvr < readiness_bvr):
                 continue
             if self._policy_thresholds_differ(run_dirs, experiment, calibration_seed):
@@ -332,13 +318,10 @@ class ClaimGateEvaluator:
             if (
                 manifest.experiment_id is not experiment
                 or manifest.calibration_seed != calibration_seed
-                or manifest.policy_id
-                not in {PolicyId.FEDCRG, PolicyId.READINESS_ONLY}
+                or manifest.policy_id not in {PolicyId.FEDCRG, PolicyId.READINESS_ONLY}
             ):
                 continue
-            for line in RunLayout(path).threshold_records.read_text(
-                encoding="utf-8"
-            ).splitlines():
+            for line in RunLayout(path).threshold_records.read_text(encoding="utf-8").splitlines():
                 if not line:
                     continue
                 row = json.loads(line)
@@ -385,10 +368,7 @@ class ClaimGateEvaluator:
         }
         return bool(
             method
-            and any(
-                values and np.mean(method) < np.mean(values)
-                for values in anchors.values()
-            )
+            and any(values and np.mean(method) < np.mean(values) for values in anchors.values())
         )
 
     def _completed_run_dirs(self, root: Path):

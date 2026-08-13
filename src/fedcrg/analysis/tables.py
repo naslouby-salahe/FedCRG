@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
 from pathlib import Path
 
 import pandas as pd
@@ -54,11 +53,28 @@ class PublicationTableBuilder:
         return self._write(pd.DataFrame.from_records(rows), output)
 
     def admission_states(self, threshold_jsonl: Path, output: Path) -> Path:
-        records = [json.loads(line) for line in threshold_jsonl.read_text(encoding="utf-8").splitlines() if line]
+        records = [
+            json.loads(line)
+            for line in threshold_jsonl.read_text(encoding="utf-8").splitlines()
+            if line
+        ]
         columns = [
-            "run_id", "client_id", "mismatch_x", "mismatch_n", "cp_lower", "cp_upper",
-            "readiness_n", "readiness_rank", "readiness_probability", "state", "tau_ref",
-            "tau_local", "selected_tau", "selected_source", "reason_code", "tie_count",
+            "run_id",
+            "client_id",
+            "mismatch_x",
+            "mismatch_n",
+            "cp_lower",
+            "cp_upper",
+            "readiness_n",
+            "readiness_rank",
+            "readiness_probability",
+            "state",
+            "tau_ref",
+            "tau_local",
+            "selected_tau",
+            "selected_source",
+            "reason_code",
+            "tie_count",
         ]
         return self._write(pd.DataFrame.from_records(records).reindex(columns=columns), output)
 

@@ -41,10 +41,15 @@ def validate_experiment_config(config: ExperimentConfig) -> None:
         if config.training.local_epochs != 20:
             raise ConfigurationError("DIAD autoencoder experiments require 20 local epochs")
         if config.id is ExperimentId.DIAD_FEATURE_SENSITIVITY:
-            if config.dataset.feature_contract is not DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE:
+            if (
+                config.dataset.feature_contract
+                is not DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE
+            ):
                 raise ConfigurationError("R14 must use the training-derived DIAD feature contract")
         elif config.dataset.feature_contract is not DatasetFeatureContractId.DIAD_LOCKED_86:
-            raise ConfigurationError("Confirmatory DIAD experiments require the locked 86-feature contract")
+            raise ConfigurationError(
+                "Confirmatory DIAD experiments require the locked 86-feature contract"
+            )
 
     registered = set(PolicyId)
     if any(policy not in registered for policy in config.policies):

@@ -21,7 +21,12 @@ BAND = OperatingBand(0.005, 0.015)
         (2000, CalibrationReadinessState.READY, 1982, 0.9805279151),
     ],
 )
-def test_readiness_numerical_ledger(sample_count: int, expected_state: CalibrationReadinessState, expected_rank: int, expected_probability: float) -> None:
+def test_readiness_numerical_ledger(
+    sample_count: int,
+    expected_state: CalibrationReadinessState,
+    expected_rank: int,
+    expected_probability: float,
+) -> None:
     plan = ReadinessPlanBuilder().build(sample_count, BAND, 0.95)
     assert plan.state is expected_state
     assert plan.rank == expected_rank
@@ -47,8 +52,15 @@ def test_readiness_numerical_ledger(sample_count: int, expected_state: Calibrati
         (3000, 59, MismatchOutcome.HIGH),
     ],
 )
-def test_mismatch_cutoff_ledger(sample_count: int, exceedances: int, expected: MismatchOutcome) -> None:
-    scores = np.concatenate((np.ones(exceedances, dtype=np.float64), np.zeros(sample_count - exceedances, dtype=np.float64)))
+def test_mismatch_cutoff_ledger(
+    sample_count: int, exceedances: int, expected: MismatchOutcome
+) -> None:
+    scores = np.concatenate(
+        (
+            np.ones(exceedances, dtype=np.float64),
+            np.zeros(sample_count - exceedances, dtype=np.float64),
+        )
+    )
     result = ReferenceMismatchEvaluator().evaluate(scores, 0.5, BAND, 0.95)
     assert result.outcome is expected
 

@@ -9,7 +9,9 @@ def source_order_blocks(scores: np.ndarray, block_count: int = 5) -> tuple[np.nd
     values = np.asarray(scores, dtype=np.float64)
     if block_count <= 0 or len(values) < block_count:
         raise ValueError("Source-order block analysis needs at least one row per block")
-    return tuple(np.asarray(block, dtype=np.float64) for block in np.array_split(values, block_count))
+    return tuple(
+        np.asarray(block, dtype=np.float64) for block in np.array_split(values, block_count)
+    )
 
 
 def contaminate_benign_scores(

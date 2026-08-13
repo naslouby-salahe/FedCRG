@@ -8,7 +8,7 @@ import statistics
 import time
 import tracemalloc
 from dataclasses import dataclass
-from typing import Callable
+from collections.abc import Callable
 
 
 @dataclass(frozen=True, slots=True)

@@ -26,7 +26,9 @@ from fedcrg.core.types import OperatingBand
 
 
 def _sha256_json(payload: object) -> str:
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode(
+        "utf-8"
+    )
     return hashlib.sha256(encoded).hexdigest()
 
 
@@ -95,7 +97,7 @@ class DatasetConfig(FrozenModel):
     expected_benign_counts: dict[str, int] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def validate_dataset_contract(self) -> "DatasetConfig":
+    def validate_dataset_contract(self) -> DatasetConfig:
         if not self.calibration_seeds:
             raise ValueError("At least one calibration seed is required")
         if len(set(self.calibration_seeds)) != len(self.calibration_seeds):
@@ -156,9 +158,9 @@ class DeepSvddConfig(FrozenModel):
     embedding_dim: int = Field(gt=0)
     activation: Literal[ActivationId.TANH] = ActivationId.TANH
     bias: Literal[False] = False
-    center_mode: Literal[
+    center_mode: Literal[DeepSvddCenterMode.EQUAL_MEAN_OF_CLIENT_INITIAL_EMBEDDINGS] = (
         DeepSvddCenterMode.EQUAL_MEAN_OF_CLIENT_INITIAL_EMBEDDINGS
-    ] = DeepSvddCenterMode.EQUAL_MEAN_OF_CLIENT_INITIAL_EMBEDDINGS
+    )
 
 
 DetectorConfig = Annotated[AutoencoderConfig | DeepSvddConfig, Field(discriminator="id")]
@@ -183,7 +185,7 @@ class TrainingConfig(FrozenModel):
     device: ComputeDeviceId = ComputeDeviceId.CPU
 
     @model_validator(mode="after")
-    def validate_training_contract(self) -> "TrainingConfig":
+    def validate_training_contract(self) -> TrainingConfig:
         if self.learning_rate_final > self.learning_rate_initial:
             raise ValueError("Final learning rate cannot exceed initial learning rate")
         beta1, beta2 = self.adam_betas
@@ -199,7 +201,7 @@ class RandomnessConfig(FrozenModel):
     bootstrap_seed: Literal[424242] = 424242
 
     @model_validator(mode="after")
-    def validate_model_seeds(self) -> "RandomnessConfig":
+    def validate_model_seeds(self) -> RandomnessConfig:
         if not self.model_seeds or len(set(self.model_seeds)) != len(self.model_seeds):
             raise ValueError("Model seeds must be non-empty and unique")
         return self
@@ -216,7 +218,7 @@ class ExperimentConfig(FrozenModel):
     outputs_root: Path = Path("outputs")
 
     @model_validator(mode="after")
-    def validate_experiment_contract(self) -> "ExperimentConfig":
+    def validate_experiment_contract(self) -> ExperimentConfig:
         if not self.policies or len(set(self.policies)) != len(self.policies):
             raise ValueError("Policies must be non-empty and unique")
         if self.id is ExperimentId.SECOND_DETECTOR and self.detector.id is not DetectorId.DEEP_SVDD:
@@ -225,14 +227,21 @@ class ExperimentConfig(FrozenModel):
             if self.dataset.id is not DatasetId.DIAD:
                 raise ValueError("External validation requires DIAD")
             if self.dataset.feature_contract is not DatasetFeatureContractId.DIAD_LOCKED_86:
-                raise ValueError("Confirmatory DIAD external validation requires the locked 86-feature contract")
+                raise ValueError(
+                    "Confirmatory DIAD external validation requires the locked 86-feature contract"
+                )
         if self.id is ExperimentId.DIAD_FEATURE_SENSITIVITY:
             if self.dataset.id is not DatasetId.DIAD:
                 raise ValueError("R14 requires DIAD")
-            if self.dataset.feature_contract is not DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE:
+            if (
+                self.dataset.feature_contract
+                is not DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE
+            ):
                 raise ValueError("R14 requires a frozen training-schema-derived feature contract")
         elif self.dataset.feature_contract is DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE:
-            raise ValueError("The training-schema-derived DIAD feature contract is exclusive to R14")
+            raise ValueError(
+                "The training-schema-derived DIAD feature contract is exclusive to R14"
+            )
         return self
 
     def canonical_json(self) -> str:

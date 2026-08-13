@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 
 from fedcrg.artifacts.serialization import atomic_write_json
@@ -62,7 +62,7 @@ class ExperimentResultEnvelope:
             "observed_monte_carlo_trials": self.observed_monte_carlo_trials,
             "expected_exact_cells": self.expected_exact_cells,
             "complete": self.complete,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "notes": list(self.notes),
             "metadata": self.metadata or {},
             "cells": list(self.cells),
@@ -108,7 +108,7 @@ class ExperimentCellEnvelope:
             "expected_subcells": self.expected_subcells,
             "observed_subcells": len(self.cells),
             "complete": self.complete,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "notes": list(self.notes),
             "metadata": self.metadata or {},
             "cells": list(self.cells),

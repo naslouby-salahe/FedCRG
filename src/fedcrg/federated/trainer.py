@@ -72,9 +72,7 @@ class FederatedTrainer:
             final_model,
             datasets,
         )
-        total_communication = sum(
-            item.round_communication_bytes for item in round_results
-        )
+        total_communication = sum(item.round_communication_bytes for item in round_results)
         result = TrainingResult(
             model_seed=seed,
             rounds=tuple(round_results),
@@ -121,9 +119,7 @@ class FederatedTrainer:
 
         global_hash = server.aggregate(trained_models)
         after = server.broadcast().cpu()
-        losses = np.asarray(
-            [item.mean_loss for item in client_results], dtype=np.float64
-        )
+        losses = np.asarray([item.mean_loss for item in client_results], dtype=np.float64)
         update_norm = self._parameter_update_norm(before, after)
         communication_bytes = 2 * len(selected_clients) * model_payload_bytes
 
@@ -162,9 +158,8 @@ class FederatedTrainer:
         for name, tensor in after.state_dict().items():
             if not tensor.dtype.is_floating_point:
                 continue
-            delta = (
-                tensor.detach().cpu().to(torch.float64)
-                - before_state[name].detach().cpu().to(torch.float64)
+            delta = tensor.detach().cpu().to(torch.float64) - before_state[name].detach().cpu().to(
+                torch.float64
             )
             squared_norm += float(torch.sum(delta * delta))
         return float(np.sqrt(squared_norm))
@@ -186,21 +181,13 @@ class FederatedTrainer:
                 dataset = datasets[client_id]
                 values = dataset.tensors[0] if hasattr(dataset, "tensors") else None
                 if values is None:
-                    raise TypeError(
-                        "Round-20 diagnostic requires tensor-backed training datasets"
-                    )
+                    raise TypeError("Round-20 diagnostic requires tensor-backed training datasets")
                 values = values.to(dtype=torch.float32)
                 round20_scores.append(
-                    round20_model.anomaly_score(values)
-                    .cpu()
-                    .numpy()
-                    .astype(np.float64)
+                    round20_model.anomaly_score(values).cpu().numpy().astype(np.float64)
                 )
                 final_scores.append(
-                    final_model.anomaly_score(values)
-                    .cpu()
-                    .numpy()
-                    .astype(np.float64)
+                    final_model.anomaly_score(values).cpu().numpy().astype(np.float64)
                 )
         left = np.concatenate(round20_scores)
         right = np.concatenate(final_scores)

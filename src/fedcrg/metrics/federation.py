@@ -37,20 +37,14 @@ def aggregate_policy(
         mafe=float(np.mean([row.absolute_fpr_error for row in rows])),
         max_fpr=float(np.max(fprs)),
         fpr_iqr=float(np.percentile(fprs, 75) - np.percentile(fprs, 25)),
-        attack_balanced_macro_tpr=_mean_defined(
-            [row.attack_balanced_tpr for row in rows]
-        ),
+        attack_balanced_macro_tpr=_mean_defined([row.attack_balanced_tpr for row in rows]),
         macro_tpr=_mean_defined([row.tpr for row in rows]),
         worst_client_tpr=min(
             (value for value in (row.tpr for row in rows) if value is not None),
             default=None,
         ),
         worst_client_attack_balanced_tpr=min(
-            (
-                value
-                for value in (row.attack_balanced_tpr for row in rows)
-                if value is not None
-            ),
+            (value for value in (row.attack_balanced_tpr for row in rows) if value is not None),
             default=None,
         ),
         mean_f1=_mean_defined([row.f1 for row in rows]),
@@ -76,11 +70,7 @@ def utility_preserved(
 ) -> bool | None:
     anchor = utility_anchor(federations)
     method = next(
-        (
-            item.attack_balanced_macro_tpr
-            for item in federations
-            if item.policy is PolicyId.FEDCRG
-        ),
+        (item.attack_balanced_macro_tpr for item in federations if item.policy is PolicyId.FEDCRG),
         None,
     )
     if anchor is None or method is None:
@@ -108,7 +98,10 @@ def assess_utility(
     federations: tuple[FederationMetrics, ...], margin: float = -0.03
 ) -> UtilityAssessment:
     anchor = utility_anchor(federations)
-    method = next((item.attack_balanced_macro_tpr for item in federations if item.policy is PolicyId.FEDCRG), None)
+    method = next(
+        (item.attack_balanced_macro_tpr for item in federations if item.policy is PolicyId.FEDCRG),
+        None,
+    )
     difference = None if anchor is None or method is None else method - anchor
     return UtilityAssessment(
         anchor=anchor,

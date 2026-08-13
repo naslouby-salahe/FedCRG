@@ -75,9 +75,7 @@ class PolicyCellMaterializer:
         calibration_seed: CalibrationSeed | int,
         assignment_mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
     ) -> FederationMetrics | None:
-        bundle = self.evaluate_federation(
-            config, caches, calibration_seed, assignment_mode
-        )
+        bundle = self.evaluate_federation(config, caches, calibration_seed, assignment_mode)
         return self.materialize_precomputed(
             config,
             policy,
@@ -137,8 +135,7 @@ class PolicyCellMaterializer:
         missing = tuple(path for path in required if not path.is_file())
         if missing:
             raise FileNotFoundError(
-                "Missing frozen upstream artifact(s): "
-                + ", ".join(str(path) for path in missing)
+                "Missing frozen upstream artifact(s): " + ", ".join(str(path) for path in missing)
             )
 
         prepared = self.dataset_manifests.load(prepared_manifest_path)
@@ -195,9 +192,7 @@ class PolicyCellMaterializer:
             layout.data / "preprocessing.json",
         )
         eligibility_name = (
-            "diad_eligibility.json"
-            if config.dataset.id is DatasetId.DIAD
-            else "eligibility.json"
+            "diad_eligibility.json" if config.dataset.id is DatasetId.DIAD else "eligibility.json"
         )
         eligibility_source = caches.prepared_root / eligibility_name
         if eligibility_source.exists():
@@ -205,10 +200,7 @@ class PolicyCellMaterializer:
             if eligibility_name != "eligibility.json":
                 self._copy(eligibility_source, layout.data / eligibility_name)
         assignment_source = (
-            caches.prepared_root
-            / "splits"
-            / "seeded"
-            / f"c{int(calibration_seed)}.json"
+            caches.prepared_root / "splits" / "seeded" / f"c{int(calibration_seed)}.json"
             if assignment_mode is CalibrationAssignmentMode.SEEDED_PERMUTATION
             else caches.prepared_root / "splits" / "source_order.json"
         )

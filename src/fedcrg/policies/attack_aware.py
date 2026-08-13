@@ -18,9 +18,7 @@ def _defined_f1(client: SupervisedDevelopmentEvidence, threshold: float) -> floa
     return -1.0 if value is None else value
 
 
-def _mean_client_f1(
-    clients: tuple[SupervisedDevelopmentEvidence, ...], threshold: float
-) -> float:
+def _mean_client_f1(clients: tuple[SupervisedDevelopmentEvidence, ...], threshold: float) -> float:
     return float(np.mean([_defined_f1(client, threshold) for client in clients]))
 
 
@@ -66,9 +64,7 @@ def summary_statistic_threshold(
     if lower >= upper:
         return None
 
-    candidates = np.linspace(
-        lower, upper, SUPERVISED_THRESHOLD_CANDIDATES, dtype=np.float64
-    )
+    candidates = np.linspace(lower, upper, SUPERVISED_THRESHOLD_CANDIDATES, dtype=np.float64)
     scores = np.asarray([_mean_client_f1(clients, float(t)) for t in candidates])
     best = float(np.max(scores))
     return float(candidates[int(np.flatnonzero(scores == best)[0])])
@@ -79,9 +75,7 @@ def supervised_global_f1(
 ) -> float:
     minimum = min(float(np.min(client.scores)) for client in clients)
     maximum = max(float(np.max(client.scores)) for client in clients)
-    candidates = np.linspace(
-        minimum, maximum, SUPERVISED_THRESHOLD_CANDIDATES, dtype=np.float64
-    )
+    candidates = np.linspace(minimum, maximum, SUPERVISED_THRESHOLD_CANDIDATES, dtype=np.float64)
     scores = np.asarray([_mean_client_f1(clients, float(t)) for t in candidates])
     best = float(np.max(scores))
     return float(candidates[int(np.flatnonzero(scores == best)[0])])

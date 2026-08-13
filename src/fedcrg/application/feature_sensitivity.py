@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 
 from fedcrg.artifacts.serialization import atomic_write_json
+from fedcrg.config.models import ExperimentConfig
+from fedcrg.core.enums import DatasetFeatureContractId, ExperimentId, PolicyId
 from fedcrg.core.ids import ClientId
 from fedcrg.data.datasets.diad import DiadAdapter
 from fedcrg.data.feature_sensitivity import NumericSafeFeatureContract, derive_numeric_safe_features
@@ -34,8 +36,7 @@ class BuildDiadFeatureSensitivityContract:
                 + ", ".join(client.value for client in missing)
             )
         training_frames = {
-            client: adapter.load_training_schema(client, train_count)
-            for client in eligible
+            client: adapter.load_training_schema(client, train_count) for client in eligible
         }
         contract = derive_numeric_safe_features(training_frames)
         atomic_write_json(
@@ -44,38 +45,39 @@ class BuildDiadFeatureSensitivityContract:
                 "experiment": "R14",
                 "source": "training_schema_only",
                 "eligible_clients": [client.value for client in eligible],
-                **contract.to_dict(),
+                "feature_contract": contract,
             },
         )
         return contract
 
 
-def r14_config(base_config, contract: NumericSafeFeatureContract):
-    """Create the R14-only derived config after the training-schema feature freeze."""
-    from fedcrg.core.enums import ExperimentId, PolicyId
+def r14_config(
+    base_config: ExperimentConfig, contract: NumericSafeFeatureContract
+) -> ExperimentConfig:
+    """Create the R14-only derived config after the training-schema feature freeze.
 
-    dataset = base_config.dataset.model_copy(
-        update={
-            "feature_count": contract.dimension,
-            "calibration_seeds": (base_config.dataset.primary_calibration_seed,),
-        }
+    Rebuilds the full validated payload and revalidates through the model instead of
+    an unchecked partial-field update, so the DIAD-training-schema cross-field
+    invariants (feature_contract/feature_names/feature_count) are enforced.
+    """
+    payload = base_config.model_dump(mode="python")
+    payload["id"] = ExperimentId.DIAD_FEATURE_SENSITIVITY
+    dataset = dict(payload["dataset"])
+    dataset["feature_contract"] = DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE
+    dataset["feature_count"] = contract.dimension
+    dataset["feature_names"] = contract.features
+    dataset["calibration_seeds"] = (base_config.dataset.primary_calibration_seed,)
+    payload["dataset"] = dataset
+    detector = dict(payload["detector"])
+    detector["hidden_dims"] = contract.encoder_hidden_dims
+    payload["detector"] = detector
+    payload["policies"] = (
+        PolicyId.GLOBAL_QUANTILE,
+        PolicyId.LOCAL_QUANTILE,
+        PolicyId.SHRINKAGE,
+        PolicyId.FEDCRG,
     )
-    detector = base_config.detector.model_copy(
-        update={"hidden_dims": contract.encoder_hidden_dims}
-    )
-    return base_config.model_copy(
-        update={
-            "id": ExperimentId.DIAD_FEATURE_SENSITIVITY,
-            "dataset": dataset,
-            "detector": detector,
-            "policies": (
-                PolicyId.GLOBAL_QUANTILE,
-                PolicyId.LOCAL_QUANTILE,
-                PolicyId.SHRINKAGE,
-                PolicyId.FEDCRG,
-            ),
-        }
-    )
+    return ExperimentConfig.model_validate(payload)
 
 
 class PrepareDiadFeatureSensitivity:
@@ -83,11 +85,11 @@ class PrepareDiadFeatureSensitivity:
 
     def prepare(
         self,
-        base_config,
+        base_config: ExperimentConfig,
         data_root: Path,
         eligibility_manifest: Path,
         feature_manifest: Path,
-    ) -> tuple[object, Path]:
+    ) -> tuple[ExperimentConfig, Path]:
         from fedcrg.application.prepare_data import PrepareData
         from fedcrg.data.datasets.diad import DiadFeatureSensitivityAdapter
 

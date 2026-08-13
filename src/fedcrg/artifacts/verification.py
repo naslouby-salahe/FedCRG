@@ -118,12 +118,8 @@ class ArtifactVerifier:
             return VerificationResult(False, ("verification/hashes.json",), (), ())
         evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
         expected_raw: dict[str, str] = evidence.get("hashes", {})
-        expected = tuple(
-            FileHashRecord(path, digest) for path, digest in expected_raw.items()
-        )
-        missing = tuple(
-            sorted(path for path in expected_raw if not (layout.root / path).exists())
-        )
+        expected = tuple(FileHashRecord(path, digest) for path, digest in expected_raw.items())
+        missing = tuple(sorted(path for path in expected_raw if not (layout.root / path).exists()))
         mismatched = {
             record.relative_path
             for record in expected

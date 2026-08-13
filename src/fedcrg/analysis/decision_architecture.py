@@ -47,7 +47,9 @@ def build_decision_architecture_figure(output: Path) -> Path:
             fontsize=9,
         )
 
-    def arrow(start: tuple[float, float], end: tuple[float, float], label: str | None = None) -> None:
+    def arrow(
+        start: tuple[float, float], end: tuple[float, float], label: str | None = None
+    ) -> None:
         axis.add_patch(
             FancyArrowPatch(
                 start,

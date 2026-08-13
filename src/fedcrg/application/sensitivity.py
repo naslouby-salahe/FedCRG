@@ -108,6 +108,28 @@ class RunRealSensitivities:
         self.score_cache = score_cache or ScoreCache()
 
     @staticmethod
+    def _contaminate_role(
+        item: RoleScores,
+        attack_dev: np.ndarray,
+        fraction: float,
+        attack_split_seed: int,
+        client_id: ClientId,
+    ) -> RoleScores:
+        if item.role not in {DataRole.MISMATCH, DataRole.CALIBRATION}:
+            return item
+        return RoleScores(
+            role=item.role,
+            values=contaminate_benign_scores(
+                item.values,
+                attack_dev,
+                fraction,
+                attack_split_seed + int(fraction * 1_000_000),
+            ),
+            client_id=client_id,
+            row_ids=item.row_ids,
+        )
+
+    @staticmethod
     def _seed(
         config: ExperimentConfig,
         calibration_seed: CalibrationSeed | int | None,
@@ -254,9 +276,7 @@ class RunRealSensitivities:
         )
         cells = tuple(
             SensitivityCell(
-                settings=(
-                    ParameterSetting(ExperimentAxisId.CALIBRATION_N, int(value)),
-                ),
+                settings=(ParameterSetting(ExperimentAxisId.CALIBRATION_N, int(value)),),
                 config_hash=variant.config_hash,
                 evaluation=self.evaluator.evaluate_from_cache(
                     variant,
@@ -324,7 +344,15 @@ class RunRealSensitivities:
             ),
         )
 
-    def run_r4(self, config: ExperimentConfig, score_root: Path, prepared_root: Path, model_seed: int, output: Path, calibration_seed: CalibrationSeed | int | None = None) -> Path:
+    def run_r4(
+        self,
+        config: ExperimentConfig,
+        score_root: Path,
+        prepared_root: Path,
+        model_seed: int,
+        output: Path,
+        calibration_seed: CalibrationSeed | int | None = None,
+    ) -> Path:
         seed = self._seed(config, calibration_seed)
         return self._parameter_sweep(
             experiment_id=ExperimentId.TOLERANCE_SENSITIVITY,
@@ -337,7 +365,15 @@ class RunRealSensitivities:
             output=output,
         )
 
-    def run_r5(self, config: ExperimentConfig, score_root: Path, prepared_root: Path, model_seed: int, output: Path, calibration_seed: CalibrationSeed | int | None = None) -> Path:
+    def run_r5(
+        self,
+        config: ExperimentConfig,
+        score_root: Path,
+        prepared_root: Path,
+        model_seed: int,
+        output: Path,
+        calibration_seed: CalibrationSeed | int | None = None,
+    ) -> Path:
         seed = self._seed(config, calibration_seed)
         return self._parameter_sweep(
             experiment_id=ExperimentId.TARGET_FPR_REAL,
@@ -350,7 +386,15 @@ class RunRealSensitivities:
             output=output,
         )
 
-    def run_r6(self, config: ExperimentConfig, score_root: Path, prepared_root: Path, model_seed: int, output: Path, calibration_seed: CalibrationSeed | int | None = None) -> Path:
+    def run_r6(
+        self,
+        config: ExperimentConfig,
+        score_root: Path,
+        prepared_root: Path,
+        model_seed: int,
+        output: Path,
+        calibration_seed: CalibrationSeed | int | None = None,
+    ) -> Path:
         seed = self._seed(config, calibration_seed)
         return self._parameter_sweep(
             experiment_id=ExperimentId.ASSURANCE_SENSITIVITY,
@@ -395,13 +439,9 @@ class RunRealSensitivities:
                 adjusted = self.variants.protocol_variant(
                     fedcrg_only,
                     experiment_id=ExperimentId.MULTIPLICITY_SENSITIVITY,
-                    readiness_assurance=familywise_readiness_assurance(
-                        len(views.client_ids)
-                    ),
+                    readiness_assurance=familywise_readiness_assurance(len(views.client_ids)),
                 )
-                readiness = tuple(
-                    self.evaluator.protocol_results(adjusted, views).values()
-                )
+                readiness = tuple(self.evaluator.protocol_results(adjusted, views).values())
                 cells.append(MultiplicityCell(raw_procedure, readiness_results=readiness))
             elif raw_procedure is MultiplicityProcedure.BONFERRONI_MISMATCH:
                 cells.append(
@@ -478,11 +518,7 @@ class RunRealSensitivities:
                             block_index=block_index,
                             block_count=block_count,
                             benign_n=len(block),
-                            fpr=(
-                                None
-                                if threshold is None
-                                else float(np.mean(block > threshold))
-                            ),
+                            fpr=(None if threshold is None else float(np.mean(block > threshold))),
                         )
                     )
         return self._write(
@@ -522,24 +558,12 @@ class RunRealSensitivities:
                     client_id,
                     DataRole.ATTACK_DEV,
                 ).values
-                contaminated_roles = {DataRole.MISMATCH, DataRole.CALIBRATION}
-
-                def _contaminate(item: RoleScores) -> RoleScores:
-                    if item.role not in contaminated_roles:
-                        return item
-                    return RoleScores(
-                        role=item.role,
-                        values=contaminate_benign_scores(
-                            item.values,
-                            attack_dev,
-                            fraction,
-                            config.randomness.attack_split_seed + int(fraction * 1_000_000),
-                        ),
-                        client_id=client_id,
-                        row_ids=item.row_ids,
+                roles = tuple(
+                    self._contaminate_role(
+                        item, attack_dev, fraction, config.randomness.attack_split_seed, client_id
                     )
-
-                roles = tuple(_contaminate(item) for item in source.roles)
+                    for item in source.roles
+                )
                 clients.append(
                     ClientCalibrationScores(
                         client_id,

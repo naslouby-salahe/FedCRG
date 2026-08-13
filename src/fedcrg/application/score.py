@@ -13,7 +13,7 @@ from fedcrg.artifacts.hashing import sha256_file
 from fedcrg.artifacts.training import TrainingManifestStore
 from fedcrg.config.models import ExperimentConfig
 from fedcrg.core.enums import DataRole
-from fedcrg.core.ids import AttackGroupId, ClientId, ModelSeed, RowId, Sha256
+from fedcrg.core.ids import AttackGroupId, ModelSeed, RowId, Sha256
 from fedcrg.data.manifests import PreparedDatasetManifest
 from fedcrg.detectors.base import DetectorModel
 from fedcrg.scoring.cache import ScoreCache, ScoreCacheIdentity
@@ -127,9 +127,7 @@ class ComputeScores:
                 if not path.is_file():
                     raise FileNotFoundError(f"Missing prepared base role: {path}")
                 if Sha256(sha256_file(path)) != role_manifest.file_sha256:
-                    raise ValueError(
-                        f"Prepared role hash mismatch: {client_id.value}/{role.value}"
-                    )
+                    raise ValueError(f"Prepared role hash mismatch: {client_id.value}/{role.value}")
                 frame = pd.read_csv(path)
                 columns = feature_columns(frame, config.dataset.feature_count)
                 if tuple(columns) != prepared_manifest.feature_names:
@@ -144,17 +142,13 @@ class ComputeScores:
                     if "attack_group" not in frame.columns:
                         raise ValueError(f"Attack role {role.value} is missing attack_group")
                     groups = tuple(
-                        AttackGroupId(str(value))
-                        for value in frame["attack_group"].astype(str)
+                        AttackGroupId(str(value)) for value in frame["attack_group"].astype(str)
                     )
                 yield RoleScores(
                     role=role,
                     values=scores,
                     client_id=client_id,
-                    row_ids=tuple(
-                        RowId(str(value))
-                        for value in frame["row_id"].astype(str)
-                    ),
+                    row_ids=tuple(RowId(str(value)) for value in frame["row_id"].astype(str)),
                     attack_groups=groups,
                 )
                 del frame, scores

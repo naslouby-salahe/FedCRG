@@ -108,8 +108,7 @@ class ScoreManifest:
     def role_hashes(self) -> dict[str, dict[str, str]]:
         return {
             client.client_id.value: {
-                role_scores.role.value: role_scores.sha256.value
-                for role_scores in client.scores
+                role_scores.role.value: role_scores.sha256.value for role_scores in client.scores
             }
             for client in self.clients
         }

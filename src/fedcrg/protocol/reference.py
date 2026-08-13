@@ -20,7 +20,9 @@ def reference_rank(sample_count: int, alpha: float) -> int:
 
 
 class ReferenceThresholdEstimator:
-    def estimate(self, scores_by_client: Mapping[ClientId, np.ndarray], alpha: float) -> ReferenceThreshold:
+    def estimate(
+        self, scores_by_client: Mapping[ClientId, np.ndarray], alpha: float
+    ) -> ReferenceThreshold:
         if not scores_by_client:
             raise ValueError("At least one client must contribute reference scores")
         lengths = {len(np.asarray(scores)) for scores in scores_by_client.values()}

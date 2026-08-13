@@ -24,14 +24,34 @@ def summarize_admission(results: tuple[ClientProtocolResult, ...]) -> AdmissionS
     if not results:
         raise ValueError("Admission summary requires clients")
     n = len(results)
-    rate = lambda count: count / n
+
+    def rate(count: int) -> float:
+        return count / n
+
     return AdmissionSummary(
         client_count=n,
-        readiness_rate=rate(sum(item.readiness.plan.state is CalibrationReadinessState.READY for item in results)),
-        low_mismatch_rate=rate(sum(item.mismatch.outcome is MismatchOutcome.LOW for item in results)),
-        high_mismatch_rate=rate(sum(item.mismatch.outcome is MismatchOutcome.HIGH for item in results)),
-        admission_rate=rate(sum(item.decision.state is DecisionState.PERSONALIZED for item in results)),
-        calibration_deficit_rate=rate(sum(item.decision.state is DecisionState.CALIBRATION_DEFICIT for item in results)),
-        insufficient_evidence_rate=rate(sum(item.decision.state is DecisionState.MISMATCH_EVIDENCE_INSUFFICIENT for item in results)),
-        assumption_violation_rate=rate(sum(item.decision.state is DecisionState.ASSUMPTION_VIOLATION for item in results)),
+        readiness_rate=rate(
+            sum(item.readiness.plan.state is CalibrationReadinessState.READY for item in results)
+        ),
+        low_mismatch_rate=rate(
+            sum(item.mismatch.outcome is MismatchOutcome.LOW for item in results)
+        ),
+        high_mismatch_rate=rate(
+            sum(item.mismatch.outcome is MismatchOutcome.HIGH for item in results)
+        ),
+        admission_rate=rate(
+            sum(item.decision.state is DecisionState.PERSONALIZED for item in results)
+        ),
+        calibration_deficit_rate=rate(
+            sum(item.decision.state is DecisionState.CALIBRATION_DEFICIT for item in results)
+        ),
+        insufficient_evidence_rate=rate(
+            sum(
+                item.decision.state is DecisionState.MISMATCH_EVIDENCE_INSUFFICIENT
+                for item in results
+            )
+        ),
+        assumption_violation_rate=rate(
+            sum(item.decision.state is DecisionState.ASSUMPTION_VIOLATION for item in results)
+        ),
     )

@@ -82,10 +82,7 @@ class PolicyRegistry:
                     if policy in self._SUPERVISED
                     else InformationRegime.BENIGN_ONLY
                 ),
-                deployable=(
-                    policy not in self._SUPERVISED
-                    and policy is not PolicyId.ORACLE_TEST
-                ),
+                deployable=(policy not in self._SUPERVISED and policy is not PolicyId.ORACLE_TEST),
             )
             for policy in PolicyId
         }
@@ -134,9 +131,7 @@ class FederationPolicySelector:
         if supervised_needed:
             if supervised_clients is None:
                 raise ValueError("Requested supervised comparator lacks development evidence")
-            supervised_by_client = {
-                client.client_id: client for client in supervised_clients
-            }
+            supervised_by_client = {client.client_id: client for client in supervised_clients}
             if set(supervised_by_client) != set(client_ids):
                 raise ValueError("Supervised development evidence does not cover the federation")
         elif supervised_clients is not None:
@@ -144,28 +139,31 @@ class FederationPolicySelector:
                 "Supervised development evidence was supplied although no supervised policy was requested"
             )
 
-        need_global = bool(
-            set(non_oracle)
-            & {
-                PolicyId.GLOBAL_QUANTILE,
-                PolicyId.DEV_F1_SELECT,
-            }
-        ) or PolicyId.ORACLE_TEST in requested_policies
-        need_local = bool(
-            set(non_oracle)
-            & {
-                PolicyId.LOCAL_QUANTILE,
-                PolicyId.DEV_F1_SELECT,
-            }
-        ) or PolicyId.ORACLE_TEST in requested_policies
+        need_global = (
+            bool(
+                set(non_oracle)
+                & {
+                    PolicyId.GLOBAL_QUANTILE,
+                    PolicyId.DEV_F1_SELECT,
+                }
+            )
+            or PolicyId.ORACLE_TEST in requested_policies
+        )
+        need_local = (
+            bool(
+                set(non_oracle)
+                & {
+                    PolicyId.LOCAL_QUANTILE,
+                    PolicyId.DEV_F1_SELECT,
+                }
+            )
+            or PolicyId.ORACLE_TEST in requested_policies
+        )
         need_method = PolicyId.FEDCRG in non_oracle or PolicyId.ORACLE_TEST in requested_policies
 
         global_q = global_quantile(benign_clients, protocol.alpha) if need_global else None
         local_q = (
-            {
-                client.client_id: local_quantile(client, protocol.alpha)
-                for client in benign_clients
-            }
+            {client.client_id: local_quantile(client, protocol.alpha) for client in benign_clients}
             if need_local
             else {}
         )
@@ -175,9 +173,7 @@ class FederationPolicySelector:
             else None
         )
         three_sigma_threshold = (
-            three_sigma(benign_clients)
-            if PolicyId.THREE_SIGMA in non_oracle
-            else None
+            three_sigma(benign_clients) if PolicyId.THREE_SIGMA in non_oracle else None
         )
         summary_threshold = (
             summary_statistic_threshold(tuple(supervised_by_client.values()))
@@ -192,10 +188,7 @@ class FederationPolicySelector:
 
         entries: list[ClientPolicyThreshold] = []
         undefined: list[UndefinedPolicyReason] = []
-        if (
-            PolicyId.SUMMARY_STATISTIC_SELECT in non_oracle
-            and summary_threshold is None
-        ):
+        if PolicyId.SUMMARY_STATISTIC_SELECT in non_oracle and summary_threshold is None:
             undefined.append(
                 UndefinedPolicyReason(
                     PolicyId.SUMMARY_STATISTIC_SELECT,
@@ -239,9 +232,7 @@ class FederationPolicySelector:
                     threshold = benign.protocol.decision.threshold
                 else:
                     raise RuntimeError(f"Unhandled non-oracle policy: {policy.value}")
-                entries.append(
-                    ClientPolicyThreshold(policy, client_id, threshold)
-                )
+                entries.append(ClientPolicyThreshold(policy, client_id, threshold))
 
             # Oracle candidates are computed from benign evidence but never exposed as
             # evaluated policies before final-test labels open.
@@ -254,22 +245,13 @@ class FederationPolicySelector:
                     (PolicyId.FEDCRG, benign.protocol.decision.threshold),
                 ):
                     if not any(
-                        item.policy is policy and item.client_id == client_id
-                        for item in entries
+                        item.policy is policy and item.client_id == client_id for item in entries
                     ):
-                        entries.append(
-                            ClientPolicyThreshold(policy, client_id, threshold)
-                        )
+                        entries.append(ClientPolicyThreshold(policy, client_id, threshold))
 
-        expected = {
-            (policy, client_id)
-            for policy in non_oracle
-            for client_id in client_ids
-        }
+        expected = {(policy, client_id) for policy in non_oracle for client_id in client_ids}
         observed = {
-            (entry.policy, entry.client_id)
-            for entry in entries
-            if entry.policy in non_oracle
+            (entry.policy, entry.client_id) for entry in entries if entry.policy in non_oracle
         }
         if observed != expected:
             raise RuntimeError("Policy selection did not produce each requested client-policy cell")

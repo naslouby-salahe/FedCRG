@@ -72,10 +72,7 @@ def distribution_cdf(
     if distribution is SyntheticDistribution.GAMMA_SHAPE_2:
         return float(gamma.cdf(threshold, a=2.0, scale=1.0))
     if distribution is SyntheticDistribution.NORMAL_MIXTURE:
-        return float(
-            0.9 * norm.cdf(threshold)
-            + 0.1 * norm.cdf(threshold, loc=3.0, scale=1.0)
-        )
+        return float(0.9 * norm.cdf(threshold) + 0.1 * norm.cdf(threshold, loc=3.0, scale=1.0))
     raise AssertionError(f"Unhandled synthetic distribution: {distribution}")
 
 
@@ -108,12 +105,7 @@ def iid_readiness_validation(
     empirical = inside / repetitions
     tolerance = max(
         0.005,
-        4.0
-        * sqrt(
-            plan.coverage_probability
-            * (1.0 - plan.coverage_probability)
-            / repetitions
-        ),
+        4.0 * sqrt(plan.coverage_probability * (1.0 - plan.coverage_probability) / repetitions),
     )
     return SyntheticCoverageResult(
         experiment=experiment,
@@ -186,11 +178,7 @@ def exact_mismatch_power(
             high_counts.append(exceedances)
     probability = 0.0
     if low_counts:
-        probability += float(
-            binom.cdf(max(low_counts), sample_count, true_fpr)
-        )
+        probability += float(binom.cdf(max(low_counts), sample_count, true_fpr))
     if high_counts:
-        probability += float(
-            binom.sf(min(high_counts) - 1, sample_count, true_fpr)
-        )
+        probability += float(binom.sf(min(high_counts) - 1, sample_count, true_fpr))
     return MismatchPowerResult(sample_count, true_fpr, probability)

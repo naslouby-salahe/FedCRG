@@ -6,9 +6,7 @@ from fedcrg.data.datasets.diad import DIAD_FEATURES, DiadAdapter
 
 
 def test_binary_anomaly_label_and_attack_category_are_distinct_contracts() -> None:
-    frame = pd.DataFrame(
-        columns=["device_mac", "label", "attack_category", *DIAD_FEATURES]
-    )
+    frame = pd.DataFrame(columns=["device_mac", "label", "attack_category", *DIAD_FEATURES])
     anomaly = DiadAdapter._anomaly_label_column(frame)
     category = DiadAdapter._attack_category_column(frame, anomaly)
     assert anomaly == "label"

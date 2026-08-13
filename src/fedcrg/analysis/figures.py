@@ -12,7 +12,11 @@ def readiness_frontier(frame: pd.DataFrame, output: Path) -> Path:
     fig, ax = plt.subplots()
     ax.plot(frame["n"], frame["coverage_probability"])
     ax.axhline(0.95, linestyle="--")
-    ax.set(xlabel="Local calibration sample size", ylabel="Maximum exact in-band probability", title="Finite-sample readiness frontier")
+    ax.set(
+        xlabel="Local calibration sample size",
+        ylabel="Maximum exact in-band probability",
+        title="Finite-sample readiness frontier",
+    )
     return _save(fig, output)
 
 
@@ -20,7 +24,11 @@ def mismatch_power_map(frame: pd.DataFrame, output: Path) -> Path:
     fig, ax = plt.subplots()
     for sample_count, group in frame.groupby("sample_count"):
         ax.plot(group["true_fpr"], group["declaration_probability"], label=str(sample_count))
-    ax.set(xlabel="True reference FPR", ylabel="Mismatch declaration probability", title="Reference-mismatch evidence power")
+    ax.set(
+        xlabel="True reference FPR",
+        ylabel="Mismatch declaration probability",
+        title="Reference-mismatch evidence power",
+    )
     ax.legend(title="n")
     return _save(fig, output)
 
@@ -49,7 +57,11 @@ def reliability_utility_frontier(frame: pd.DataFrame, output: Path) -> Path:
 def calibration_phase_transition(frame: pd.DataFrame, output: Path) -> Path:
     fig, ax = plt.subplots()
     ax.plot(frame["sample_count"], frame["admission_rate"], marker="o")
-    ax.set(xlabel="Calibration/evidence sample size", ylabel="Admission rate", title="Calibration-size phase transition")
+    ax.set(
+        xlabel="Calibration/evidence sample size",
+        ylabel="Admission rate",
+        title="Calibration-size phase transition",
+    )
     return _save(fig, output)
 
 

@@ -116,9 +116,7 @@ def bonferroni_fleet_sensitivity(
             FleetMismatchDecision(
                 client_id=client_id,
                 outcome=outcome,
-                low_p_value=(
-                    None if band.lower == 0.0 else float(binom.cdf(x, n, band.lower))
-                ),
+                low_p_value=(None if band.lower == 0.0 else float(binom.cdf(x, n, band.lower))),
                 high_p_value=float(binom.sf(x - 1, n, band.upper)),
             )
         )
@@ -163,9 +161,7 @@ def holm_directional_fleet_sensitivity(
         low_rejected = (client_id, MismatchOutcome.LOW) in rejected
         high_rejected = (client_id, MismatchOutcome.HIGH) in rejected
         if low_rejected and high_rejected:
-            raise RuntimeError(
-                f"DIRECTION_CONTRADICTION: both directions rejected for {client_id}"
-            )
+            raise RuntimeError(f"DIRECTION_CONTRADICTION: both directions rejected for {client_id}")
         outcome = (
             MismatchOutcome.LOW
             if low_rejected

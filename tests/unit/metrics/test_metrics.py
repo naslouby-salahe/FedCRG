@@ -1,7 +1,7 @@
 import numpy as np
 
 from fedcrg.core.types import OperatingBand
-from fedcrg.metrics.classification import confusion_matrix, fpr, tpr
+from fedcrg.metrics.classification import confusion_matrix
 from fedcrg.metrics.operating_band import band_error, high_excess
 
 

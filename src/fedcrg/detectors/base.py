@@ -11,10 +11,9 @@ import torch
 
 class DetectorModel(torch.nn.Module, ABC):
     @abstractmethod
-    def anomaly_score(self, batch: torch.Tensor) -> torch.Tensor:
-        ...
+    def anomaly_score(self, batch: torch.Tensor) -> torch.Tensor: ...
 
-    def clone(self) -> "DetectorModel":
+    def clone(self) -> DetectorModel:
         return copy.deepcopy(self)
 
     def state_hash(self) -> str:

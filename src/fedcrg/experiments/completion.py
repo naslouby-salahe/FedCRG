@@ -138,9 +138,7 @@ class ExperimentCompletionAuditor:
         expected_clients: int,
     ) -> ExperimentCompletion:
         selected = [
-            (manifest, root)
-            for manifest, root in runs
-            if manifest.experiment_id is experiment_id
+            (manifest, root) for manifest, root in runs if manifest.experiment_id is experiment_id
         ]
         expected_identities = set(product(model_seeds, calibration_seeds, policies))
         observed_identities = {
@@ -168,9 +166,7 @@ class ExperimentCompletionAuditor:
         policies: tuple[PolicyId, ...],
     ) -> ExperimentCompletion:
         selected = [
-            (manifest, root)
-            for manifest, root in runs
-            if manifest.experiment_id is experiment_id
+            (manifest, root) for manifest, root in runs if manifest.experiment_id is experiment_id
         ]
         expected_identities = set(product(model_seeds, calibration_seeds, policies))
         observed_identities = {
@@ -185,9 +181,7 @@ class ExperimentCompletionAuditor:
                 problems.append(f"{manifest.run_id.value}: missing metric records")
                 continue
             line_count = sum(
-                1
-                for line in record_path.read_text(encoding="utf-8").splitlines()
-                if line
+                1 for line in record_path.read_text(encoding="utf-8").splitlines() if line
             )
             client_counts.add(line_count)
             if line_count <= 0:
@@ -225,11 +219,7 @@ class ExperimentCompletionAuditor:
         record_path = RunLayout(root).metric_records
         if not record_path.is_file():
             return [f"{manifest.run_id.value}: missing metric records"]
-        line_count = sum(
-            1
-            for line in record_path.read_text(encoding="utf-8").splitlines()
-            if line
-        )
+        line_count = sum(1 for line in record_path.read_text(encoding="utf-8").splitlines() if line)
         if line_count != expected_clients:
             return [f"{manifest.run_id.value}: {line_count} client rows != {expected_clients}"]
         return []

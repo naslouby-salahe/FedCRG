@@ -73,7 +73,14 @@ def _config(root: Path) -> ExperimentConfig:
             primary_calibration_seed=1000,
         ),
         detector=AutoencoderConfig(hidden_dims=(3, 2, 1, 1)),
-        training=TrainingConfig(rounds=1, local_epochs=1, batch_size=4, learning_rate_initial=1e-3, learning_rate_final=1e-3, device=ComputeDeviceId.CPU),
+        training=TrainingConfig(
+            rounds=1,
+            local_epochs=1,
+            batch_size=4,
+            learning_rate_initial=1e-3,
+            learning_rate_final=1e-3,
+            device=ComputeDeviceId.CPU,
+        ),
         randomness=RandomnessConfig(model_seeds=(11,)),
         policies=(PolicyId.REFERENCE_QUANTILE, PolicyId.LOCAL_QUANTILE, PolicyId.FEDCRG),
         outputs_root=root,
@@ -141,7 +148,9 @@ def test_train_score_evaluate_cache_pipeline(tmp_path: Path) -> None:
     assert model_path.exists()
     assert training_manifest.exists()
 
-    score_root = ComputeScores().score_from_cache(config, prepared, model_path, 11, training_manifest)
+    score_root = ComputeScores().score_from_cache(
+        config, prepared, model_path, 11, training_manifest
+    )
 
     readiness_cache_path = config.outputs_root / "cache" / "precomputed" / "readiness_plans.json"
     ReadinessPlanCache(readiness_cache_path).precompute(
