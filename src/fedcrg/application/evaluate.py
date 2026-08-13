@@ -53,10 +53,9 @@ from fedcrg.scoring.views import CalibrationScoreViewBuilder, CalibrationScoreVi
 class EvaluatePolicies:
     """Freeze thresholds before opening final-test evidence.
 
-    The canonical path never materializes the complete score cache. Reservoir and
-    attack-development partitions are opened for threshold selection; final benign and
-    attack partitions are opened one client at a time only after every non-oracle
-    threshold has been frozen.
+    Reservoir and attack-development partitions are opened for threshold selection;
+    final benign and attack partitions are opened one client at a time only after
+    every non-oracle threshold has been frozen.
     """
 
     def __init__(
@@ -71,7 +70,12 @@ class EvaluatePolicies:
 
     @staticmethod
     def _protocol(config: ExperimentConfig) -> FedCRGProtocol:
-        cache_path = config.outputs_root / "cache" / "precomputed" / "readiness_plans.json"
+        cache_path = (
+            config.outputs_root
+            / "cache"
+            / "precomputed"
+            / "readiness_plans.json"
+        )
         return FedCRGProtocol.with_persistent_readiness_cache(cache_path)
 
     @staticmethod
@@ -128,17 +132,19 @@ class EvaluatePolicies:
         }
         if len(calibration_sizes) != 1:
             raise ValueError("Calibration evidence count must be identical across clients")
-        plan = protocol.precompute_readiness(calibration_sizes.pop(), config.protocol)
+        plan = protocol.require_readiness(calibration_sizes.pop(), config.protocol)
         results: dict[ClientId, ClientProtocolResult] = {}
         for client_id in calibration_views.client_ids:
             results[client_id] = protocol.evaluate_client(
                 client_id=client_id,
                 reference=reference,
                 calibration_scores=calibration_views.get(
-                    client_id, DataRole.CALIBRATION
+                    client_id,
+                    DataRole.CALIBRATION,
                 ).values,
                 mismatch_scores=calibration_views.get(
-                    client_id, DataRole.MISMATCH
+                    client_id,
+                    DataRole.MISMATCH,
                 ).values,
                 config=config.protocol,
                 readiness_plan=plan,
@@ -161,11 +167,16 @@ class EvaluatePolicies:
                 protocol=protocol_results[client_id],
             )
             attack_dev = self.score_cache.read_role(
-                score_root, client_id, DataRole.ATTACK_DEV
+                score_root,
+                client_id,
+                DataRole.ATTACK_DEV,
             )
             supervised = SupervisedDevelopmentEvidence(
                 benign=benign,
-                benign_guard_scores=views.get(client_id, DataRole.BENIGN_GUARD).values,
+                benign_guard_scores=views.get(
+                    client_id,
+                    DataRole.BENIGN_GUARD,
+                ).values,
                 attack_dev_scores=attack_dev.values,
             )
             clients.append(PolicySelectionInputs(benign, supervised))
@@ -177,17 +188,21 @@ class EvaluatePolicies:
         thresholds: PolicyThresholdSet,
         config: ExperimentConfig,
     ) -> float:
-        cid = final.benign.client_id
+        client_id = final.benign.client_id
         candidates = (
-            thresholds.for_client(PolicyId.GLOBAL_QUANTILE, cid),
-            thresholds.for_client(PolicyId.LOCAL_QUANTILE, cid),
-            thresholds.for_client(PolicyId.FEDCRG, cid),
+            thresholds.for_client(PolicyId.GLOBAL_QUANTILE, client_id),
+            thresholds.for_client(PolicyId.LOCAL_QUANTILE, client_id),
+            thresholds.for_client(PolicyId.FEDCRG, client_id),
         )
         if any(value is None for value in candidates):
             raise RuntimeError("Oracle candidates must all be defined")
         return oracle_choice(
             final,
-            (float(candidates[0]), float(candidates[1]), float(candidates[2])),
+            (
+                float(candidates[0]),
+                float(candidates[1]),
+                float(candidates[2]),
+            ),
             config.protocol.band,
         )
 
@@ -210,29 +225,43 @@ class EvaluatePolicies:
             prepared_root,
         )
         protocol_results = self.protocol_results(config, views)
-        selection_inputs = self._selection_inputs(score_root, views, protocol_results)
+        selection_inputs = self._selection_inputs(
+            score_root,
+            views,
+            protocol_results,
+        )
         thresholds = self.selector.select(selection_inputs, config.protocol)
-        selection_by_client = {item.client_id: item for item in selection_inputs}
+        selection_by_client = {
+            item.client_id: item for item in selection_inputs
+        }
 
         evaluations: list[PolicyEvaluation] = []
         for client_id in descriptor.client_ids:
             selection = selection_by_client[client_id]
             benign_test = self.score_cache.read_role(
-                score_root, client_id, DataRole.BENIGN_TEST
+                score_root,
+                client_id,
+                DataRole.BENIGN_TEST,
             )
             attack_test = self.score_cache.read_role(
-                score_root, client_id, DataRole.ATTACK_TEST
+                score_root,
+                client_id,
+                DataRole.ATTACK_TEST,
             )
-            attack_groups = attack_test.attack_groups or tuple(
-                AttackGroupId("attack") for _ in attack_test.values
-            )
+            if attack_test.attack_groups is None:
+                raise ValueError(
+                    f"Final attack scores lack attack-group metadata for {client_id.value}"
+                )
+            attack_groups = attack_test.attack_groups
             final = FinalTestEvidence(
                 benign=selection.benign,
                 benign_test_scores=benign_test.values,
                 attack_test_scores=attack_test.values,
                 attack_test_groups=attack_groups,
             )
-            test_scores = np.concatenate((benign_test.values, attack_test.values))
+            test_scores = np.concatenate(
+                (benign_test.values, attack_test.values)
+            )
             test_labels = np.concatenate(
                 (
                     np.zeros(len(benign_test.values), dtype=np.int64),
@@ -240,8 +269,7 @@ class EvaluatePolicies:
                 )
             )
             test_groups = np.asarray(
-                ("__benign__",)
-                * len(benign_test.values)
+                ("__benign__",) * len(benign_test.values)
                 + tuple(group.value for group in attack_groups),
                 dtype=object,
             )
@@ -291,15 +319,24 @@ class EvaluatePolicies:
                     auprc=ranking_auprc,
                     band_error=band_error(client_fpr, config.protocol.band),
                     high_excess=high_excess(client_fpr, config.protocol.band),
-                    band_violation=band_violation(client_fpr, config.protocol.band),
+                    band_violation=band_violation(
+                        client_fpr,
+                        config.protocol.band,
+                    ),
                     absolute_fpr_error=absolute_fpr_error(
-                        client_fpr, config.protocol.alpha
+                        client_fpr,
+                        config.protocol.alpha,
                     ),
                     attack_balanced_tpr=attack_balanced_tpr(
-                        test_scores, test_labels, test_groups, threshold
+                        test_scores,
+                        test_labels,
+                        test_groups,
+                        threshold,
                     ),
                     fpr_reference_interval=clopper_pearson_interval(
-                        cm.fp, cm.fp + cm.tn, 0.95
+                        cm.fp,
+                        cm.fp + cm.tn,
+                        0.95,
                     ),
                 )
                 evaluations.append(
@@ -337,7 +374,9 @@ class EvaluatePolicies:
         policy: PolicyId,
         bundle: EvaluationBundle,
     ) -> tuple[Path, Path]:
-        protocol_by_client = {item.client_id: item for item in bundle.protocol_results}
+        protocol_by_client = {
+            item.client_id: item for item in bundle.protocol_results
+        }
         threshold_records: list[ThresholdRecord] = []
         metric_records: list[MetricRecord] = []
         for row in bundle.clients:
@@ -399,10 +438,14 @@ class EvaluatePolicies:
         write_jsonl(decisions, tuple(threshold_records))
         write_jsonl(metrics, tuple(metric_records))
         federation = next(
-            (item for item in bundle.federations if item.policy is policy), None
+            (item for item in bundle.federations if item.policy is policy),
+            None,
         )
         if federation is not None:
-            atomic_write_json(root / "metrics" / "federation.json", federation)
+            atomic_write_json(
+                root / "metrics" / "federation.json",
+                federation,
+            )
         return decisions, metrics
 
     @staticmethod
