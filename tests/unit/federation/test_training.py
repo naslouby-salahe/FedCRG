@@ -2,8 +2,8 @@ import pytest
 import torch
 from pydantic import ValidationError
 from torch.utils.data import TensorDataset
-from fedcrg.config.detector_config import AutoencoderConfig
-from fedcrg.config.training_config import TrainingConfig
+from fedcrg.configuration.detector_config import AutoencoderConfig
+from fedcrg.configuration.training_config import TrainingConfig
 from fedcrg.domain.enums import ComputeDeviceId
 from fedcrg.domain.identifiers import ClientId
 from fedcrg.detectors.autoencoder import Autoencoder

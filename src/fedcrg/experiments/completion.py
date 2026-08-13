@@ -9,8 +9,8 @@ from pathlib import Path
 
 from fedcrg.artifacts.manifests import RunManifest, RunManifestStore
 from fedcrg.artifacts.paths import RunLayout
-from fedcrg.config.experiment_config import ExperimentConfig
-from fedcrg.config.resolve import ExperimentConfigResolver
+from fedcrg.configuration.experiment_config import ExperimentConfig
+from fedcrg.configuration.resolve import ExperimentConfigResolver
 from fedcrg.domain.enums import DatasetId, ExperimentId, ExperimentStatus, PolicyId
 from fedcrg.experiments.experiment_definition import (
     SECOND_DETECTOR_POLICIES,

@@ -1,11 +1,11 @@
 import numpy as np
 import pandas as pd
 
-from fedcrg.config.dataset_config import DatasetConfig, SplitConfig
+from fedcrg.configuration.dataset_config import DatasetConfig, SplitConfig
 from fedcrg.domain.enums import DataRole, DatasetFeatureContractId, DatasetId
 from fedcrg.domain.identifiers import ClientId
-from fedcrg.data.prepare import ClientData
-from fedcrg.data.splits import DataSplitter
+from fedcrg.datasets.prepare import ClientData
+from fedcrg.datasets.splits import DataSplitter
 
 
 def test_diad_waterfill_preserves_small_categories_in_final_test() -> None:

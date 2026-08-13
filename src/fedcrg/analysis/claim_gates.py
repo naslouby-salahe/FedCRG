@@ -16,9 +16,9 @@ from fedcrg.artifacts.paths import RunLayout
 from fedcrg.artifacts.manifests import RunManifestStore
 from fedcrg.artifacts.json_io import atomic_write_json
 from fedcrg.artifacts.integrity import ArtifactVerifier
-from fedcrg.config.experiment_config import ExperimentConfig
-from fedcrg.config.resolve import ExperimentConfigResolver
-from fedcrg.config.statistics_config import StatisticsConfig
+from fedcrg.configuration.experiment_config import ExperimentConfig
+from fedcrg.configuration.resolve import ExperimentConfigResolver
+from fedcrg.configuration.statistics_config import StatisticsConfig
 from fedcrg.domain.enums import (
     ClaimLevel,
     ExperimentId,
@@ -27,7 +27,7 @@ from fedcrg.domain.enums import (
 )
 from fedcrg.evaluation.federation_evaluation import utility_margin_satisfied
 from fedcrg.experiments.completion import ExperimentCompletion, ExperimentCompletionAuditor
-from fedcrg.pipeline.verify_outputs import VerifyOutputs
+from fedcrg.experiments.verification import VerifyOutputs
 
 
 @dataclass(frozen=True, slots=True)

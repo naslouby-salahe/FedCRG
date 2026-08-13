@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from fedcrg.artifacts.json_io import atomic_write_json
-from fedcrg.config.resolve import load_config
+from fedcrg.configuration.resolve import load_config
 from fedcrg.domain.enums import CampaignStatusValue, ExperimentId
 from fedcrg.domain.errors import ConfigurationError
 from fedcrg.reporting.results import ResultsBuilder
@@ -320,7 +320,7 @@ class CampaignRunner:
 
     def _execute_item(self, item: CampaignWorkItem) -> tuple[Path, ...]:
         """Execute one work item through the single execution spine."""
-        from fedcrg.pipeline.run_all_experiments import RunAllExperiments
+        from fedcrg.experiments.runner import RunAllExperiments
 
         config = load_config(item.config_path)
         if config.id is not item.experiment_id:

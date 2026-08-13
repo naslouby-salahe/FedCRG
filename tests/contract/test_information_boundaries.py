@@ -1,8 +1,8 @@
 from dataclasses import fields
 import inspect
 
-from fedcrg.method.client_evaluation import ClientEvaluation
-from fedcrg.thresholds.evidence import BenignPolicyEvidence
+from fedcrg.decision.client_evaluation import ClientEvaluation
+from fedcrg.decision.evidence import BenignPolicyEvidence
 
 
 def test_protocol_evaluation_has_no_attack_or_label_argument() -> None:

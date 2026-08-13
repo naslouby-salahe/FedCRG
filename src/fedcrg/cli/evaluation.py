@@ -7,8 +7,8 @@ from pathlib import Path
 import click
 
 from fedcrg.artifacts.json_io import atomic_write_json
-from fedcrg.pipeline.evaluate_policies import EvaluatePolicies
-from fedcrg.config.resolve import load_config
+from fedcrg.experiments.policy_evaluation import EvaluatePolicies
+from fedcrg.configuration.resolve import load_config
 
 
 @click.command(name="evaluate")

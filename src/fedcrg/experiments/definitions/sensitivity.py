@@ -14,11 +14,14 @@ import numpy as np
 
 from fedcrg.artifacts.manifests import EligibilityManifestStore
 from fedcrg.artifacts.json_io import atomic_write_json
-from fedcrg.config.experiment_config import ExperimentConfig
-from fedcrg.config.method_config import ProtocolConfig
-from fedcrg.config.validate import validate_experiment_config
-from fedcrg.data.diad import DiadAdapter
-from fedcrg.data.feature_sensitivity import NumericSafeFeatureContract, derive_numeric_safe_features
+from fedcrg.configuration.experiment_config import ExperimentConfig
+from fedcrg.configuration.method_config import ProtocolConfig
+from fedcrg.configuration.validate import validate_experiment_config
+from fedcrg.datasets.diad import DiadAdapter
+from fedcrg.datasets.feature_sensitivity import (
+    NumericSafeFeatureContract,
+    derive_numeric_safe_features,
+)
 from fedcrg.domain.enums import (
     CalibrationAssignmentMode,
     DataRole,
@@ -32,14 +35,14 @@ from fedcrg.domain.enums import (
 from fedcrg.domain.identifiers import CalibrationSeed, ClientId
 from fedcrg.evaluation.evaluation_results import EvaluationBundle
 from fedcrg.experiments.experiment_definition import ParameterSetting, get_experiment_definition
-from fedcrg.method.calibration_readiness import familywise_readiness_assurance
-from fedcrg.method.mismatch_detection import (
+from fedcrg.decision.calibration_readiness import familywise_readiness_assurance
+from fedcrg.decision.mismatch_detection import (
     FleetMismatchDecision,
     bonferroni_fleet_sensitivity,
     holm_directional_fleet_sensitivity,
 )
-from fedcrg.method.results import ClientEvaluationResult
-from fedcrg.pipeline.evaluate_policies import EvaluatePolicies
+from fedcrg.decision.results import ClientEvaluationResult
+from fedcrg.experiments.policy_evaluation import EvaluatePolicies
 from fedcrg.scoring.cache import ScoreCache
 from fedcrg.scoring.calibration_scores import (
     CalibrationScoreViews,

@@ -5,12 +5,12 @@ import pytest
 
 from fedcrg.domain.enums import CalibrationReadinessState, MismatchOutcome
 from fedcrg.domain.values import OperatingBand
-from fedcrg.method.mismatch_detection import (
+from fedcrg.decision.mismatch_detection import (
     ReferenceMismatchEvaluator,
     minimum_bidirectional_sample_count,
 )
-from fedcrg.method.calibration_readiness import ReadinessPlanBuilder
-from fedcrg.method.reference_threshold import reference_rank
+from fedcrg.decision.calibration_readiness import ReadinessPlanBuilder
+from fedcrg.decision.reference_threshold import reference_rank
 
 BAND = OperatingBand(0.005, 0.015)
 

@@ -16,16 +16,16 @@ from fedcrg.artifacts.json_io import (
     atomic_write_json,
     to_json_value,
 )
-from fedcrg.data.eligibility import EligibilityManifest, EligibilityRecord
-from fedcrg.data.prepare import (
+from fedcrg.datasets.eligibility import EligibilityManifest, EligibilityRecord
+from fedcrg.datasets.prepare import (
     CalibrationAssignmentReference,
     ClientDatasetManifest,
     PreparedDatasetManifest,
     RoleArtifactManifest,
     SourceFileManifest,
 )
-from fedcrg.data.preprocessing import ClientPreprocessingParameters, PreprocessingModel
-from fedcrg.data.splits import (
+from fedcrg.datasets.preprocessing import ClientPreprocessingParameters, PreprocessingModel
+from fedcrg.datasets.splits import (
     CalibrationAssignmentManifest,
     CalibrationRoleManifest,
     ClientCalibrationManifest,

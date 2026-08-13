@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fedcrg.config.resolve import ExperimentConfigResolver
+from fedcrg.configuration.resolve import ExperimentConfigResolver
 
 ROOT = Path(__file__).resolve().parents[2]
 

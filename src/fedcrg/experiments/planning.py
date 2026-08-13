@@ -1,6 +1,6 @@
 """Experiment-plan construction from one fully validated configuration."""
 
-from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.configuration.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import ExperimentId
 from fedcrg.domain.identifiers import CalibrationSeed, ModelSeed, Sha256
 from fedcrg.experiments.execution import ExperimentPlan

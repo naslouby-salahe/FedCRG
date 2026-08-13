@@ -2,7 +2,7 @@ import hashlib
 
 import numpy as np
 
-from fedcrg.config.detector_config import AutoencoderConfig
+from fedcrg.configuration.detector_config import AutoencoderConfig
 from fedcrg.domain.enums import ComputeDeviceId, DataRole, DatasetId
 from fedcrg.domain.identifiers import ClientId, ModelSeed, RowId, Sha256
 from fedcrg.detectors.autoencoder import Autoencoder

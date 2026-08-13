@@ -27,3 +27,4 @@ Baseline (before any changes in this effort, 2026-08-13):
 | b3 (preprocessed root + outputs layout) | pytest; pyright; ruff | 126 passed; clean | 2026-08-13 |
 | b4 (logging/monitoring/GPU) | pytest; pyright; ruff; fedcrg monitor --samples 2 | 133 passed; telemetry.jsonl + fedcrg.log written | 2026-08-13 |
 | b5 (campaign + results) | pytest; pyright; ruff; results build/verify e2e | 140 passed; bundle verified | 2026-08-13 |
+| b6 (spine + package layout) | pytest; pyright; ruff; boundary contract | 140 passed; no pipeline/config/data/method/thresholds packages | 2026-08-13 |

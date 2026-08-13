@@ -6,7 +6,7 @@ from typing import cast
 
 import torch
 
-from fedcrg.config.detector_config import AutoencoderConfig
+from fedcrg.configuration.detector_config import AutoencoderConfig
 from fedcrg.domain.enums import ActivationId
 from fedcrg.detectors.detector import DetectorModel
 

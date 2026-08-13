@@ -1,12 +1,12 @@
 from pathlib import Path
 
-from fedcrg.analysis.communication_cost import (
+from fedcrg.evaluation.communication_metrics import (
     model_communication,
     preprocessing_communication,
     threshold_policy_communication,
 )
 from fedcrg.analysis.split_stability import summarize_state_stability, summarize_threshold_stability
-from fedcrg.config.resolve import ExperimentConfigResolver
+from fedcrg.configuration.resolve import ExperimentConfigResolver
 from fedcrg.domain.enums import DecisionState, PolicyId
 
 ROOT = Path(__file__).resolve().parents[3]

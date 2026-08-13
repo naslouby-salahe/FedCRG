@@ -8,7 +8,7 @@ import torch
 from torch import Tensor
 from torch.utils.data import DataLoader, TensorDataset
 
-from fedcrg.config.training_config import TrainingConfig
+from fedcrg.configuration.training_config import TrainingConfig
 from fedcrg.domain.identifiers import ClientId, Sha256
 from fedcrg.detectors.autoencoder import Autoencoder
 from fedcrg.detectors.detector import DetectorModel

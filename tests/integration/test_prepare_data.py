@@ -3,10 +3,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from fedcrg.pipeline.prepare_dataset import PrepareData
-from fedcrg.config.dataset_config import DatasetConfig, SplitConfig
-from fedcrg.config.detector_config import AutoencoderConfig
-from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.experiments.dataset_preparation import PrepareData
+from fedcrg.configuration.dataset_config import DatasetConfig, SplitConfig
+from fedcrg.configuration.detector_config import AutoencoderConfig
+from fedcrg.configuration.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import (
     ComputeDeviceId,
     DatasetFeatureContractId,
@@ -15,7 +15,7 @@ from fedcrg.domain.enums import (
     PolicyId,
 )
 from fedcrg.domain.identifiers import ClientId
-from fedcrg.data.prepare import DatasetAdapter, ClientData
+from fedcrg.datasets.prepare import DatasetAdapter, ClientData
 from tests._fixtures import (
     primary_protocol,
     primary_randomness,

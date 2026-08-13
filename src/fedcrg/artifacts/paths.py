@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.configuration.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import DetectorId, PolicyId
 from fedcrg.domain.identifiers import CalibrationSeed, ModelSeed, RunId
 

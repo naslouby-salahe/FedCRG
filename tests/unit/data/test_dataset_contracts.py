@@ -5,8 +5,8 @@ import pandas as pd
 
 from fedcrg.domain.enums import DatasetId
 from fedcrg.domain.identifiers import ClientId
-from fedcrg.data.diad import DIAD_FEATURES, DiadAdapter
-from fedcrg.data.nbaiot import _CANONICAL_DEVICES, NBaiotAdapter
+from fedcrg.datasets.diad import DIAD_FEATURES, DiadAdapter
+from fedcrg.datasets.nbaiot import _CANONICAL_DEVICES, NBaiotAdapter
 
 _NBAIOT_CLIENT_IDS = tuple(ClientId(value) for value in _CANONICAL_DEVICES)
 

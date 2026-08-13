@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from fedcrg.data.diad import DIAD_FEATURES, DiadAdapter
+from fedcrg.datasets.diad import DIAD_FEATURES, DiadAdapter
 
 
 def test_binary_anomaly_label_and_attack_category_are_distinct_contracts() -> None:

@@ -6,9 +6,9 @@ from pathlib import Path
 
 import click
 
-from fedcrg.pipeline.compute_scores import ComputeScores
-from fedcrg.pipeline.select_thresholds import ProtocolTablePrecomputer
-from fedcrg.config.resolve import load_config
+from fedcrg.scoring.compute_scores import ComputeScores
+from fedcrg.experiments.table_precompute import ProtocolTablePrecomputer
+from fedcrg.configuration.resolve import load_config
 
 
 @click.group(name="tables")

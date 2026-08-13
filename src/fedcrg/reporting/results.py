@@ -13,10 +13,10 @@ from pathlib import Path
 
 from fedcrg.artifacts.integrity import sha256_file
 from fedcrg.artifacts.json_io import atomic_write_json
-from fedcrg.config.experiment_config import ExperimentConfig
-from fedcrg.config.resolve import load_config
+from fedcrg.configuration.experiment_config import ExperimentConfig
+from fedcrg.configuration.resolve import load_config
 from fedcrg.domain.errors import ConfigurationError
-from fedcrg.pipeline.verify_outputs import VerifyOutputs
+from fedcrg.experiments.verification import VerifyOutputs
 from fedcrg.reporting.report import ReportBuilder
 
 _REQUIRED_BUNDLE_DIRECTORIES = (

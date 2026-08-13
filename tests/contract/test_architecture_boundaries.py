@@ -74,17 +74,15 @@ def test_no_forbidden_implementation_shortcuts() -> None:
 
 def test_domain_is_dependency_free_from_outer_layers() -> None:
     forbidden_prefixes = (
-        "fedcrg.pipeline",
         "fedcrg.artifacts",
         "fedcrg.cli",
-        "fedcrg.config",
-        "fedcrg.data",
+        "fedcrg.configuration",
+        "fedcrg.datasets",
         "fedcrg.detectors",
         "fedcrg.experiments",
         "fedcrg.federation",
         "fedcrg.evaluation",
-        "fedcrg.method",
-        "fedcrg.thresholds",
+        "fedcrg.decision",
         "fedcrg.scoring",
         "fedcrg.analysis",
         "fedcrg.reporting",
@@ -99,12 +97,13 @@ def test_domain_is_dependency_free_from_outer_layers() -> None:
 
 def test_method_does_not_depend_on_pipeline_cli_or_artifact_io() -> None:
     forbidden_prefixes = (
-        "fedcrg.pipeline",
         "fedcrg.cli",
         "fedcrg.experiments",
+        "fedcrg.reporting",
+        "fedcrg.artifacts",
     )
     violations: list[str] = []
-    for path in _python_files(SRC / "method"):
+    for path in _python_files(SRC / "decision"):
         for imported in _imports(path):
             if imported.startswith(forbidden_prefixes):
                 violations.append(f"{path.relative_to(ROOT)} -> {imported}")
@@ -113,15 +112,17 @@ def test_method_does_not_depend_on_pipeline_cli_or_artifact_io() -> None:
 
 def test_cli_never_imports_statistical_or_training_implementation_directly() -> None:
     forbidden_prefixes = (
-        "fedcrg.method",
+        "fedcrg.decision",
         "fedcrg.federation",
         "fedcrg.detectors",
-        "fedcrg.thresholds",
         "fedcrg.evaluation",
+        "fedcrg.datasets",
     )
     violations: list[str] = []
     for path in _python_files(SRC / "cli"):
         for imported in _imports(path):
             if imported.startswith(forbidden_prefixes):
                 violations.append(f"{path.relative_to(ROOT)} -> {imported}")
-    assert not violations, "CLI must call pipeline services only:\n" + "\n".join(violations)
+    assert not violations, (
+        "CLI must call the experiments spine and scoring services only:\n" + "\n".join(violations)
+    )

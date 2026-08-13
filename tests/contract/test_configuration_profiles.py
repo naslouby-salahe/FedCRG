@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from fedcrg.config.resolve import ExperimentConfigResolver
-from fedcrg.config.validate import validate_experiment_config
+from fedcrg.configuration.resolve import ExperimentConfigResolver
+from fedcrg.configuration.validate import validate_experiment_config
 from fedcrg.domain.enums import DatasetId, DetectorId, ExperimentId, PolicyId
 
 ROOT = Path(__file__).resolve().parents[2]

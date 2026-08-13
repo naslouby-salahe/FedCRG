@@ -6,7 +6,7 @@ from typing import Literal, cast
 
 import torch
 
-from fedcrg.config.detector_config import DeepSvddConfig
+from fedcrg.configuration.detector_config import DeepSvddConfig
 from fedcrg.domain.enums import ActivationId
 from fedcrg.detectors.detector import DetectorModel
 

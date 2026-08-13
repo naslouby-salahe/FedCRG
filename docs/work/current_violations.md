@@ -35,8 +35,10 @@ matrix IDs (`docs/FedCRG Audit Matrix.md`).
 
 ## C. Structure (prompt §4, §11, §13, §14)
 
-- C1. `pipeline/` package = second orchestration layer; one execution spine must live in
-  `experiments/`. Matrix: R02, E09.
+- C1. ~~`pipeline/` package = second orchestration layer~~ RESOLVED 2026-08-13: folded
+  into `experiments/` (runner, preflight, verification, experiment_runner, policy_cells,
+  model_training, dataset_preparation, table_precompute) and capability homes
+  (`scoring/`, `evaluation/`). Matrix: R02, E09.
 - C2. ~~Preprocessed data at `outputs/cache/datasets/`~~ RESOLVED 2026-08-13:
   materialization moved to `config.preprocessed_root` (default `data/preprocessed/`);
   `outputs/cache/datasets/` removed from tree. Matrix: R06, D05, D12.
@@ -47,8 +49,9 @@ matrix IDs (`docs/FedCRG Audit Matrix.md`).
   2026-08-13: `experiments/campaign.py` + `reporting/results.py` + CLI
   (`campaign run|status|list`, `results build|verify`); campaign completion invokes the
   same ResultsBuilder. Matrix: R09, L04, L05, P03-P05.
-- C5. Package names deviate from target (`config/`, `data/`, `method/`+`thresholds/`,
-  `runtime.py`->runtime/ done in b4; `cli/`). Matrix: R01.
+- C5. Package names: `config/`->`configuration/`, `data/`->`datasets/`,
+  `method/`+`thresholds/`->`decision/`, `runtime.py`->`runtime/` all RESOLVED 2026-08-13;
+  `cli/` consolidation remains for Batch 7. Matrix: R01.
 
 ## D. CLI / logging / monitoring (prompt §16-§18, §34)
 

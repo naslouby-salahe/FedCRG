@@ -7,10 +7,10 @@ They are regression fixtures for the locked primary contract.
 
 from __future__ import annotations
 
-from fedcrg.config.detector_config import AutoencoderConfig
-from fedcrg.config.method_config import ProtocolConfig
-from fedcrg.config.statistics_config import StatisticsConfig
-from fedcrg.config.training_config import RandomnessConfig, TrainingConfig
+from fedcrg.configuration.detector_config import AutoencoderConfig
+from fedcrg.configuration.method_config import ProtocolConfig
+from fedcrg.configuration.statistics_config import StatisticsConfig
+from fedcrg.configuration.training_config import RandomnessConfig, TrainingConfig
 from fedcrg.domain.enums import (
     ActivationId,
     AggregationId,

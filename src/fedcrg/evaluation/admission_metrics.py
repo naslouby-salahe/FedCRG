@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from fedcrg.domain.enums import CalibrationReadinessState, DecisionState, MismatchOutcome
-from fedcrg.method.results import ClientEvaluationResult
+from fedcrg.decision.results import ClientEvaluationResult
 
 
 @dataclass(frozen=True, slots=True)

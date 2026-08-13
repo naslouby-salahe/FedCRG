@@ -2,8 +2,8 @@
 
 from fedcrg.domain.enums import CalibrationReadinessState, DecisionState, MismatchOutcome
 from fedcrg.domain.values import ConfidenceInterval, OperatingBand
-from fedcrg.method.threshold_decision import ThresholdDecisionEngine
-from fedcrg.method.results import (
+from fedcrg.decision.threshold_decision import ThresholdDecisionEngine
+from fedcrg.decision.results import (
     CalibrationReadiness,
     ContinuityDiagnostics,
     MismatchEvidence,

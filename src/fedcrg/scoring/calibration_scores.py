@@ -11,8 +11,8 @@ import numpy as np
 import pandas as pd
 
 from fedcrg.artifacts.manifests import CalibrationAssignmentManifestStore
-from fedcrg.config.dataset_config import DatasetConfig
-from fedcrg.data.splits import CalibrationAssignmentBuilder, CalibrationAssignmentManifest
+from fedcrg.configuration.dataset_config import DatasetConfig
+from fedcrg.datasets.splits import CalibrationAssignmentBuilder, CalibrationAssignmentManifest
 from fedcrg.domain.enums import CalibrationAssignmentMode, DataRole, DatasetId
 from fedcrg.domain.identifiers import AttackGroupId, CalibrationSeed, ClientId, RowId, Sha256
 

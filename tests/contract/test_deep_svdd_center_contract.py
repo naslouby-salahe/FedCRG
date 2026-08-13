@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import torch
 
-from fedcrg.config.detector_config import DeepSvddConfig
+from fedcrg.configuration.detector_config import DeepSvddConfig
 from fedcrg.detectors.deep_svdd import DeepSvdd
 
 

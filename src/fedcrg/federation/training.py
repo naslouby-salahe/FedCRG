@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from torch.utils.data import TensorDataset
 
-from fedcrg.config.training_config import TrainingConfig
+from fedcrg.configuration.training_config import TrainingConfig
 from fedcrg.domain.identifiers import ClientId, ModelSeed, Sha256
 from fedcrg.runtime.gpu import log_device_capabilities, resolve_compute_device
 from fedcrg.runtime.logging import get_logger

@@ -39,13 +39,13 @@ CLI `campaign run|status|list` and `results build|verify`; unit + e2e tests.
 
 ## Batch 6 — Execution spine and package layout (matrix R01, R02, E09, C1, C5)
 
-1. Fold `pipeline/` into `experiments/` (runner, preflight, verification) and capability
-   modules; delete `pipeline/` package.
-2. Rename `config/` -> `configuration/`, `data/` -> `datasets/`, `method/`+`thresholds/`
-   -> `decision/`, `runtime.py` -> `runtime/logging.py` (module), `cli/` -> target files.
-3. Move `analysis/communication_cost.py` -> `evaluation/communication_metrics.py`;
-   `analysis/computational_benchmark.py` -> `experiments/computational_benchmark.py`.
-4. Update all imports, CLI, tests.
+DONE 2026-08-13: `pipeline/` folded into `experiments/` (runner, preflight,
+verification, experiment_runner, policy_cells, model_training, dataset_preparation,
+table_precompute) and capability homes (scoring/compute_scores, evaluation/metrics);
+`config/`->`configuration/`, `data/`->`datasets/`, `method/`+`thresholds/`->`decision/`
+(with policies/), `analysis/communication_cost.py`->`evaluation/communication_metrics.py`,
+`analysis/computational_benchmark.py`->`experiments/`; boundary contract updated;
+README architecture section rewritten. Remaining: `cli/` consolidation (Batch 7).
 
 ## Batch 7 — CLI surface (matrix L01-L06, D1)
 

@@ -33,7 +33,7 @@ def campaign_run(
     """Execute a campaign over the given experiment configs and record persistent status."""
     if not config_paths:
         raise click.UsageError("At least one --config is required")
-    from fedcrg.config.resolve import load_config
+    from fedcrg.configuration.resolve import load_config
 
     work_items = tuple(
         CampaignWorkItem(

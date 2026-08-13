@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from fedcrg.domain.identifiers import ClientId
-from fedcrg.data.feature_sensitivity import derive_numeric_safe_features
+from fedcrg.datasets.feature_sensitivity import derive_numeric_safe_features
 
 
 def test_r14_keeps_stream_behavior_features_but_excludes_direct_stream_identifier() -> None:

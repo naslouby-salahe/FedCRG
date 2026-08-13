@@ -16,22 +16,25 @@ configs/                 YAML profiles: method, training, randomness, statistics
                          datasets, detectors, and per-experiment compositions
 src/fedcrg/
   domain/                enums, identifiers, value objects, errors
-  config/                typed configuration resolution and validation
-  method/                reference estimation, readiness, mismatch evidence, decision
-  data/                  natural-client adapters, splitting, eligibility, preprocessing
+  configuration/         typed configuration resolution and validation
+  datasets/              natural-client adapters, splitting, eligibility, preprocessing
   detectors/             autoencoder and Deep-SVDD score generators
   federation/            deterministic client/server training and aggregation
-  scoring/               immutable score caches and calibration views
-  thresholds/            benign-only, supervised-development, and oracle comparators
+  scoring/               immutable score caches, calibration views, score computation
+  decision/              readiness, mismatch, threshold decision, policy evidence,
+                         policy selection, and per-policy comparators
   evaluation/            client/federation reliability and utility metrics
-  experiments/           S1-S6 / R1-R14 catalogue, lifecycle, dependencies, ledgers
-  analysis/              statistics, communication, stability, figures, tables, claims
+  experiments/           one execution spine: runner, preflight, verification,
+                         campaign, table precompute, and the S1-S6/R1-R14 catalogue
+  analysis/              statistics, contrasts, stability, claim gates
   artifacts/             immutable layouts, manifests, hashes, environment evidence
-  reporting/             publication and report orchestration
-  pipeline/              prepared-data audit, training, scoring, verification workflows
+  reporting/             publication tables/figures, reports, results bundles
+  runtime/               structured logging, resource monitoring, CUDA guards
   cli/                   thin research command surface
 tests/                   contract, regression, unit, and integration verification
 outputs/                 generated caches, runs, experiment evidence, and reports
+data/preprocessed/       deterministic prepared datasets (reused by identity)
+results/                 publication bundles per campaign
 tools/                   optional developer/release utilities only
 ```
 

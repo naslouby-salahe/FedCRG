@@ -5,8 +5,8 @@ import pytest
 from fedcrg.domain.enums import DataRole, DatasetId
 from fedcrg.domain.errors import DataIntegrityError
 from fedcrg.domain.identifiers import ClientId
-from fedcrg.data.splits import ClientSplits, RoleFrame
-from fedcrg.data.preprocessing import FederatedPreprocessor
+from fedcrg.datasets.splits import ClientSplits, RoleFrame
+from fedcrg.datasets.preprocessing import FederatedPreprocessor
 
 C1 = ClientId("c1")
 C2 = ClientId("c2")

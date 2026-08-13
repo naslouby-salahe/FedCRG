@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from fedcrg.domain.enums import PolicyEvaluationStatus, PolicyId
 from fedcrg.domain.identifiers import ClientId
 from fedcrg.domain.values import ConfidenceInterval
-from fedcrg.method.results import ClientEvaluationResult
+from fedcrg.decision.results import ClientEvaluationResult
 
 
 @dataclass(frozen=True, slots=True)

@@ -10,7 +10,7 @@ import pandas as pd
 from fedcrg.analysis.policy_contrasts import confirmatory_contrasts, load_federation_results
 from fedcrg.artifacts.json_io import as_json_dict, to_json_value
 from fedcrg.artifacts.paths import RunLayout
-from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.configuration.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import ExperimentId, PolicyId
 
 

@@ -10,8 +10,8 @@ import click
 from fedcrg.domain.enums import DetectorId, ExperimentId, PolicyId
 from fedcrg.experiments.definitions.synthetic import RunSyntheticExperiments
 from fedcrg.experiments.planning import ExperimentPlanner
-from fedcrg.pipeline.train_detector import TrainDetector
-from fedcrg.config.resolve import load_config
+from fedcrg.experiments.model_training import TrainDetector
+from fedcrg.configuration.resolve import load_config
 
 
 @click.group(name="experiment")
@@ -75,8 +75,8 @@ def run_policy_cell(
     score_root: Path,
 ) -> None:
     """Materialize one immutable pre-registered policy cell from frozen caches."""
-    from fedcrg.pipeline.run_experiment import RunExperiment
-    from fedcrg.pipeline.run_policy_evaluation import FrozenCacheInputs, PolicyCellMaterializer
+    from fedcrg.experiments.experiment_runner import RunExperiment
+    from fedcrg.experiments.policy_cells import FrozenCacheInputs, PolicyCellMaterializer
 
     config = load_config(config_path)
     experiment_id = ExperimentId(experiment) if experiment is not None else config.id
@@ -120,7 +120,7 @@ def materialize_federation_cell(
     score_root: Path,
 ) -> None:
     """Evaluate one federation once and materialize every configured policy run."""
-    from fedcrg.pipeline.run_policy_evaluation import FederationCellMaterializer, FrozenCacheInputs
+    from fedcrg.experiments.policy_cells import FederationCellMaterializer, FrozenCacheInputs
 
     config = load_config(config_path)
     experiment_id = ExperimentId(experiment) if experiment is not None else config.id
@@ -156,7 +156,7 @@ def execute_grid(
 ) -> None:
     """Audit prepared evidence, then execute each model seed once, score once, and
     materialize the requested policy grid."""
-    from fedcrg.pipeline.run_all_experiments import RunAllExperiments
+    from fedcrg.experiments.runner import RunAllExperiments
 
     config = load_config(config_path)
     experiment_id = ExperimentId(experiment) if experiment is not None else config.id

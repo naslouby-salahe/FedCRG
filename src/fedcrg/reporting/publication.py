@@ -20,7 +20,7 @@ from fedcrg.reporting.figures import (
     reliability_utility_frontier,
 )
 from fedcrg.reporting.tables import PublicationTableBuilder
-from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.configuration.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import ExperimentStatus, PolicyId
 
 

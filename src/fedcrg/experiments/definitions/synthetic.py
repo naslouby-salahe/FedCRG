@@ -10,7 +10,7 @@ import numpy as np
 from scipy.stats import binom, gamma, lognorm, norm
 
 from fedcrg.artifacts.json_io import atomic_write_json
-from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.configuration.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import (
     ContaminationDirection,
     ExperimentAxisId,
@@ -19,8 +19,8 @@ from fedcrg.domain.enums import (
 )
 from fedcrg.domain.values import OperatingBand
 from fedcrg.experiments.experiment_definition import ExperimentDefinition, get_experiment_definition
-from fedcrg.method.calibration_readiness import ReadinessPlanBuilder
-from fedcrg.method.mismatch_detection import clopper_pearson_interval
+from fedcrg.decision.calibration_readiness import ReadinessPlanBuilder
+from fedcrg.decision.mismatch_detection import clopper_pearson_interval
 
 # --- Statistical kernels -----------------------------------------------------------
 

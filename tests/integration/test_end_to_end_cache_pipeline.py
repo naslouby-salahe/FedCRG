@@ -7,15 +7,15 @@ from pathlib import PurePosixPath
 import numpy as np
 import pandas as pd
 
-from fedcrg.pipeline.evaluate_policies import EvaluatePolicies
-from fedcrg.pipeline.compute_scores import ComputeScores
-from fedcrg.pipeline.train_detector import TrainDetector
+from fedcrg.experiments.policy_evaluation import EvaluatePolicies
+from fedcrg.scoring.compute_scores import ComputeScores
+from fedcrg.experiments.model_training import TrainDetector
 from fedcrg.artifacts.manifests import PreparedDatasetManifestStore
 from fedcrg.artifacts.integrity import sha256_file
 from fedcrg.artifacts.json_io import atomic_write_json
-from fedcrg.config.dataset_config import DatasetConfig, SplitConfig
-from fedcrg.config.detector_config import AutoencoderConfig
-from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.configuration.dataset_config import DatasetConfig, SplitConfig
+from fedcrg.configuration.detector_config import AutoencoderConfig
+from fedcrg.configuration.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import (
     ComputeDeviceId,
     DataRole,
@@ -25,8 +25,8 @@ from fedcrg.domain.enums import (
     PolicyId,
 )
 from fedcrg.domain.identifiers import ClientId, RowId, Sha256
-from fedcrg.data.prepare import ClientDatasetManifest, RoleArtifactManifest, hash_row_ids
-from fedcrg.method.calibration_readiness import ReadinessPlanCache
+from fedcrg.datasets.prepare import ClientDatasetManifest, RoleArtifactManifest, hash_row_ids
+from fedcrg.decision.calibration_readiness import ReadinessPlanCache
 from tests._fixtures import (
     primary_protocol,
     primary_randomness,

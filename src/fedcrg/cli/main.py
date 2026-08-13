@@ -30,7 +30,7 @@ from fedcrg.cli.results import results_group
 from fedcrg.cli.scoring import score_command, tables_group
 from fedcrg.cli.training import train_command
 from fedcrg.cli.verification import verify_command
-from fedcrg.config.resolve import load_config
+from fedcrg.configuration.resolve import load_config
 from fedcrg.runtime.logging import configure_logging
 
 
