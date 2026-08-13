@@ -12,6 +12,7 @@ from fedcrg.artifacts.hashing import sha256_file
 from fedcrg.artifacts.layout import RunLayout
 from fedcrg.artifacts.references import CacheReference, CacheReferenceStore
 from fedcrg.artifacts.serialization import atomic_write_json
+from fedcrg.artifacts.training import TrainingManifestStore
 from fedcrg.config.models import ExperimentConfig
 from fedcrg.core.enums import CalibrationAssignmentMode, DatasetId, PolicyId
 from fedcrg.core.ids import CalibrationSeed, RunId, Sha256
@@ -35,10 +36,12 @@ class PolicyCellMaterializer:
         evaluator: EvaluatePolicies | None = None,
         score_cache: ScoreCache | None = None,
         references: CacheReferenceStore | None = None,
+        training_manifests: TrainingManifestStore | None = None,
     ) -> None:
         self.evaluator = evaluator or EvaluatePolicies()
         self.score_cache = score_cache or ScoreCache()
         self.references = references or CacheReferenceStore()
+        self.training_manifests = training_manifests or TrainingManifestStore()
 
     def evaluate_federation(
         self,
@@ -114,11 +117,16 @@ class PolicyCellMaterializer:
         )
         return next((item for item in bundle.federations if item.policy is policy), None)
 
-    @staticmethod
-    def validate_upstream(config: ExperimentConfig, caches: FrozenCacheInputs) -> None:
+    def validate_upstream(
+        self,
+        config: ExperimentConfig,
+        caches: FrozenCacheInputs,
+    ) -> None:
+        prepared_manifest_path = caches.prepared_root / "manifest.json"
+        preprocessing_path = caches.prepared_root / "preprocessing.json"
         required = (
-            caches.prepared_root / "manifest.json",
-            caches.prepared_root / "preprocessing.json",
+            prepared_manifest_path,
+            preprocessing_path,
             caches.model_path,
             caches.training_manifest,
             caches.score_root / ScoreCache.filename,
@@ -130,28 +138,33 @@ class PolicyCellMaterializer:
                 "Missing frozen upstream artifact(s): "
                 + ", ".join(str(path) for path in missing)
             )
-        prepared = json.loads(
-            (caches.prepared_root / "manifest.json").read_text(encoding="utf-8")
-        )
-        training = json.loads(caches.training_manifest.read_text(encoding="utf-8"))
-        score = json.loads(
-            (caches.score_root / ScoreCache.manifest_filename).read_text(encoding="utf-8")
-        )
-        expected = (
-            ("prepared dataset", prepared.get("data_spec_hash"), config.data_spec_hash),
-            ("training", training.get("data_spec_hash"), config.data_spec_hash),
-            ("training", training.get("training_spec_hash"), config.training_spec_hash),
-            ("score cache", score.get("data_spec_hash"), config.data_spec_hash),
-            ("score cache", score.get("training_spec_hash"), config.training_spec_hash),
-        )
-        for name, observed, wanted in expected:
-            if observed != wanted:
-                raise ValueError(
-                    f"{name} provenance hash does not match the requested cell"
-                )
-        if training.get("model_file_sha256") != sha256_file(caches.model_path):
+
+        prepared = json.loads(prepared_manifest_path.read_text(encoding="utf-8"))
+        if prepared.get("data_spec_hash") != config.data_spec_hash:
+            raise ValueError("Prepared dataset provenance does not match requested cell")
+
+        training = self.training_manifests.load(caches.training_manifest)
+        if training.data_spec_hash != Sha256(config.data_spec_hash):
+            raise ValueError("Training data specification does not match requested cell")
+        if training.training_spec_hash != Sha256(config.training_spec_hash):
+            raise ValueError("Training specification does not match requested cell")
+        if training.dataset_manifest_sha256 != Sha256(sha256_file(prepared_manifest_path)):
+            raise ValueError("Training manifest references a different dataset manifest")
+        if training.preprocessing_sha256 != Sha256(sha256_file(preprocessing_path)):
+            raise ValueError("Training manifest references a different preprocessing artifact")
+        if training.model_file_sha256 != Sha256(sha256_file(caches.model_path)):
             raise ValueError("Frozen model hash does not match its training manifest")
-        if score.get("model_hash") != training.get("final_model_hash"):
+
+        descriptor = self.score_cache.load_descriptor(caches.score_root)
+        if descriptor.identity.data_spec_hash != training.data_spec_hash:
+            raise ValueError("Score cache references a different data specification")
+        if descriptor.identity.training_spec_hash != training.training_spec_hash:
+            raise ValueError("Score cache references a different training specification")
+        if descriptor.identity.dataset_manifest_hash != training.dataset_manifest_sha256:
+            raise ValueError("Score cache references a different dataset manifest")
+        if descriptor.identity.preprocessing_hash != training.preprocessing_sha256:
+            raise ValueError("Score cache references a different preprocessing artifact")
+        if descriptor.identity.model_hash != training.result.final_model_hash:
             raise ValueError("Score-cache model state does not match training result")
 
     @staticmethod
