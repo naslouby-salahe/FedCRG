@@ -15,7 +15,7 @@ from fedcrg.core.enums import (
     PolicyEvaluationStatus,
     PolicyId,
 )
-from fedcrg.core.ids import AttackGroupId, CalibrationSeed, ClientId, RunId, Sha256
+from fedcrg.core.ids import CalibrationSeed, ClientId, RunId, Sha256
 from fedcrg.metrics.attack_balanced import attack_balanced_tpr
 from fedcrg.metrics.classification import (
     balanced_accuracy,
@@ -38,7 +38,6 @@ from fedcrg.metrics.results import ClientMetrics, EvaluationBundle, PolicyEvalua
 from fedcrg.policies.base import (
     BenignPolicyEvidence,
     FinalTestEvidence,
-    PolicySelectionInputs,
     SupervisedDevelopmentEvidence,
 )
 from fedcrg.policies.oracle import oracle_choice
@@ -53,9 +52,9 @@ from fedcrg.scoring.views import CalibrationScoreViewBuilder, CalibrationScoreVi
 class EvaluatePolicies:
     """Freeze thresholds before opening final-test evidence.
 
-    Reservoir and attack-development partitions are opened for threshold selection;
-    final benign and attack partitions are opened one client at a time only after
-    every non-oracle threshold has been frozen.
+    Benign evidence is always available. Attack-development evidence is opened only
+    when B7-B9 are requested. Final benign/attack test partitions are opened one
+    client at a time only after all non-oracle thresholds are frozen.
     """
 
     def __init__(
@@ -133,9 +132,8 @@ class EvaluatePolicies:
         if len(calibration_sizes) != 1:
             raise ValueError("Calibration evidence count must be identical across clients")
         plan = protocol.require_readiness(calibration_sizes.pop(), config.protocol)
-        results: dict[ClientId, ClientProtocolResult] = {}
-        for client_id in calibration_views.client_ids:
-            results[client_id] = protocol.evaluate_client(
+        return {
+            client_id: protocol.evaluate_client(
                 client_id=client_id,
                 reference=reference,
                 calibration_scores=calibration_views.get(
@@ -149,38 +147,47 @@ class EvaluatePolicies:
                 config=config.protocol,
                 readiness_plan=plan,
             )
-        return results
+            for client_id in calibration_views.client_ids
+        }
 
-    def _selection_inputs(
-        self,
-        score_root: Path,
+    @staticmethod
+    def _benign_inputs(
         views: CalibrationScoreViews,
         protocol_results: dict[ClientId, ClientProtocolResult],
-    ) -> tuple[PolicySelectionInputs, ...]:
-        clients: list[PolicySelectionInputs] = []
-        for client_id in views.client_ids:
-            benign = BenignPolicyEvidence(
+    ) -> tuple[BenignPolicyEvidence, ...]:
+        return tuple(
+            BenignPolicyEvidence(
                 client_id=client_id,
                 reference_scores=views.get(client_id, DataRole.REFERENCE).values,
                 mismatch_scores=views.get(client_id, DataRole.MISMATCH).values,
                 calibration_scores=views.get(client_id, DataRole.CALIBRATION).values,
                 protocol=protocol_results[client_id],
             )
-            attack_dev = self.score_cache.read_role(
-                score_root,
-                client_id,
-                DataRole.ATTACK_DEV,
-            )
-            supervised = SupervisedDevelopmentEvidence(
-                benign=benign,
+            for client_id in views.client_ids
+        )
+
+    def _supervised_inputs(
+        self,
+        score_root: Path,
+        views: CalibrationScoreViews,
+        benign_clients: tuple[BenignPolicyEvidence, ...],
+    ) -> tuple[SupervisedDevelopmentEvidence, ...]:
+        benign_by_client = {client.client_id: client for client in benign_clients}
+        return tuple(
+            SupervisedDevelopmentEvidence(
+                benign=benign_by_client[client_id],
                 benign_guard_scores=views.get(
                     client_id,
                     DataRole.BENIGN_GUARD,
                 ).values,
-                attack_dev_scores=attack_dev.values,
+                attack_dev_scores=self.score_cache.read_role(
+                    score_root,
+                    client_id,
+                    DataRole.ATTACK_DEV,
+                ).values,
             )
-            clients.append(PolicySelectionInputs(benign, supervised))
-        return tuple(clients)
+            for client_id in views.client_ids
+        )
 
     @staticmethod
     def _oracle_threshold(
@@ -225,19 +232,22 @@ class EvaluatePolicies:
             prepared_root,
         )
         protocol_results = self.protocol_results(config, views)
-        selection_inputs = self._selection_inputs(
-            score_root,
-            views,
-            protocol_results,
+        benign_inputs = self._benign_inputs(views, protocol_results)
+        supervised_inputs = (
+            self._supervised_inputs(score_root, views, benign_inputs)
+            if self.selector.registry.supervised_requested(config.policies)
+            else None
         )
-        thresholds = self.selector.select(selection_inputs, config.protocol)
-        selection_by_client = {
-            item.client_id: item for item in selection_inputs
-        }
+        thresholds = self.selector.select(
+            benign_inputs,
+            config.protocol,
+            config.policies,
+            supervised_inputs,
+        )
+        benign_by_client = {item.client_id: item for item in benign_inputs}
 
         evaluations: list[PolicyEvaluation] = []
         for client_id in descriptor.client_ids:
-            selection = selection_by_client[client_id]
             benign_test = self.score_cache.read_role(
                 score_root,
                 client_id,
@@ -254,14 +264,12 @@ class EvaluatePolicies:
                 )
             attack_groups = attack_test.attack_groups
             final = FinalTestEvidence(
-                benign=selection.benign,
+                benign=benign_by_client[client_id],
                 benign_test_scores=benign_test.values,
                 attack_test_scores=attack_test.values,
                 attack_test_groups=attack_groups,
             )
-            test_scores = np.concatenate(
-                (benign_test.values, attack_test.values)
-            )
+            test_scores = np.concatenate((benign_test.values, attack_test.values))
             test_labels = np.concatenate(
                 (
                     np.zeros(len(benign_test.values), dtype=np.int64),
@@ -319,10 +327,7 @@ class EvaluatePolicies:
                     auprc=ranking_auprc,
                     band_error=band_error(client_fpr, config.protocol.band),
                     high_excess=high_excess(client_fpr, config.protocol.band),
-                    band_violation=band_violation(
-                        client_fpr,
-                        config.protocol.band,
-                    ),
+                    band_violation=band_violation(client_fpr, config.protocol.band),
                     absolute_fpr_error=absolute_fpr_error(
                         client_fpr,
                         config.protocol.alpha,
@@ -442,10 +447,7 @@ class EvaluatePolicies:
             None,
         )
         if federation is not None:
-            atomic_write_json(
-                root / "metrics" / "federation.json",
-                federation,
-            )
+            atomic_write_json(root / "metrics" / "federation.json", federation)
         return decisions, metrics
 
     @staticmethod
