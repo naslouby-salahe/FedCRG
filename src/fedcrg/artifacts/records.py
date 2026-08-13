@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 
-from fedcrg.core.enums import PolicyId
+from fedcrg.artifacts.serialization import to_json_value
+from fedcrg.core.enums import DecisionReason, DecisionState, PolicyId, ThresholdSource
+from fedcrg.core.ids import ClientId, RunId
 
 
 @dataclass(frozen=True, slots=True)
 class ThresholdRecord:
-    run_id: str
+    run_id: RunId
     policy_id: PolicyId
-    client_id: str
+    client_id: ClientId
     tau_ref: float
     tau_local: float | None
     selected_tau: float | None
@@ -22,21 +24,21 @@ class ThresholdRecord:
     readiness_probability: float
     mismatch_n: int
     mismatch_x: int
-    cp_lower: float
-    cp_upper: float
+    cp_lower: float | None
+    cp_upper: float | None
     p_low: float | None
     p_high: float
-    state: str
+    state: DecisionState
     tie_count: int
-    selected_source: str
-    reason_code: str
+    selected_source: ThresholdSource
+    reason_code: DecisionReason
 
 
 @dataclass(frozen=True, slots=True)
 class MetricRecord:
-    run_id: str
+    run_id: RunId
     policy_id: PolicyId
-    client_id: str
+    client_id: ClientId
     benign_n: int
     attack_n: int
     fp: int
@@ -59,7 +61,5 @@ def write_jsonl(path: Path, records: tuple[ThresholdRecord | MetricRecord, ...])
     temp = path.with_name(f".{path.name}.tmp")
     with temp.open("w", encoding="utf-8") as handle:
         for record in records:
-            payload = asdict(record)
-            payload["policy_id"] = record.policy_id.value
-            handle.write(json.dumps(payload, sort_keys=True) + "\n")
+            handle.write(json.dumps(to_json_value(record), sort_keys=True) + "\n")
     temp.replace(path)
