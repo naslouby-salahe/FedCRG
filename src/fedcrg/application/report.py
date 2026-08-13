@@ -16,6 +16,7 @@ from fedcrg.analysis.primary import (
 from fedcrg.application.verify import VerifyOutputs
 from fedcrg.artifacts.layout import RunLayout
 from fedcrg.artifacts.verification import ArtifactVerifier
+from fedcrg.core.enums import ExperimentCode
 
 
 class ReportBuilder:
@@ -85,7 +86,11 @@ class ReportBuilder:
             run_tests=False,
         )
         r1 = next(
-            (item for item in verification.experiment_completion if item.protocol_code == "R1"),
+            (
+                item
+                for item in verification.experiment_completion
+                if item.protocol_code is ExperimentCode.R1
+            ),
             None,
         )
         contrasts_path = reports_root / "primary_contrasts.json"

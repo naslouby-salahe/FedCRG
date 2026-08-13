@@ -97,15 +97,24 @@ class PublicationTableBuilder:
         return self._write(pd.DataFrame.from_records(rows), output)
 
     def sensitivity(self, experiments_root: Path, output: Path) -> Path:
+        """R2-R7 each write one SensitivityEnvelope/MultiplicityEnvelope per cells/*.json file."""
         rows: list[dict[str, object]] = []
         for code in ("R2", "R3", "R4", "R5", "R6", "R7"):
-            path = experiments_root / code / "results.json"
-            if not path.is_file():
+            cells_root = experiments_root / code / "cells"
+            if not cells_root.is_dir():
                 continue
-            payload = json.loads(path.read_text(encoding="utf-8"))
-            for cell in payload.get("cells", []):
-                if isinstance(cell, dict):
-                    rows.append({"protocol_code": code, **cell})
+            for path in sorted(cells_root.glob("*.json")):
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                for cell in payload.get("cells", []):
+                    if isinstance(cell, dict):
+                        rows.append(
+                            {
+                                "protocol_code": code,
+                                "model_seed": payload.get("model_seed"),
+                                "calibration_seed": payload.get("calibration_seed"),
+                                **cell,
+                            }
+                        )
         return self._write(pd.DataFrame.from_records(rows), output)
 
     def protocol_constants(self, config: ExperimentConfig, output: Path) -> Path:

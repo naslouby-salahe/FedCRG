@@ -12,6 +12,7 @@ from fedcrg.analysis.benchmark import benchmark, configure_single_thread_executi
 from fedcrg.artifacts.environment import capture_environment
 from fedcrg.artifacts.experiment_results import ExperimentResultEnvelope
 from fedcrg.config.models import ExperimentConfig
+from fedcrg.core.enums import ExperimentCode
 from fedcrg.core.ids import ClientId, Sha256
 from fedcrg.protocol.decision import ThresholdDecisionEngine
 from fedcrg.protocol.mismatch import ReferenceMismatchEvaluator
@@ -114,7 +115,7 @@ class RunBenchmark:
             "Runtime values are empirical machine-specific evidence, not mathematical constants.",
         )
         return ExperimentResultEnvelope(
-            protocol_code="R13",
+            protocol_code=ExperimentCode.R13,
             config_hash=Sha256(config.config_hash),
             master_seed=config.randomness.synthetic_seed,
             expected_cells=4,

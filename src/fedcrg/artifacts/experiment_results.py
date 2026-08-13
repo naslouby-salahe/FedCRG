@@ -7,6 +7,7 @@ from datetime import datetime, UTC
 from pathlib import Path
 
 from fedcrg.artifacts.serialization import atomic_write_json
+from fedcrg.core.enums import ExperimentCode
 from fedcrg.core.ids import Sha256
 
 
@@ -14,7 +15,7 @@ from fedcrg.core.ids import Sha256
 class ExperimentResultEnvelope:
     """Self-describing aggregate evidence for one pre-registered S/R experiment."""
 
-    protocol_code: str
+    protocol_code: ExperimentCode
     config_hash: Sha256
     master_seed: int | None
     expected_cells: int | None
@@ -61,52 +62,6 @@ class ExperimentResultEnvelope:
             "expected_monte_carlo_trials": self.expected_monte_carlo_trials,
             "observed_monte_carlo_trials": self.observed_monte_carlo_trials,
             "expected_exact_cells": self.expected_exact_cells,
-            "complete": self.complete,
-            "created_at": datetime.now(UTC).isoformat(),
-            "notes": list(self.notes),
-            "metadata": self.metadata or {},
-            "cells": list(self.cells),
-        }
-
-    def write(self, path: Path) -> Path:
-        atomic_write_json(path, self.to_dict())
-        return path
-
-
-@dataclass(frozen=True, slots=True)
-class ExperimentCellEnvelope:
-    """Evidence for one model/calibration cell of a real-score sensitivity."""
-
-    protocol_code: str
-    config_hash: Sha256
-    model_seed: int
-    calibration_seed: int
-    expected_subcells: int | None
-    dataset_id: str
-    cells: tuple[dict[str, object], ...]
-    score_cache_sha256: Sha256
-    data_spec_hash: Sha256
-    training_spec_hash: Sha256
-    notes: tuple[str, ...] = ()
-    metadata: dict[str, object] | None = None
-
-    @property
-    def complete(self) -> bool:
-        return self.expected_subcells is None or len(self.cells) == self.expected_subcells
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "schema_version": 1,
-            "experiment": self.protocol_code,
-            "config_hash": self.config_hash.value,
-            "dataset_id": self.dataset_id,
-            "model_seed": self.model_seed,
-            "calibration_seed": self.calibration_seed,
-            "score_cache_sha256": self.score_cache_sha256.value,
-            "data_spec_hash": self.data_spec_hash.value,
-            "training_spec_hash": self.training_spec_hash.value,
-            "expected_subcells": self.expected_subcells,
-            "observed_subcells": len(self.cells),
             "complete": self.complete,
             "created_at": datetime.now(UTC).isoformat(),
             "notes": list(self.notes),
