@@ -11,10 +11,10 @@ from pathlib import Path
 import numpy as np
 
 from fedcrg.analysis.policy_contrasts import FederationResultRecord, load_federation_results
-from fedcrg.artifacts.layout import RunLayout
-from fedcrg.artifacts.manifest import RunManifestStore
-from fedcrg.artifacts.serialization import atomic_write_json
-from fedcrg.artifacts.verification import ArtifactVerifier
+from fedcrg.artifacts.paths import RunLayout
+from fedcrg.artifacts.manifests import RunManifestStore
+from fedcrg.artifacts.json_io import atomic_write_json
+from fedcrg.artifacts.integrity import ArtifactVerifier
 from fedcrg.domain.enums import (
     ClaimLevel,
     ExperimentCode,

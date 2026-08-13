@@ -6,7 +6,7 @@ from pathlib import Path
 
 import click
 
-from fedcrg.artifacts.environment_lock import EnvironmentLocker
+from fedcrg.artifacts.environment import EnvironmentLocker
 
 
 @click.group(name="environment")

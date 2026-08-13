@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from fedcrg.artifacts.serialization import atomic_write_json
+from fedcrg.artifacts.json_io import atomic_write_json
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.config.method_config import ProtocolConfig
 from fedcrg.domain.enums import ExperimentAxisId, ExperimentId

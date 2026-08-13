@@ -9,7 +9,7 @@ import click
 
 from fedcrg.pipeline.evaluate_policies import EvaluatePolicies
 from fedcrg.reporting.report import ReportBuilder
-from fedcrg.artifacts.serialization import atomic_write_json
+from fedcrg.artifacts.json_io import atomic_write_json
 from fedcrg.cli.shared import load_config
 
 

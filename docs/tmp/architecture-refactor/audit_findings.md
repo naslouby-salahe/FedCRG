@@ -78,10 +78,19 @@ See current_state.md section 3 for full detail. Summary of findings to be fixed 
   experiments/experiment_definition.py, federation/training_results.py,
   scoring/score_records.py, thresholds/results.py, method/results.py -- the last two are
   explicitly permitted by the target tree). No remaining forbidden-named files.
-- Finding #5 (artifacts/environment.py + environment_lock.py duplication): still open,
-  targeted for Phase 7 (artifacts consolidation).
+- Finding #5 (artifacts/environment.py + environment_lock.py duplication): RESOLVED in
+  Phase 7, merged into one artifacts/environment.py.
 
-Status: 6 of 9 phases complete (domain+config, data+detectors, federation+scoring,
-method+thresholds, evaluation+analysis/reporting, application-removed+pipeline). See
-remaining_work.md for per-phase detail. Remaining: Phase 7 (artifacts consolidation),
-Phase 8 (reporting+cli boundaries), Phase 9 (final hostile audit + full validation).
+## Phase 7 resolutions
+
+- Finding #5: RESOLVED (see above).
+- artifacts/ package reduced from 14 files to prompt.md's exact 6 names (paths.py,
+  manifests.py, records.py, json_io.py, integrity.py, environment.py). All findings from
+  the pre-migration audit are now resolved except the minor sha256_file/hash_file
+  cross-package duplication noted in remaining_work.md's Phase 7 notes (accepted, not a
+  meaningful architectural issue -- different type contracts for different package layers).
+
+Status: 7 of 9 phases complete (domain+config, data+detectors, federation+scoring,
+method+thresholds, evaluation+analysis/reporting, application-removed+pipeline, artifacts
+consolidation). See remaining_work.md for per-phase detail. Remaining: Phase 8
+(reporting+cli boundaries), Phase 9 (final hostile audit + full validation).

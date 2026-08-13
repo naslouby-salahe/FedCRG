@@ -8,9 +8,9 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from fedcrg.artifacts.layout import RunLayout
-from fedcrg.artifacts.manifest import RunManifestStore
-from fedcrg.artifacts.verification import ArtifactVerifier, VerificationResult
+from fedcrg.artifacts.paths import RunLayout
+from fedcrg.artifacts.manifests import RunManifestStore
+from fedcrg.artifacts.integrity import ArtifactVerifier, VerificationResult
 from fedcrg.domain.enums import ExperimentStatus
 from fedcrg.experiments.completion import ExperimentCompletion, ExperimentCompletionAuditor
 from fedcrg.experiments.experiment_definition import all_experiment_definitions

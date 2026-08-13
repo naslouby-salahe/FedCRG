@@ -10,9 +10,9 @@ import pandas as pd
 from fedcrg.pipeline.evaluate_policies import EvaluatePolicies
 from fedcrg.pipeline.compute_scores import ComputeScores
 from fedcrg.pipeline.train_detector import TrainDetector
-from fedcrg.artifacts.dataset import PreparedDatasetManifestStore
-from fedcrg.artifacts.hashing import sha256_file
-from fedcrg.artifacts.serialization import atomic_write_json
+from fedcrg.artifacts.manifests import PreparedDatasetManifestStore
+from fedcrg.artifacts.integrity import sha256_file
+from fedcrg.artifacts.json_io import atomic_write_json
 from fedcrg.config.dataset_config import DatasetConfig, SplitConfig
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.config.method_config import ProtocolConfig

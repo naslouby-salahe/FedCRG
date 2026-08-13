@@ -8,9 +8,9 @@ from pathlib import Path
 import pandas as pd
 
 from fedcrg.pipeline.train_detector import TrainDetector, feature_columns
-from fedcrg.artifacts.dataset import PreparedDatasetManifestStore
-from fedcrg.artifacts.hashing import sha256_file
-from fedcrg.artifacts.training import TrainingManifestStore
+from fedcrg.artifacts.manifests import PreparedDatasetManifestStore
+from fedcrg.artifacts.integrity import sha256_file
+from fedcrg.artifacts.manifests import TrainingManifestStore
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import DataRole
 from fedcrg.domain.identifiers import AttackGroupId, ModelSeed, RowId, Sha256

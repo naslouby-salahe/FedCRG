@@ -7,11 +7,11 @@ ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src" / "fedcrg"
 
 _OUTER_BOUNDARIES = {
-    "artifacts/serialization.py",
+    "artifacts/json_io.py",
     # Self-describing JSON envelopes for heterogeneous per-experiment-type cell
     # payloads produced across many sensitivity/benchmark call sites; this is the
     # write boundary itself, not internal domain state.
-    "artifacts/experiment_results.py",
+    "artifacts/records.py",
 }
 _MUTABLE_NAMES = {"dict", "list", "set", "Dict", "List", "Set"}
 

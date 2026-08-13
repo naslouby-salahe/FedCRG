@@ -10,13 +10,9 @@ import pandas as pd
 import torch
 from torch.utils.data import TensorDataset
 
-from fedcrg.artifacts.dataset import PreparedDatasetManifestStore
-from fedcrg.artifacts.hashing import sha256_file
-from fedcrg.artifacts.training import (
-    ClientTrainingCount,
-    TrainingManifest,
-    TrainingManifestStore,
-)
+from fedcrg.artifacts.manifests import PreparedDatasetManifestStore
+from fedcrg.artifacts.integrity import sha256_file
+from fedcrg.artifacts.manifests import ClientTrainingCount, TrainingManifest, TrainingManifestStore
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.domain.constants import (
     DIAD_AUTOENCODER_BYTES,

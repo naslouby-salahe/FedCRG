@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from fedcrg.artifacts.serialization import as_json_int
+from fedcrg.artifacts.json_io import as_json_int
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.domain.constants import DIAD_EXPECTED_SOURCE_CLIENTS
 from fedcrg.domain.enums import CalibrationAssignmentMode, DataRole, DatasetId

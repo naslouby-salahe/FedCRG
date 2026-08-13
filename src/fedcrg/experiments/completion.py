@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from itertools import product
 from pathlib import Path
 
-from fedcrg.artifacts.layout import RunLayout
-from fedcrg.artifacts.manifest import RunManifest, RunManifestStore
+from fedcrg.artifacts.paths import RunLayout
+from fedcrg.artifacts.manifests import RunManifest, RunManifestStore
 from fedcrg.domain.enums import ExperimentCode, ExperimentId, ExperimentStatus, PolicyId
 from fedcrg.experiments.experiment_definition import (
     SECOND_DETECTOR_POLICIES,

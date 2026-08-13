@@ -10,12 +10,12 @@ from pathlib import Path, PurePosixPath
 
 import pandas as pd
 
-from fedcrg.artifacts.dataset import (
+from fedcrg.artifacts.manifests import (
     CalibrationAssignmentManifestStore,
     PreparedDatasetManifestStore,
 )
-from fedcrg.artifacts.hashing import sha256_file
-from fedcrg.artifacts.serialization import atomic_write_json
+from fedcrg.artifacts.integrity import sha256_file
+from fedcrg.artifacts.json_io import atomic_write_json
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import (
     CalibrationAssignmentMode,

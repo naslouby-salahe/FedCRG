@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fedcrg.artifacts.layout import RunLayout
+from fedcrg.artifacts.paths import RunLayout
 from fedcrg.domain.identifiers import RunId
 
 

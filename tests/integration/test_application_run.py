@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from fedcrg.pipeline.run_experiment import RunExperiment
-from fedcrg.artifacts.manifest import RunManifestStore
+from fedcrg.artifacts.manifests import RunManifestStore
 from fedcrg.config.dataset_config import DatasetConfig, SplitConfig
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.config.method_config import ProtocolConfig

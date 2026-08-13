@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 from scipy.stats import binom, gamma, lognorm, norm
 
-from fedcrg.artifacts.serialization import atomic_write_json
+from fedcrg.artifacts.json_io import atomic_write_json
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import (
     ContaminationDirection,

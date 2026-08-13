@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import PurePosixPath
 from typing import get_type_hints
 
-from fedcrg.artifacts.manifest import RunManifest
-from fedcrg.artifacts.references import CacheReference
+from fedcrg.artifacts.manifests import RunManifest
+from fedcrg.artifacts.records import CacheReference
 from fedcrg.domain.identifiers import (
     CalibrationSeed,
     ClientId,

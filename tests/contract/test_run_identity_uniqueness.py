@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from fedcrg.experiments.definitions.sensitivity import r14_config
-from fedcrg.artifacts.identity import RunIdentityFactory
+from fedcrg.artifacts.paths import RunIdentityFactory
 from fedcrg.config.resolve import ExperimentConfigResolver
 from fedcrg.domain.enums import PolicyId
 from fedcrg.domain.identifiers import ClientId

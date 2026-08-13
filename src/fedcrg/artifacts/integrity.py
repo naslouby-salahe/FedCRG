@@ -1,19 +1,25 @@
-"""Cryptographic and semantic verification of immutable run evidence."""
+"""File hashing plus cryptographic and semantic verification of immutable run evidence."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
 
-from fedcrg.artifacts.hashing import sha256_file
-from fedcrg.artifacts.layout import RunLayout
-from fedcrg.artifacts.manifest import RunManifestStore
-from fedcrg.artifacts.references import CacheReferenceStore
-from fedcrg.artifacts.serialization import as_json_float, as_json_int, atomic_write_json
+from fedcrg.artifacts.json_io import as_json_float, as_json_int, atomic_write_json
+from fedcrg.artifacts.paths import RunLayout
 from fedcrg.domain.enums import ArtifactType
 from fedcrg.experiments.experiment_definition import ExperimentDefinition
+
+
+def sha256_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(chunk_size), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,6 +145,9 @@ class ArtifactVerifier:
         )
 
     def _semantic_mismatches(self, layout: RunLayout) -> set[str]:
+        from fedcrg.artifacts.manifests import RunManifestStore
+        from fedcrg.artifacts.records import CacheReferenceStore
+
         mismatches: set[str] = set()
         outputs_root = layout.root.parents[1]
         references = CacheReferenceStore()

@@ -1,11 +1,13 @@
-"""Canonical immutable output layout for one policy/run cell."""
+"""Canonical immutable output layout and run-identity construction."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
 
-from fedcrg.domain.identifiers import RunId
+from fedcrg.config.experiment_config import ExperimentConfig
+from fedcrg.domain.enums import DetectorId, PolicyId
+from fedcrg.domain.identifiers import CalibrationSeed, ModelSeed, RunId
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,3 +109,33 @@ class RunLayout:
             self.verification,
         ):
             directory.mkdir()
+
+
+class RunIdentityFactory:
+    """Build path-safe run IDs from one fully resolved scientific configuration.
+
+    The human-readable prefix follows the pre-registration convention. A short
+    scientific-config digest is appended so distinct experiment specifications can
+    never map to the same evidence directory.
+    """
+
+    @staticmethod
+    def for_policy_cell(
+        config: ExperimentConfig,
+        model_seed: ModelSeed | int,
+        calibration_seed: CalibrationSeed | int,
+        policy: PolicyId,
+    ) -> RunId:
+        alpha_ppm = round(config.protocol.alpha * 1_000_000)
+        rho_bp = round(config.protocol.rho * 10_000)
+        assurance_bp = round(config.protocol.readiness_assurance * 10_000)
+        confidence_bp = round(config.protocol.mismatch_confidence * 10_000)
+        detector = (
+            "ae" if config.detector.id is DetectorId.AUTOENCODER else config.detector.id.value
+        )
+        prefix = (
+            f"{config.dataset.id.value}__{detector}__ms{int(model_seed)}__"
+            f"cs{int(calibration_seed)}__a{alpha_ppm}__r{rho_bp}__"
+            f"ga{assurance_bp}__gb{confidence_bp}__{policy.value.lower()}"
+        )
+        return RunId(f"{prefix}__cfg{config.config_hash[:12]}")

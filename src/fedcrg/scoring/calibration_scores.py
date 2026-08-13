@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from fedcrg.artifacts.dataset import CalibrationAssignmentManifestStore
+from fedcrg.artifacts.manifests import CalibrationAssignmentManifestStore
 from fedcrg.config.dataset_config import DatasetConfig
 from fedcrg.data.splits import CalibrationAssignmentBuilder, CalibrationAssignmentManifest
 from fedcrg.domain.enums import CalibrationAssignmentMode, DataRole, DatasetId

@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from fedcrg.artifacts.records import MetricRecord, ThresholdRecord, write_jsonl
-from fedcrg.artifacts.serialization import JsonValue, atomic_write_json, to_json_value
+from fedcrg.artifacts.json_io import JsonValue, atomic_write_json, to_json_value
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import (
     CalibrationAssignmentMode,

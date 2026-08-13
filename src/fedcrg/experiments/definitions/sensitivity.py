@@ -12,8 +12,8 @@ from pathlib import Path
 
 import numpy as np
 
-from fedcrg.artifacts.dataset import EligibilityManifestStore
-from fedcrg.artifacts.serialization import atomic_write_json
+from fedcrg.artifacts.manifests import EligibilityManifestStore
+from fedcrg.artifacts.json_io import atomic_write_json
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.config.method_config import ProtocolConfig
 from fedcrg.config.validate import validate_experiment_config

@@ -9,7 +9,7 @@ from pathlib import Path
 import pandas as pd
 
 from fedcrg.analysis.policy_contrasts import confirmatory_contrasts, load_federation_results
-from fedcrg.artifacts.layout import RunLayout
+from fedcrg.artifacts.paths import RunLayout
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import PolicyId
 

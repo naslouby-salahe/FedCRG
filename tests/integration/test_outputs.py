@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from fedcrg.artifacts.layout import RunLayout
-from fedcrg.artifacts.manifest import RunManifest, RunManifestStore
+from fedcrg.artifacts.paths import RunLayout
+from fedcrg.artifacts.manifests import RunManifest, RunManifestStore
 from fedcrg.domain.enums import ExperimentId, ExperimentStatus, PolicyId
 from fedcrg.domain.errors import ImmutableRunError
 from fedcrg.domain.identifiers import CalibrationSeed, ModelSeed, RunId, Sha256

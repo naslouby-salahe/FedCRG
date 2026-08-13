@@ -11,8 +11,8 @@ import pandas as pd
 from fedcrg.analysis.policy_contrasts import confirmatory_contrasts, load_federation_results
 from fedcrg.analysis.split_stability import split_sensitivity
 from fedcrg.pipeline.verify_outputs import VerifyOutputs
-from fedcrg.artifacts.layout import RunLayout
-from fedcrg.artifacts.verification import ArtifactVerifier
+from fedcrg.artifacts.paths import RunLayout
+from fedcrg.artifacts.integrity import ArtifactVerifier
 from fedcrg.domain.enums import ExperimentCode
 
 

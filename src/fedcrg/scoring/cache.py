@@ -19,13 +19,8 @@ from typing import Literal, cast
 import numpy as np
 import pandas as pd
 
-from fedcrg.artifacts.hashing import sha256_file
-from fedcrg.artifacts.serialization import (
-    as_json_dict,
-    as_json_int,
-    as_json_list,
-    atomic_write_json,
-)
+from fedcrg.artifacts.integrity import sha256_file
+from fedcrg.artifacts.json_io import as_json_dict, as_json_int, as_json_list, atomic_write_json
 from fedcrg.domain.enums import DataRole, DatasetId
 from fedcrg.domain.errors import ImmutableRunError
 from fedcrg.domain.identifiers import AttackGroupId, ClientId, ModelSeed, RowId, Sha256

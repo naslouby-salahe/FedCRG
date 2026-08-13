@@ -6,12 +6,12 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from fedcrg.artifacts.dataset import PreparedDatasetManifestStore
-from fedcrg.artifacts.hashing import sha256_file
-from fedcrg.artifacts.layout import RunLayout
-from fedcrg.artifacts.references import CacheReference, CacheReferenceStore
-from fedcrg.artifacts.serialization import atomic_write_json
-from fedcrg.artifacts.training import TrainingManifestStore
+from fedcrg.artifacts.manifests import PreparedDatasetManifestStore
+from fedcrg.artifacts.integrity import sha256_file
+from fedcrg.artifacts.paths import RunLayout
+from fedcrg.artifacts.records import CacheReference, CacheReferenceStore
+from fedcrg.artifacts.json_io import atomic_write_json
+from fedcrg.artifacts.manifests import TrainingManifestStore
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import CalibrationAssignmentMode, DatasetId, ExperimentId, PolicyId
 from fedcrg.domain.identifiers import CalibrationSeed, ModelSeed, RunId, Sha256

@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 
 from fedcrg.artifacts.environment import capture_environment
-from fedcrg.artifacts.experiment_results import ExperimentResultEnvelope
+from fedcrg.artifacts.records import ExperimentResultEnvelope
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import ExperimentCode
 from fedcrg.domain.identifiers import ClientId, Sha256

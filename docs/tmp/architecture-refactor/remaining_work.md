@@ -8,7 +8,7 @@ Update this file as phases complete. Status values: TODO / IN_PROGRESS / DONE.
 - [x] Phase 4: method + thresholds       STATUS: DONE
 - [x] Phase 5: evaluation + analysis/reporting split   STATUS: DONE
 - [x] Phase 6: application/ removed -> pipeline/ + experiments/definitions/   STATUS: DONE
-- [ ] Phase 7: artifacts consolidation   STATUS: TODO
+- [x] Phase 7: artifacts consolidation   STATUS: DONE
 - [ ] Phase 8: reporting + cli           STATUS: TODO
 - [ ] Phase 9: final hostile audit + full validation suite   STATUS: TODO
 
@@ -316,6 +316,48 @@ experiments/definitions/.
   pipeline/run_policy_evaluation.py) -- zero new errors; full pytest -n auto suite passes
   (125 tests; net -5 vs Phase 5's 130 from deleting the ExperimentExecutor-only test file's
   3 dead tests and consolidating 2 others, offset by 1 new dependency-order test).
+
+## Phase 7 completion notes (artifacts consolidation)
+Consolidated 14 files down to the 6 prompt.md names:
+- paths.py: layout.py's RunLayout + identity.py's RunIdentityFactory (both build/describe
+  output paths for one run).
+- manifests.py: manifest.py's RunManifest/RunManifestStore + dataset.py's
+  PreparedDatasetManifestStore/EligibilityManifestStore/CalibrationAssignmentManifestStore +
+  preprocessing.py's PreprocessingManifestStore + training.py's
+  ClientTrainingCount/TrainingManifest/TrainingManifestStore -- one file for "typed
+  persistence of every manifest kind", replacing the prior one-file-per-artifact-type
+  pattern prompt.md explicitly warns against.
+- records.py: records.py's ThresholdRecord/MetricRecord/write_jsonl + references.py's
+  CacheReference/CacheReferenceStore + experiment_results.py's ExperimentResultEnvelope --
+  all are "normalized evidence records written as JSON/JSONL", a cohesive grouping.
+- json_io.py: serialization.py renamed (atomic writes + JSON-value coercion).
+- integrity.py: hashing.py's sha256_file + verification.py's
+  FileHashRecord/VerificationResult/ArtifactVerifier.
+- environment.py: environment.py's capture_environment merged with environment_lock.py's
+  EnvironmentLock/EnvironmentLocker (resolves audit finding #5).
+- Broke a genuine three-way circular dependency between integrity.py (needs
+  manifests.py's RunManifestStore and records.py's CacheReferenceStore only inside
+  ArtifactVerifier._semantic_mismatches) and records.py (needs integrity.py's sha256_file
+  at module scope for CacheReference): kept the manifests/records imports inside
+  integrity.py's method body (function-local), since promoting them to module level would
+  create integrity->records->integrity. This is the same class of exception noted in Phase
+  6 (finding #11) -- a genuine mutual reference, not a dodge of a fixable direction.
+- Left one deliberate minor duplication un-merged: artifacts/records.py's `sha256_file`
+  usage (via integrity.py) and data/prepare.py's separate `hash_file` (returns typed
+  Sha256 rather than str) compute the same SHA-256-of-file logic but serve different type
+  contracts across the data/ vs artifacts/ package boundary; merging them would require
+  either weakening data/prepare.py's typed Sha256 return or having artifacts/ wrap every
+  call site's string result, touching ~10 files for no architectural benefit -- noted here
+  rather than silently left undocumented.
+- Bulk-updated 28 files' imports from the 11 deleted old artifact module names to the 6
+  new ones (symbol-aware rewrite, since old files each held a small subset of what the new
+  files now hold together).
+- Fixed tests/contract/test_domain_immutability.py's `_OUTER_BOUNDARIES` allowlist (which
+  exempts specific files from the "frozen dataclasses must not embed mutable containers"
+  check) to reference the new artifacts/json_io.py and artifacts/records.py paths instead
+  of the deleted artifacts/serialization.py and artifacts/experiment_results.py.
+- Validation: ruff check/format clean; mypy (py312 override) shows the same 10 pre-existing
+  errors, none new; full pytest -n auto suite passes (125 tests, unchanged).
 
 ## Notes / open decisions to resolve during implementation
 - config/validate.py must not import thresholds/ (downward dependency violation in old
