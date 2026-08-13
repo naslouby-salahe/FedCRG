@@ -322,7 +322,7 @@ class PublicationPackageBuilder:
 
     @staticmethod
     def _readiness_frame(outputs_root: Path) -> pd.DataFrame:
-        path = outputs_root / "cache" / "precomputed" / "readiness_plans.json"
+        path = outputs_root / "cache" / "analysis" / "readiness_plans.json"
         if not path.is_file():
             return pd.DataFrame()
         payload = json.loads(path.read_text(encoding="utf-8"))

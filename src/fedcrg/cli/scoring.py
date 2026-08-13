@@ -23,7 +23,7 @@ def tables_group() -> None:
 @click.option(
     "--output",
     type=click.Path(path_type=Path),
-    default=Path("outputs/cache/precomputed/readiness_plans.json"),
+    default=Path("outputs/cache/analysis/readiness_plans.json"),
 )
 def precompute_readiness(config_path: Path, output: Path) -> None:
     config = load_config(config_path)

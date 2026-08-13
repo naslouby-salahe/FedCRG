@@ -18,6 +18,10 @@ data/
 outputs/*
 !outputs/.gitignore
 !outputs/README.md
+!outputs/logs/
+!outputs/logs/.gitkeep
+!outputs/monitoring/
+!outputs/monitoring/.gitkeep
 !outputs/runs/
 !outputs/runs/.gitkeep
 !outputs/cache/

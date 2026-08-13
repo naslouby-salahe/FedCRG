@@ -77,7 +77,7 @@ class PolicyCellMaterializer:
         assignment_mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
     ) -> FederationMetrics | None:
         bundle = self.evaluate_federation(config, caches, calibration_seed, assignment_mode)
-        return self.materialize_precomputed(
+        return self.materialize_analysis(
             config,
             policy,
             layout,
@@ -87,7 +87,7 @@ class PolicyCellMaterializer:
             assignment_mode,
         )
 
-    def materialize_precomputed(
+    def materialize_analysis(
         self,
         config: ExperimentConfig,
         policy: PolicyId,
@@ -302,7 +302,7 @@ class FederationCellMaterializer:
             def materialize_policy(
                 _plan: object, run_layout: RunLayout, policy: PolicyId = policy
             ) -> FederationMetrics | None:
-                return self.policy_cells.materialize_precomputed(
+                return self.policy_cells.materialize_analysis(
                     config,
                     policy,
                     run_layout,

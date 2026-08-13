@@ -94,6 +94,9 @@ class ExperimentConfigResolver:
             outputs_raw = root.get("outputs_root", "outputs")
             if not isinstance(outputs_raw, str):
                 raise ConfigurationError("outputs_root must be a path string")
+            preprocessed_raw = root.get("preprocessed_root", "data/preprocessed")
+            if not isinstance(preprocessed_raw, str):
+                raise ConfigurationError("preprocessed_root must be a path string")
             return ExperimentConfig(
                 id=ExperimentId(str(root["id"])),
                 protocol=protocol,
@@ -110,6 +113,7 @@ class ExperimentConfigResolver:
                 ),
                 policies=tuple(policies_raw),
                 outputs_root=Path(outputs_raw),
+                preprocessed_root=Path(preprocessed_raw),
             )
         except (KeyError, ValueError, ValidationError, ConfigurationError) as exc:
             if isinstance(exc, ConfigurationError):

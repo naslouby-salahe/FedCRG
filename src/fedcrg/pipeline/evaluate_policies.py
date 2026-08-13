@@ -74,7 +74,7 @@ class EvaluatePolicies:
 
     @staticmethod
     def _protocol(config: ExperimentConfig) -> ClientEvaluation:
-        cache_path = config.outputs_root / "cache" / "precomputed" / "readiness_plans.json"
+        cache_path = config.outputs_root / "cache" / "analysis" / "readiness_plans.json"
         return ClientEvaluation.with_persistent_readiness_cache(cache_path)
 
     @staticmethod

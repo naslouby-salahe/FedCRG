@@ -102,6 +102,7 @@ def _config(root: Path) -> ExperimentConfig:
         statistics=primary_statistics(),
         policies=(PolicyId.FEDCRG,),
         outputs_root=root,
+        preprocessed_root=root / "preprocessed",
     )
 
 

@@ -157,7 +157,7 @@ def test_train_score_evaluate_cache_pipeline(tmp_path: Path) -> None:
         config, prepared, model_path, 11, training_manifest
     )
 
-    readiness_cache_path = config.outputs_root / "cache" / "precomputed" / "readiness_plans.json"
+    readiness_cache_path = config.outputs_root / "cache" / "analysis" / "readiness_plans.json"
     ReadinessPlanCache(readiness_cache_path).precompute(
         config.dataset.split.calibration_benign,
         config.protocol.band,

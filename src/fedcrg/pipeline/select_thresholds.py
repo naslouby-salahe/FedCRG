@@ -36,7 +36,7 @@ class ProtocolTablePrecomputer:
         config: ExperimentConfig,
         root: Path | None = None,
     ) -> tuple[Path, Path]:
-        target_root = root or config.outputs_root / "cache" / "precomputed"
+        target_root = root or config.outputs_root / "cache" / "analysis"
         target_root.mkdir(parents=True, exist_ok=True)
         readiness_path = target_root / "readiness_plans.json"
         mismatch_path = target_root / "mismatch_cutoffs.json"

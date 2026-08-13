@@ -37,10 +37,12 @@ matrix IDs (`docs/FedCRG Audit Matrix.md`).
 
 - C1. `pipeline/` package = second orchestration layer; one execution spine must live in
   `experiments/`. Matrix: R02, E09.
-- C2. Preprocessed data at `outputs/cache/datasets/`; must be `data/preprocessed/`.
-  Matrix: R06, D05, D12.
-- C3. Outputs layout missing `logs/` and `monitoring/`; has `cache/datasets` (forbidden)
-  and `cache/precomputed` (not in target; should be `cache/analysis/`). Matrix: R08.
+- C2. ~~Preprocessed data at `outputs/cache/datasets/`~~ RESOLVED 2026-08-13:
+  materialization moved to `config.preprocessed_root` (default `data/preprocessed/`);
+  `outputs/cache/datasets/` removed from tree. Matrix: R06, D05, D12.
+- C3. ~~Outputs layout~~ RESOLVED 2026-08-13: `outputs/logs/` + `outputs/monitoring/`
+  added; `cache/precomputed/` renamed to `cache/analysis/`; README and .gitignore
+  updated. Matrix: R08.
 - C4. No `results/`, no campaign, no `fedcrg results build|verify`. Matrix: R09, L04, L05.
 - C5. Package names deviate from target (`config/`, `data/`, `method/`+`thresholds/`,
   `runtime.py`, `cli/`). Matrix: R01.

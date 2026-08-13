@@ -18,10 +18,10 @@ to match the actual tree and CLI.
 
 ## Batch 3 — Preprocessed root and outputs layout (matrix R06, R08, D05, D12, C2, C3)
 
-1. Move prepared-dataset materialization to `data/preprocessed/<dataset>/<identity>/`.
-2. Restructure outputs: add `logs/`, `monitoring/`; rename `cache/precomputed/` ->
-   `cache/analysis/`; remove `cache/datasets/`.
-3. Update integration/contract tests to assert the new roots.
+DONE 2026-08-13: `data/preprocessed/<dataset_id>/<identity>/` materialization root
+(`config.preprocessed_root`), `outputs/logs/` + `outputs/monitoring/` skeletons,
+`cache/precomputed/` -> `cache/analysis/`, `outputs/cache/datasets/` removed; outputs
+README/.gitignore updated.
 
 ## Batch 4 — Logging, monitoring, GPU (matrix L07, L08, L10, L11, D2-D5)
 

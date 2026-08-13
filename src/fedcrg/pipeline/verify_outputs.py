@@ -57,9 +57,9 @@ class VerifyOutputs:
         """Reconcile the frozen readiness/mismatch tables against their locked formulas."""
 
         problems: list[str] = []
-        precomputed_root = outputs_root / "cache" / "precomputed"
-        readiness_path = precomputed_root / "readiness_plans.json"
-        mismatch_path = precomputed_root / "mismatch_cutoffs.json"
+        analysis_root = outputs_root / "cache" / "analysis"
+        readiness_path = analysis_root / "readiness_plans.json"
+        mismatch_path = analysis_root / "mismatch_cutoffs.json"
 
         if not readiness_path.is_file():
             problems.append(f"missing readiness table: {readiness_path}")

@@ -105,13 +105,7 @@ class PrepareData:
         self._validate_source_identity_count(config, discovered)
         sources = tuple(source_file_manifest(path, adapter.root) for path in adapter.source_files())
 
-        final_root = (
-            config.outputs_root
-            / "cache"
-            / "datasets"
-            / config.dataset.id.value
-            / config.data_spec_hash[:16]
-        )
+        final_root = config.preprocessed_root / config.dataset.id.value / config.data_spec_hash[:16]
         if final_root.exists():
             raise FileExistsError(
                 f"Prepared dataset cache already exists and is immutable: {final_root}"

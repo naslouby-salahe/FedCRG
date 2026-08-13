@@ -41,6 +41,7 @@ class ExperimentConfig(BaseModel):
     statistics: StatisticsConfig
     policies: tuple[PolicyId, ...]
     outputs_root: Path = Path("outputs")
+    preprocessed_root: Path = Path("data/preprocessed")
 
     @model_validator(mode="after")
     def validate_experiment_contract(self) -> ExperimentConfig:
@@ -71,7 +72,7 @@ class ExperimentConfig(BaseModel):
 
     def serialized_payload(self) -> str:
         """Stable scientific configuration, independent of output location."""
-        payload = self.model_dump(mode="json", exclude={"outputs_root"})
+        payload = self.model_dump(mode="json", exclude={"outputs_root", "preprocessed_root"})
         return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
     @property
