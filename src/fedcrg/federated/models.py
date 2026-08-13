@@ -1,23 +1,40 @@
-"""Typed federated-training results."""
+"""Typed federated-training diagnostics and manifests."""
 
 from dataclasses import dataclass
 
+from fedcrg.core.ids import ClientId, Sha256
+
+
 @dataclass(frozen=True, slots=True)
 class ClientRoundResult:
-    client_id: str
+    client_id: ClientId
     mean_loss: float
-    model_hash: str
+    record_presentations: int
+    optimizer_steps: int
+    model_hash: Sha256
+
 
 @dataclass(frozen=True, slots=True)
 class RoundResult:
     round_index: int
     learning_rate: float
-    selected_clients: tuple[str, ...]
+    selected_clients: tuple[ClientId, ...]
     client_results: tuple[ClientRoundResult, ...]
-    global_model_hash: str
+    mean_client_loss: float
+    minimum_client_loss: float
+    maximum_client_loss: float
+    parameter_update_norm: float
+    model_payload_bytes: int
+    round_communication_bytes: int
+    global_model_hash: Sha256
+
 
 @dataclass(frozen=True, slots=True)
 class TrainingResult:
     model_seed: int
     rounds: tuple[RoundResult, ...]
-    final_model_hash: str
+    final_model_hash: Sha256
+    trainable_parameter_count: int
+    model_payload_bytes: int
+    total_model_communication_bytes: int
+    round20_training_score_correlation: float | None
