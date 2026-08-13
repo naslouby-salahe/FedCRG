@@ -2,17 +2,9 @@
 
 from __future__ import annotations
 
-import numpy as np
-
 from fedcrg.core.enums import DataRole
 from fedcrg.core.exceptions import DataIntegrityError
 from fedcrg.data.models import ClientSplits
-
-
-def validate_numeric_frame(frame, feature_columns: list[str]) -> None:
-    values = frame[feature_columns].to_numpy(dtype=np.float64)
-    if not np.isfinite(values).all():
-        raise DataIntegrityError("Feature matrix contains NaN or infinite values")
 
 
 def validate_split_disjointness(splits: ClientSplits, row_id_column: str = "row_id") -> None:

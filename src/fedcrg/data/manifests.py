@@ -10,7 +10,6 @@ from typing import Iterable
 
 from fedcrg.core.enums import (
     CalibrationAssignmentMode,
-    ChronologyStatus,
     DataRole,
     DatasetId,
     FailureCode,
@@ -32,16 +31,6 @@ class EligibilityManifest:
     discovered_clients: tuple[ClientId, ...]
     eligible_clients: tuple[ClientId, ...]
     records: tuple[EligibilityRecord, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class SplitManifest:
-    dataset: DatasetId
-    client_id: ClientId
-    calibration_seed: CalibrationSeed
-    row_counts: tuple[tuple[DataRole, int], ...]
-    row_id_hashes: tuple[tuple[DataRole, Sha256], ...]
-    chronology: ChronologyStatus
 
 
 @dataclass(frozen=True, slots=True)

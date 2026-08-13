@@ -26,6 +26,7 @@ from fedcrg.metrics.classification import (
     recall,
     tpr,
 )
+from fedcrg.metrics.admission import summarize_admission
 from fedcrg.metrics.federation import aggregate_policy, assert_ranking_metric_invariance
 from fedcrg.metrics.operating_band import (
     absolute_fpr_error,
@@ -434,6 +435,10 @@ class EvaluatePolicies:
         )
         if federation is not None:
             atomic_write_json(root / "metrics" / "federation.json", federation)
+        atomic_write_json(
+            root / "metrics" / "admission.json",
+            summarize_admission(bundle.protocol_results),
+        )
         return decisions, metrics
 
     @staticmethod
