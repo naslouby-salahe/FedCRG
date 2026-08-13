@@ -14,7 +14,7 @@ from fedcrg.evaluation.evaluation_results import (
 
 
 LOCKED_UTILITY_MARGIN = -0.03
-"""The locked reliability/utility comparator margin (roadmap Claim Gate G3/G5)."""
+"""The locked reliability/utility comparator margin (Claim Gate G3/G5)."""
 
 
 def _mean_defined(values: list[float | None]) -> float | None:

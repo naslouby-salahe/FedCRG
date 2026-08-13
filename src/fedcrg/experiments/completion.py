@@ -287,11 +287,11 @@ class ExperimentCompletionAuditor:
         expected_by_experiment = _EXPECTED_CELLS_BY_EXPERIMENT[experiment_id]
         if expected_int != expected_by_experiment or observed != expected_by_experiment:
             problems.append(
-                f"cell ledger {observed}/{expected_int} != roadmap {expected_by_experiment}"
+                f"cell ledger {observed}/{expected_int} != pre-registered {expected_by_experiment}"
             )
         expected_trials = _EXPECTED_MONTE_CARLO_TRIALS_BY_EXPERIMENT[experiment_id]
         if int(payload.get("observed_monte_carlo_trials", 0)) != expected_trials:
-            problems.append("Monte-Carlo trial ledger does not match the roadmap")
+            problems.append("Monte-Carlo trial ledger does not match the pre-registered count")
         return ExperimentCompletion(
             experiment_id=experiment_id,
             complete=not problems,

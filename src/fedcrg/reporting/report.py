@@ -14,6 +14,7 @@ from fedcrg.analysis.split_stability import split_sensitivity
 from fedcrg.pipeline.verify_outputs import VerifyOutputs
 from fedcrg.artifacts.paths import RunLayout
 from fedcrg.artifacts.integrity import ArtifactVerifier
+from fedcrg.artifacts.json_io import as_json_dict, to_json_value
 from fedcrg.domain.enums import ExperimentId, ExperimentStatus
 
 
@@ -114,7 +115,10 @@ class ReportBuilder:
             encoding="utf-8",
         )
         sensitivity_path = reports_root / "split_sensitivity.csv"
-        pd.DataFrame.from_records(split_sensitivity(primary_records)).to_csv(
+        sensitivity_rows = [
+            as_json_dict(to_json_value(row)) for row in split_sensitivity(primary_records)
+        ]
+        pd.DataFrame.from_records(sensitivity_rows).to_csv(
             sensitivity_path,
             index=False,
         )

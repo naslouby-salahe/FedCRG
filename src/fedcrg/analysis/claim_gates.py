@@ -29,7 +29,7 @@ from fedcrg.pipeline.verify_outputs import VerifyOutputs
 
 @dataclass(frozen=True, slots=True)
 class ClaimGateEvidence:
-    """Evidence flags corresponding exactly to the roadmap claim-strength gates."""
+    """Evidence flags corresponding exactly to the pre-registered claim-strength gates."""
 
     novelty_recheck_current: bool
     statistical_core_integrity: bool
