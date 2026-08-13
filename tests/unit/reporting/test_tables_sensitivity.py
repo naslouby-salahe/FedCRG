@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from fedcrg.analysis.tables import PublicationTableBuilder
+from fedcrg.reporting.tables import PublicationTableBuilder
 
 
 def test_sensitivity_reads_cells_directory_not_a_single_results_file(tmp_path: Path) -> None:

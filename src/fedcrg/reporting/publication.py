@@ -9,8 +9,8 @@ from collections.abc import Callable
 
 import pandas as pd
 
-from fedcrg.analysis.decision_architecture import build_decision_architecture_figure
-from fedcrg.analysis.figures import (
+from fedcrg.reporting.decision_figure import build_decision_architecture_figure
+from fedcrg.reporting.figures import (
     assumption_stress,
     calibration_phase_transition,
     external_replication,
@@ -19,7 +19,7 @@ from fedcrg.analysis.figures import (
     readiness_frontier,
     reliability_utility_frontier,
 )
-from fedcrg.analysis.tables import PublicationTableBuilder
+from fedcrg.reporting.tables import PublicationTableBuilder
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import PolicyId
 

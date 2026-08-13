@@ -8,7 +8,7 @@ from collections.abc import Callable
 
 import numpy as np
 
-from fedcrg.analysis.benchmark import benchmark, configure_single_thread_execution
+from fedcrg.analysis.computational_benchmark import benchmark, configure_single_thread_execution
 from fedcrg.artifacts.environment import capture_environment
 from fedcrg.artifacts.experiment_results import ExperimentResultEnvelope
 from fedcrg.config.experiment_config import ExperimentConfig

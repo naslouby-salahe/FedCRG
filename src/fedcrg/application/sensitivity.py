@@ -28,7 +28,7 @@ from fedcrg.experiments.real_sensitivity import (
     source_order_blocks,
 )
 from fedcrg.experiments.registry import ExperimentRegistry
-from fedcrg.metrics.results import EvaluationBundle
+from fedcrg.evaluation.evaluation_results import EvaluationBundle
 from fedcrg.method.mismatch_detection import (
     FleetMismatchDecision,
     bonferroni_fleet_sensitivity,

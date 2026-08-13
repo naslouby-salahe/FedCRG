@@ -9,15 +9,15 @@ from pathlib import Path
 
 import numpy as np
 
-from fedcrg.analysis.claims import ClaimAssessment, ClaimGateEvidence, assess_claim_level
-from fedcrg.analysis.primary import FederationResultRecord, load_federation_results
+from fedcrg.analysis.claim_gates import ClaimAssessment, ClaimGateEvidence, assess_claim_level
+from fedcrg.analysis.policy_contrasts import FederationResultRecord, load_federation_results
 from fedcrg.artifacts.layout import RunLayout
 from fedcrg.artifacts.manifest import RunManifestStore
 from fedcrg.artifacts.serialization import atomic_write_json
 from fedcrg.artifacts.verification import ArtifactVerifier
 from fedcrg.domain.enums import ExperimentCode, ExperimentId, ExperimentStatus, PolicyId
 from fedcrg.experiments.completion import ExperimentCompletion, ExperimentCompletionAuditor
-from fedcrg.metrics.federation import utility_margin_satisfied
+from fedcrg.evaluation.federation_evaluation import utility_margin_satisfied
 
 
 @dataclass(frozen=True, slots=True)

@@ -76,7 +76,7 @@ def test_domain_is_dependency_free_from_outer_layers() -> None:
         "fedcrg.detectors",
         "fedcrg.experiments",
         "fedcrg.federation",
-        "fedcrg.metrics",
+        "fedcrg.evaluation",
         "fedcrg.method",
         "fedcrg.thresholds",
         "fedcrg.scoring",
@@ -109,7 +109,7 @@ def test_cli_never_imports_statistical_or_training_implementation_directly() -> 
         "fedcrg.federation",
         "fedcrg.detectors",
         "fedcrg.thresholds",
-        "fedcrg.metrics",
+        "fedcrg.evaluation",
     )
     violations: list[str] = []
     for path in _python_files(SRC / "cli"):

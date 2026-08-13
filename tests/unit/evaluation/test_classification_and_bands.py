@@ -1,8 +1,8 @@
 import numpy as np
 
 from fedcrg.domain.values import OperatingBand
-from fedcrg.metrics.classification import confusion_matrix
-from fedcrg.metrics.operating_band import band_error, high_excess
+from fedcrg.evaluation.confusion_matrix import confusion_matrix
+from fedcrg.evaluation.operating_band_metrics import band_error, high_excess
 
 
 def test_strict_threshold_operator_treats_equality_as_benign() -> None:

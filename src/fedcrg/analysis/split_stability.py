@@ -1,4 +1,4 @@
-"""Split-sensitivity stability metrics for thresholds and deployment states."""
+"""Split-sensitivity stability of thresholds, deployment states, and repeated splits."""
 
 from __future__ import annotations
 
@@ -6,7 +6,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from fedcrg.domain.enums import DecisionState
+from fedcrg.analysis.descriptive_statistics import split_sensitivity_summary
+from fedcrg.analysis.policy_contrasts import FederationResultRecord
+from fedcrg.domain.enums import DecisionState, PolicyId
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,3 +63,32 @@ def summarize_state_stability(states: tuple[DecisionState, ...]) -> StateStabili
             StateFrequency(state, count / total) for state, count in counts.items()
         ),
     )
+
+
+def split_sensitivity(
+    records: tuple[FederationResultRecord, ...],
+) -> list[dict[str, object]]:
+    """Summarize repeated role permutations without treating them as independent subjects."""
+
+    grouped: dict[tuple[int, PolicyId, str], list[float]] = {}
+    for row in records:
+        for metric in ("mebe", "high_excess", "attack_balanced_macro_tpr"):
+            value = getattr(row, metric)
+            if value is None:
+                continue
+            grouped.setdefault((row.model_seed, row.policy, metric), []).append(float(value))
+    rows: list[dict[str, object]] = []
+    for (model_seed, policy, metric), values in sorted(
+        grouped.items(),
+        key=lambda item: (item[0][0], item[0][1].value, item[0][2]),
+    ):
+        rows.append(
+            {
+                "model_seed": model_seed,
+                "policy": policy.value,
+                "metric": metric,
+                **split_sensitivity_summary(tuple(values)),
+                "calibration_split_count": len(values),
+            }
+        )
+    return rows

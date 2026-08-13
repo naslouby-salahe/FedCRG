@@ -6,7 +6,7 @@ Update this file as phases complete. Status values: TODO / IN_PROGRESS / DONE.
 - [x] Phase 2: data + detectors          STATUS: DONE
 - [x] Phase 3: federation + scoring      STATUS: DONE
 - [x] Phase 4: method + thresholds       STATUS: DONE
-- [ ] Phase 5: evaluation + analysis/reporting split   STATUS: TODO
+- [x] Phase 5: evaluation + analysis/reporting split   STATUS: DONE
 - [ ] Phase 6: application/ removed -> pipeline/ + experiments/definitions/   STATUS: TODO
 - [ ] Phase 7: artifacts consolidation   STATUS: TODO
 - [ ] Phase 8: reporting + cli           STATUS: TODO
@@ -169,6 +169,53 @@ Do not run full pytest/mypy/ruff after every micro-edit -- only at phase complet
 - Validation: ruff check/format clean; mypy (py312 override) reports 0 issues across
   method/, thresholds/, config/, and application/evaluate.py; full pytest -n auto suite
   passes (130 tests -- one net-new test added alongside the registry-removal rewrite).
+
+## Phase 5 completion notes (evaluation + analysis/reporting split)
+- metrics/ package renamed to evaluation/:
+  - classification.py split: ConfusionMatrix + confusion_matrix() -> evaluation/
+    confusion_matrix.py; fpr/tpr/precision/recall/f1/balanced_accuracy -> evaluation/
+    classification_metrics.py.
+  - operating_band.py -> operating_band_metrics.py, attack_balanced.py ->
+    attack_balanced_metrics.py, ranking.py -> ranking_metrics.py, admission.py ->
+    admission_metrics.py, federation.py -> federation_evaluation.py, results.py ->
+    evaluation_results.py. metrics/ package deleted.
+- analysis/ package boundary fixed per prompt.md's explicit "analysis/ must not own
+  publication rendering" rule -- the four purely-rendering files (decision_architecture.py,
+  figures.py, publication.py, tables.py) moved to a new top-level reporting/ package
+  (decision_figure.py, figures.py, publication.py, tables.py), which prompt.md's target tree
+  already names explicitly. This was the single biggest package-boundary violation flagged
+  in the pre-migration audit (current_state.md section on analysis/).
+- Remaining analysis/ files renamed to their target names: benchmark.py ->
+  computational_benchmark.py, claims.py -> claim_gates.py, communication.py ->
+  communication_cost.py, robustness.py -> robustness_analysis.py.
+- analysis/statistics.py split by cohesion: DescriptiveSummary/describe/
+  split_sensitivity_summary -> descriptive_statistics.py; PairedBootstrapInterval/
+  paired_model_seed_bootstrap -> paired_bootstrap.py (two independent statistical kernels
+  that happened to share a file only because they're both "statistics").
+- analysis/primary.py split: FederationResultRecord/load_federation_results/
+  confirmatory_contrasts/ContrastMetricResult/PolicyContrastResult (the primary contrast
+  computation) -> new policy_contrasts.py; the split_sensitivity() function merged into
+  analysis/stability.py (renamed split_stability.py) alongside ThresholdStability/
+  StateStability, since both are split-sensitivity/stability responsibilities per prompt.md's
+  target tree -- split_stability.py imports FederationResultRecord from policy_contrasts.py.
+- Bulk-updated ~15 call sites across src/ and tests/ for the metrics.* -> evaluation.* and
+  analysis.{primary,statistics,stability,benchmark,claims,communication,robustness,
+  decision_architecture,figures,publication,tables} -> new module renames, including
+  tests/contract/test_architecture_boundaries.py's forbidden-prefix lists
+  ("fedcrg.metrics" -> "fedcrg.evaluation").
+- tests/unit/metrics/ -> tests/unit/evaluation/ (test_metrics.py ->
+  test_classification_and_bands.py, test_ranking_attack.py kept). tests/unit/analysis/
+  test_communication_and_stability.py -> test_communication_cost_and_split_stability.py.
+  tests/unit/analysis/test_tables_sensitivity.py -> new tests/unit/reporting/
+  test_tables_sensitivity.py (it tests PublicationTableBuilder, a reporting/ concern).
+- application/report.py, application/claims.py, application/synthetic.py,
+  application/benchmark.py, cli/evaluation.py, data/preprocessing.py (a comment only) all
+  had their imports repointed; application/*.py itself is not yet moved to pipeline/
+  (deferred to Phase 6) but now correctly depends on the new analysis/evaluation/reporting
+  module names.
+- Validation: ruff check/format clean; mypy (py312 override) shows only the one pre-existing
+  error in reporting/publication.py:297 (untyped-def, present before this phase too, not
+  newly introduced); full pytest -n auto suite passes (130 tests, unchanged).
 
 ## Notes / open decisions to resolve during implementation
 - config/validate.py must not import thresholds/ (downward dependency violation in old

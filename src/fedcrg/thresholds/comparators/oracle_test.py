@@ -5,8 +5,9 @@ from __future__ import annotations
 import numpy as np
 
 from fedcrg.domain.values import OperatingBand
-from fedcrg.metrics.classification import confusion_matrix, tpr
-from fedcrg.metrics.operating_band import band_error
+from fedcrg.evaluation.classification_metrics import tpr
+from fedcrg.evaluation.confusion_matrix import confusion_matrix
+from fedcrg.evaluation.operating_band_metrics import band_error
 from fedcrg.thresholds.evidence import FinalTestEvidence
 
 

@@ -1,11 +1,11 @@
 from pathlib import Path
 
-from fedcrg.analysis.communication import (
+from fedcrg.analysis.communication_cost import (
     model_communication,
     preprocessing_communication,
     threshold_policy_communication,
 )
-from fedcrg.analysis.stability import summarize_state_stability, summarize_threshold_stability
+from fedcrg.analysis.split_stability import summarize_state_stability, summarize_threshold_stability
 from fedcrg.config.resolve import ExperimentConfigResolver
 from fedcrg.domain.enums import DecisionState, PolicyId
 

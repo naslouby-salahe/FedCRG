@@ -16,26 +16,29 @@ from fedcrg.domain.enums import (
     PolicyId,
 )
 from fedcrg.domain.identifiers import CalibrationSeed, ClientId, RunId, Sha256
-from fedcrg.metrics.attack_balanced import attack_balanced_tpr
-from fedcrg.metrics.classification import (
+from fedcrg.evaluation.attack_balanced_metrics import attack_balanced_tpr
+from fedcrg.evaluation.classification_metrics import (
     balanced_accuracy,
-    confusion_matrix,
     f1,
     fpr,
     precision,
     recall,
     tpr,
 )
-from fedcrg.metrics.admission import summarize_admission
-from fedcrg.metrics.federation import aggregate_policy, assert_ranking_metric_invariance
-from fedcrg.metrics.operating_band import (
+from fedcrg.evaluation.confusion_matrix import confusion_matrix
+from fedcrg.evaluation.admission_metrics import summarize_admission
+from fedcrg.evaluation.federation_evaluation import (
+    aggregate_policy,
+    assert_ranking_metric_invariance,
+)
+from fedcrg.evaluation.operating_band_metrics import (
     absolute_fpr_error,
     band_error,
     band_violation,
     high_excess,
 )
-from fedcrg.metrics.ranking import auprc, auroc
-from fedcrg.metrics.results import ClientMetrics, EvaluationBundle, PolicyEvaluation
+from fedcrg.evaluation.ranking_metrics import auprc, auroc
+from fedcrg.evaluation.evaluation_results import ClientMetrics, EvaluationBundle, PolicyEvaluation
 from fedcrg.method.client_evaluation import ClientEvaluation
 from fedcrg.method.mismatch_detection import clopper_pearson_interval
 from fedcrg.method.results import ClientEvaluationResult

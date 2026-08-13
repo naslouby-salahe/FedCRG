@@ -68,7 +68,7 @@ def report_build_publication(
     destination: Path | None,
 ) -> None:
     """Build the manuscript Tables 1-8 and Figures 1-8 from immutable evidence."""
-    from fedcrg.analysis.publication import PublicationPackageBuilder
+    from fedcrg.reporting.publication import PublicationPackageBuilder
 
     package = PublicationPackageBuilder().build(
         config=load_config(config_path),

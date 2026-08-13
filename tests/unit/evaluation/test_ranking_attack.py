@@ -1,7 +1,7 @@
 import numpy as np
 
-from fedcrg.metrics.attack_balanced import attack_balanced_tpr
-from fedcrg.metrics.ranking import auprc, auroc
+from fedcrg.evaluation.attack_balanced_metrics import attack_balanced_tpr
+from fedcrg.evaluation.ranking_metrics import auprc, auroc
 
 
 def test_ranking_metrics_are_perfect_for_separable_scores() -> None:

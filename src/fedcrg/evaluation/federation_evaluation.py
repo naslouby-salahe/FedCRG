@@ -6,7 +6,11 @@ import numpy as np
 
 from fedcrg.domain.enums import PolicyEvaluationStatus, PolicyId
 from fedcrg.domain.identifiers import ClientId
-from fedcrg.metrics.results import FederationMetrics, PolicyEvaluation, UtilityAssessment
+from fedcrg.evaluation.evaluation_results import (
+    FederationMetrics,
+    PolicyEvaluation,
+    UtilityAssessment,
+)
 
 
 LOCKED_UTILITY_MARGIN = -0.03

@@ -1,4 +1,4 @@
-"""Fixed-federation primary contrasts and split-sensitivity analysis from run evidence."""
+"""Fixed-federation primary contrasts against locked comparator policies."""
 
 from __future__ import annotations
 
@@ -6,13 +6,8 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from fedcrg.analysis.statistics import (
-    DescriptiveSummary,
-    PairedBootstrapInterval,
-    describe,
-    paired_model_seed_bootstrap,
-    split_sensitivity_summary,
-)
+from fedcrg.analysis.descriptive_statistics import DescriptiveSummary, describe
+from fedcrg.analysis.paired_bootstrap import PairedBootstrapInterval, paired_model_seed_bootstrap
 from fedcrg.domain.enums import PolicyId
 
 
@@ -144,32 +139,3 @@ def confirmatory_contrasts(
             )
         results.append(PolicyContrastResult(comparator, tuple(metrics)))
     return tuple(results)
-
-
-def split_sensitivity(
-    records: tuple[FederationResultRecord, ...],
-) -> list[dict[str, object]]:
-    """Summarize repeated role permutations without treating them as independent subjects."""
-
-    grouped: dict[tuple[int, PolicyId, str], list[float]] = {}
-    for row in records:
-        for metric in ("mebe", "high_excess", "attack_balanced_macro_tpr"):
-            value = getattr(row, metric)
-            if value is None:
-                continue
-            grouped.setdefault((row.model_seed, row.policy, metric), []).append(float(value))
-    rows: list[dict[str, object]] = []
-    for (model_seed, policy, metric), values in sorted(
-        grouped.items(),
-        key=lambda item: (item[0][0], item[0][1].value, item[0][2]),
-    ):
-        rows.append(
-            {
-                "model_seed": model_seed,
-                "policy": policy.value,
-                "metric": metric,
-                **split_sensitivity_summary(tuple(values)),
-                "calibration_split_count": len(values),
-            }
-        )
-    return rows

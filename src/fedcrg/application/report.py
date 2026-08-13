@@ -8,11 +8,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from fedcrg.analysis.primary import (
-    confirmatory_contrasts,
-    load_federation_results,
-    split_sensitivity,
-)
+from fedcrg.analysis.policy_contrasts import confirmatory_contrasts, load_federation_results
+from fedcrg.analysis.split_stability import split_sensitivity
 from fedcrg.application.verify import VerifyOutputs
 from fedcrg.artifacts.layout import RunLayout
 from fedcrg.artifacts.verification import ArtifactVerifier

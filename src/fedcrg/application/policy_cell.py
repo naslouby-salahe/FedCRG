@@ -16,7 +16,7 @@ from fedcrg.artifacts.training import TrainingManifestStore
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import CalibrationAssignmentMode, DatasetId, PolicyId
 from fedcrg.domain.identifiers import CalibrationSeed, RunId, Sha256
-from fedcrg.metrics.results import EvaluationBundle, FederationMetrics
+from fedcrg.evaluation.evaluation_results import EvaluationBundle, FederationMetrics
 from fedcrg.scoring.cache import ScoreCache
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from fedcrg.analysis.robustness import (
+from fedcrg.analysis.robustness_analysis import (
     RobustnessCell,
     calibration_shift_stress,
     temporal_dependence_stress,

@@ -6,7 +6,8 @@ accidentally enter benign-only threshold-comparator code.
 
 from __future__ import annotations
 
-from fedcrg.metrics.classification import confusion_matrix, f1
+from fedcrg.evaluation.classification_metrics import f1
+from fedcrg.evaluation.confusion_matrix import confusion_matrix
 from fedcrg.thresholds.evidence import SupervisedDevelopmentEvidence
 
 

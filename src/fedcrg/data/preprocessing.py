@@ -27,7 +27,7 @@ _METADATA = {
     "capture_time",
 }
 
-# Matches the float64 serialization convention in fedcrg.analysis.communication.
+# Matches the float64 serialization convention in fedcrg.analysis.communication_cost.
 _FLOAT64_BYTES = 8
 
 
