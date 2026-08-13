@@ -11,7 +11,7 @@ from fedcrg.domain.enums import DetectorId, ExperimentId, PolicyId
 from fedcrg.experiments.definitions.synthetic import RunSyntheticExperiments
 from fedcrg.experiments.planning import ExperimentPlanner
 from fedcrg.pipeline.train_detector import TrainDetector
-from fedcrg.runtime import load_config
+from fedcrg.config.resolve import load_config
 
 
 @click.group(name="experiment")

@@ -8,7 +8,7 @@ import click
 
 from fedcrg.pipeline.compute_scores import ComputeScores
 from fedcrg.pipeline.select_thresholds import ProtocolTablePrecomputer
-from fedcrg.runtime import load_config
+from fedcrg.config.resolve import load_config
 
 
 @click.group(name="tables")

@@ -23,18 +23,20 @@ from fedcrg.cli.experiments import (
     sensitivity_group,
     synthetic_group,
 )
+from fedcrg.cli.monitoring import monitor_command
 from fedcrg.cli.reporting import report_group
 from fedcrg.cli.scoring import score_command, tables_group
 from fedcrg.cli.training import train_command
 from fedcrg.cli.verification import verify_command
-from fedcrg.runtime import configure_logging, load_config
+from fedcrg.config.resolve import load_config
+from fedcrg.runtime.logging import configure_logging
 
 
 @click.group()
 @click.version_option(package_name="fedcrg")
 def cli() -> None:
     """FedCRG reproducible research tooling."""
-    configure_logging()
+    configure_logging(logs_root=Path("outputs/logs"))
 
 
 @cli.command(name="doctor")
@@ -84,6 +86,7 @@ cli.add_command(benchmark_command)
 cli.add_command(report_group)
 cli.add_command(experiment_group)
 cli.add_command(verify_command)
+cli.add_command(monitor_command)
 
 if __name__ == "__main__":
     cli()

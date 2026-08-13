@@ -45,18 +45,22 @@ matrix IDs (`docs/FedCRG Audit Matrix.md`).
   updated. Matrix: R08.
 - C4. No `results/`, no campaign, no `fedcrg results build|verify`. Matrix: R09, L04, L05.
 - C5. Package names deviate from target (`config/`, `data/`, `method/`+`thresholds/`,
-  `runtime.py`, `cli/`). Matrix: R01.
+  `runtime.py`->runtime/ done in b4; `cli/`). Matrix: R01.
 
 ## D. CLI / logging / monitoring (prompt §16-§18, §34)
 
-- D1. CLI groups differ from target; missing `campaign`, `results`, `monitor`,
+- D1. CLI groups differ from target; missing `campaign`, `results`,
   `data status`, `experiment validate|run`. Matrix: L01-L06.
-- D2. Logs go to stderr only; no persistence under `outputs/logs/`. Matrix: L07.
+- D2. ~~Logs go to stderr only~~ RESOLVED 2026-08-13: file handler writes
+  `outputs/logs/fedcrg.log`; `runtime.py` split into `runtime/{logging,gpu,monitoring}.py`.
+  Matrix: L07.
 - D3. No Rich console progress for long runs. Matrix: L08.
-- D4. No resource telemetry (RAM/CPU/GPU/VRAM/stage timing), no `outputs/monitoring/`,
-  no `fedcrg monitor`. Matrix: L10, L06.
-- D5. GPU: device honored, but no device/VRAM logging, no explicit CUDA-required guard,
-  no inference_mode. Matrix: L11.
+- D4. ~~No resource telemetry / fedcrg monitor~~ RESOLVED 2026-08-13: `ResourceMonitor`
+  (psutil + torch CUDA) writes `outputs/monitoring/telemetry.jsonl`; `fedcrg monitor`
+  streams live samples; campaign telemetry hook pending Batch 5. Matrix: L10, L06.
+- D5. ~~GPU: no device logging / no CUDA-required guard / no inference_mode~~ RESOLVED
+  2026-08-13: `resolve_compute_device` refuses silent CPU fallback; device name/VRAM/peak
+  logged; `torch.inference_mode()` scoring; device required (no default). Matrix: L11.
 
 ## E. Typing / tests / tooling (prompt §28-§30)
 

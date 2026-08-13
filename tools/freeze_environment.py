@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from fedcrg.artifacts.environment_lock import EnvironmentLocker
+from fedcrg.artifacts.environment import EnvironmentLocker
 
 
 if __name__ == "__main__":

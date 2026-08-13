@@ -23,3 +23,6 @@ Baseline (before any changes in this effort, 2026-08-13):
 |-------|---------|--------|------|
 | baseline | pytest; pyright | 125 passed; 0 errors | 2026-08-13 |
 | b1 (config ownership) | pytest; pyright; ruff check; ruff format --check | 125 passed; 0 errors; 0 warnings; clean | 2026-08-13 |
+| b2 (vocabulary) | pytest; pyright; ruff | 125 passed; clean | 2026-08-13 |
+| b3 (preprocessed root + outputs layout) | pytest; pyright; ruff | 126 passed; clean | 2026-08-13 |
+| b4 (logging/monitoring/GPU) | pytest; pyright; ruff; fedcrg monitor --samples 2 | 133 passed; telemetry.jsonl + fedcrg.log written | 2026-08-13 |

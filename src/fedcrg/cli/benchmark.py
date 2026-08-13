@@ -7,7 +7,7 @@ from pathlib import Path
 import click
 
 from fedcrg.analysis.computational_benchmark import RunBenchmark
-from fedcrg.runtime import load_config
+from fedcrg.config.resolve import load_config
 
 
 @click.command(name="benchmark")

@@ -14,6 +14,7 @@ from fedcrg.config.load import load_yaml
 from fedcrg.config.method_config import ProtocolConfig
 from fedcrg.config.statistics_config import StatisticsConfig
 from fedcrg.config.training_config import RandomnessConfig, TrainingConfig
+from fedcrg.config.validate import validate_experiment_config
 from fedcrg.domain.enums import DetectorId, ExperimentId
 from fedcrg.domain.errors import ConfigurationError
 
@@ -119,3 +120,9 @@ class ExperimentConfigResolver:
             if isinstance(exc, ConfigurationError):
                 raise
             raise ConfigurationError(f"Invalid experiment configuration {path}: {exc}") from exc
+
+
+def load_config(path: Path | str) -> ExperimentConfig:
+    config = ExperimentConfigResolver().resolve(path)
+    validate_experiment_config(config)
+    return config

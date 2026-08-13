@@ -25,11 +25,10 @@ README/.gitignore updated.
 
 ## Batch 4 — Logging, monitoring, GPU (matrix L07, L08, L10, L11, D2-D5)
 
-1. `runtime/logging.py` with file handler to `outputs/logs/`.
-2. Monitoring sampler (psutil + torch CUDA) writing `outputs/monitoring/`; `fedcrg
-   monitor`; campaign hook.
-3. GPU: device logging, explicit CUDA guard, inference_mode, VRAM logging.
-4. Add deps (psutil, rich) + requirements.lock update.
+DONE 2026-08-13: `runtime/{logging,gpu,monitoring}.py` package; file logs to
+`outputs/logs/`; `fedcrg monitor` + telemetry.jsonl; CUDA-required guard, device/VRAM
+logging, `torch.inference_mode()` scoring; psutil dep; requirements.lock updated;
+runtime unit tests added. Remaining: Rich progress (L08) lands with campaign work.
 
 ## Batch 5 — Campaign and results (matrix R09, L04, L05, P03-P05, C4)
 

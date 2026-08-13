@@ -8,7 +8,7 @@ from pathlib import Path
 import click
 
 from fedcrg.reporting.report import ReportBuilder
-from fedcrg.runtime import load_config
+from fedcrg.config.resolve import load_config
 
 
 @click.group(name="report")

@@ -26,7 +26,7 @@ from fedcrg.domain.enums import (
 )
 from fedcrg.domain.errors import DataIntegrityError
 from fedcrg.domain.identifiers import CalibrationSeed, ClientId, Sha256
-from fedcrg.runtime import get_logger
+from fedcrg.runtime.logging import get_logger
 from fedcrg.data.diad import DiadAdapter
 from fedcrg.data.eligibility import (
     ClientEligibilityEvaluator,

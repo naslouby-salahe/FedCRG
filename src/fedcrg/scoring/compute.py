@@ -8,6 +8,7 @@ import torch
 from fedcrg.domain.enums import ComputeDeviceId, DatasetId
 from fedcrg.domain.identifiers import ModelSeed, Sha256
 from fedcrg.detectors.detector import DetectorModel
+from fedcrg.runtime.gpu import resolve_compute_device
 from fedcrg.scoring.calibration_scores import ClientScoreInput, ClientScoreSet, RoleScores
 from fedcrg.scoring.score_records import ScoreManifest
 
@@ -19,15 +20,15 @@ class ScoreComputer:
         self,
         model: DetectorModel,
         values: np.ndarray,
-        device: ComputeDeviceId = ComputeDeviceId.CPU,
+        device: ComputeDeviceId,
         batch_size: int = 65_536,
     ) -> np.ndarray:
         if batch_size <= 0:
             raise ValueError("Scoring batch_size must be positive")
-        torch_device = torch.device(device.value)
+        torch_device = resolve_compute_device(device)
         model = model.to(torch_device).eval()
         result: list[np.ndarray] = []
-        with torch.no_grad():
+        with torch.inference_mode():
             for start in range(0, len(values), batch_size):
                 batch = torch.as_tensor(
                     values[start : start + batch_size],
@@ -48,7 +49,7 @@ class ScoreComputer:
         dataset_manifest_hash: Sha256,
         preprocessing_hash: Sha256,
         clients: tuple[ClientScoreInput, ...],
-        device: ComputeDeviceId = ComputeDeviceId.CPU,
+        device: ComputeDeviceId,
     ) -> ScoreManifest:
         scored_clients: list[ClientScoreSet] = []
         for client in clients:

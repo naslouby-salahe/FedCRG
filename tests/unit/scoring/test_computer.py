@@ -3,7 +3,7 @@ import hashlib
 import numpy as np
 
 from fedcrg.config.detector_config import AutoencoderConfig
-from fedcrg.domain.enums import DataRole, DatasetId
+from fedcrg.domain.enums import ComputeDeviceId, DataRole, DatasetId
 from fedcrg.domain.identifiers import ClientId, ModelSeed, RowId, Sha256
 from fedcrg.detectors.autoencoder import Autoencoder
 from fedcrg.scoring.compute import ScoreComputer
@@ -37,6 +37,7 @@ def test_score_computer_emits_float64_manifest() -> None:
         _SOME_HASH,
         _SOME_HASH,
         (client,),
+        ComputeDeviceId.CPU,
     )
     scores = manifest.client(client_id).get(DataRole.TRAIN)
     assert scores.values.dtype == np.float64

@@ -12,7 +12,8 @@ from torch.utils.data import TensorDataset
 
 from fedcrg.config.training_config import TrainingConfig
 from fedcrg.domain.identifiers import ClientId, ModelSeed, Sha256
-from fedcrg.runtime import get_logger
+from fedcrg.runtime.gpu import log_device_capabilities, resolve_compute_device
+from fedcrg.runtime.logging import get_logger
 from fedcrg.detectors.detector import DetectorModel
 from fedcrg.federation.client import FederatedClient
 from fedcrg.federation.training_results import RoundResult, TrainingResult
@@ -40,7 +41,8 @@ class FederatedTrainer:
 
         seed = ModelSeed(int(model_seed))
         self._configure_determinism(seed, config)
-        device = torch.device(config.device.value)
+        device = resolve_compute_device(config.device)
+        log_device_capabilities(_LOGGER)
         client_ids = tuple(sorted(datasets))
         clients = {
             client_id: FederatedClient(client_id, datasets[client_id], device)

@@ -14,7 +14,7 @@ from fedcrg.artifacts.manifests import TrainingManifestStore
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import DataRole
 from fedcrg.domain.identifiers import AttackGroupId, ModelSeed, RowId, Sha256
-from fedcrg.runtime import get_logger
+from fedcrg.runtime.logging import get_logger
 from fedcrg.data.prepare import PreparedDatasetManifest
 from fedcrg.detectors.detector import DetectorModel
 from fedcrg.scoring.cache import ScoreCache, ScoreCacheIdentity

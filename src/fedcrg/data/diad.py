@@ -17,7 +17,7 @@ from fedcrg.data.splits import stable_row_id
 from fedcrg.domain.enums import ChronologyStatus, DatasetId, FailureCode
 from fedcrg.domain.errors import DataIntegrityError
 from fedcrg.domain.identifiers import ClientId
-from fedcrg.runtime import get_logger
+from fedcrg.runtime.logging import get_logger
 
 _LOGGER = get_logger(__name__)
 

@@ -8,7 +8,7 @@ from pathlib import Path
 import click
 
 from fedcrg.pipeline.train_detector import TrainDetector
-from fedcrg.runtime import load_config
+from fedcrg.config.resolve import load_config
 
 
 @click.command(name="train")
