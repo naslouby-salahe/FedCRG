@@ -1,4 +1,5 @@
 id: nbaiot
+feature_contract: nbaiot_locked_115
 source_version: "UCI-442"
 parser_version: "1"
 feature_count: 115
