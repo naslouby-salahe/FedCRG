@@ -9,7 +9,7 @@ from pathlib import Path
 
 from fedcrg.artifacts.layout import RunLayout
 from fedcrg.artifacts.manifest import RunManifest, RunManifestStore
-from fedcrg.core.enums import ExperimentId, ExperimentStatus, PolicyId
+from fedcrg.core.enums import ExperimentCode, ExperimentId, ExperimentStatus, PolicyId
 from fedcrg.experiments.definitions import SECOND_DETECTOR_POLICIES
 from fedcrg.experiments.registry import ExperimentRegistry
 
@@ -22,7 +22,7 @@ _SECOND_DETECTOR_CALIBRATION_SEEDS = tuple(range(1000, 1010))
 
 @dataclass(frozen=True, slots=True)
 class ExperimentCompletion:
-    protocol_code: str
+    protocol_code: ExperimentCode
     complete: bool
     expected_cells: int | None
     observed_cells: int
@@ -88,19 +88,41 @@ class ExperimentCompletionAuditor:
                         definition.policies,
                     )
                 )
-            elif code in {"S1", "S2", "S3", "S4", "S5", "S6", "R13"}:
+            elif code in {
+                ExperimentCode.S1,
+                ExperimentCode.S2,
+                ExperimentCode.S3,
+                ExperimentCode.S4,
+                ExperimentCode.S5,
+                ExperimentCode.S6,
+                ExperimentCode.R13,
+            }:
                 rows.append(self._aggregate_experiment_workload(outputs_root, code))
-            elif code in {"R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9"}:
+            elif code in {
+                ExperimentCode.R2,
+                ExperimentCode.R3,
+                ExperimentCode.R4,
+                ExperimentCode.R5,
+                ExperimentCode.R6,
+                ExperimentCode.R9,
+            }:
                 rows.append(
                     self._real_sensitivity_workload(
                         outputs_root,
                         code,
-                        expected_datasets={"nbaiot"},
                         expected_model_seeds=_PRIMARY_MODEL_SEEDS,
                         expected_calibration_seed=1000,
                     )
                 )
-            elif code == "R12":
+            elif code in {ExperimentCode.R7, ExperimentCode.R8}:
+                rows.append(
+                    self._single_seed_sensitivity_workload(
+                        outputs_root,
+                        code,
+                        expected_calibration_seed=1000,
+                    )
+                )
+            elif code is ExperimentCode.R12:
                 rows.append(self._source_order_workload(outputs_root))
             else:
                 rows.append(
@@ -129,7 +151,7 @@ class ExperimentCompletionAuditor:
 
     def _policy_run_workload(
         self,
-        code: str,
+        code: ExperimentCode,
         experiment_id: ExperimentId,
         runs: tuple[tuple[RunManifest, Path], ...],
         model_seeds: tuple[int, ...],
@@ -158,7 +180,7 @@ class ExperimentCompletionAuditor:
 
     def _external_policy_workload(
         self,
-        code: str,
+        code: ExperimentCode,
         experiment_id: ExperimentId,
         runs: tuple[tuple[RunManifest, Path], ...],
         model_seeds: tuple[int, ...],
@@ -227,7 +249,7 @@ class ExperimentCompletionAuditor:
     @staticmethod
     def _aggregate_experiment_workload(
         outputs_root: Path,
-        code: str,
+        code: ExperimentCode,
     ) -> ExperimentCompletion:
         result_path = outputs_root / "experiments" / code / "results.json"
         if not result_path.is_file():
@@ -242,24 +264,24 @@ class ExperimentCompletionAuditor:
         expected = payload.get("expected_cells")
         expected_int = int(expected) if isinstance(expected, int) else None
         expected_by_code = {
-            "S1": 32,
-            "S2": 36,
-            "S3": 12,
-            "S4": 5,
-            "S5": 12,
-            "S6": 45,
-            "R13": 4,
+            ExperimentCode.S1: 32,
+            ExperimentCode.S2: 36,
+            ExperimentCode.S3: 12,
+            ExperimentCode.S4: 5,
+            ExperimentCode.S5: 12,
+            ExperimentCode.S6: 45,
+            ExperimentCode.R13: 4,
         }[code]
         if expected_int != expected_by_code or observed != expected_by_code:
             problems.append(f"cell ledger {observed}/{expected_int} != roadmap {expected_by_code}")
         expected_trials = {
-            "S1": 320_000,
-            "S2": 360_000,
-            "S3": 120_000,
-            "S4": 50_000,
-            "S5": 120_000,
-            "S6": 0,
-            "R13": 0,
+            ExperimentCode.S1: 320_000,
+            ExperimentCode.S2: 360_000,
+            ExperimentCode.S3: 120_000,
+            ExperimentCode.S4: 50_000,
+            ExperimentCode.S5: 120_000,
+            ExperimentCode.S6: 0,
+            ExperimentCode.R13: 0,
         }[code]
         if int(payload.get("observed_monte_carlo_trials", 0)) != expected_trials:
             problems.append("Monte-Carlo trial ledger does not match the roadmap")
@@ -274,31 +296,28 @@ class ExperimentCompletionAuditor:
     @staticmethod
     def _real_sensitivity_workload(
         outputs_root: Path,
-        code: str,
-        expected_datasets: set[str],
+        code: ExperimentCode,
         expected_model_seeds: tuple[int, ...],
         expected_calibration_seed: int,
     ) -> ExperimentCompletion:
+        """R2-R6/R9 write a SensitivityEnvelope (protocol_code/model_seed/calibration_seed/cells)."""
         cells_root = outputs_root / "experiments" / code / "cells"
         files = tuple(sorted(cells_root.glob("*.json"))) if cells_root.exists() else ()
         problems: list[str] = []
-        identities: set[tuple[str, int, int]] = set()
+        identities: set[tuple[int, int]] = set()
         for path in files:
             payload = json.loads(path.read_text(encoding="utf-8"))
-            if payload.get("experiment") != code:
+            if payload.get("protocol_code") != code:
                 problems.append(f"{path.name}: experiment code mismatch")
                 continue
-            if payload.get("complete") is not True:
-                problems.append(f"{path.name}: incomplete subcell ledger")
-            dataset = str(payload.get("dataset_id"))
+            cells = payload.get("cells")
+            if not isinstance(cells, list) or not cells:
+                problems.append(f"{path.name}: sensitivity envelope has no cells")
+                continue
             model_seed = int(payload.get("model_seed", -1))
             calibration_seed = int(payload.get("calibration_seed", -1))
-            identities.add((dataset, model_seed, calibration_seed))
-        expected = {
-            (dataset, model_seed, expected_calibration_seed)
-            for dataset in expected_datasets
-            for model_seed in expected_model_seeds
-        }
+            identities.add((model_seed, calibration_seed))
+        expected = {(model_seed, expected_calibration_seed) for model_seed in expected_model_seeds}
         missing = expected - identities
         unexpected = identities - expected
         if missing:
@@ -314,14 +333,50 @@ class ExperimentCompletionAuditor:
         )
 
     @staticmethod
+    def _single_seed_sensitivity_workload(
+        outputs_root: Path,
+        code: ExperimentCode,
+        expected_calibration_seed: int,
+    ) -> ExperimentCompletion:
+        """R7/R8 write a MultiplicityEnvelope/SourceOrderEnvelope: no model-seed axis."""
+        cells_root = outputs_root / "experiments" / code / "cells"
+        files = tuple(sorted(cells_root.glob("*.json"))) if cells_root.exists() else ()
+        problems: list[str] = []
+        identities: set[int] = set()
+        for path in files:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if payload.get("protocol_code") != code:
+                problems.append(f"{path.name}: experiment code mismatch")
+                continue
+            cells = payload.get("cells")
+            if not isinstance(cells, list) or not cells:
+                problems.append(f"{path.name}: sensitivity envelope has no cells")
+                continue
+            identities.add(int(payload.get("calibration_seed", -1)))
+        expected = {expected_calibration_seed}
+        missing = expected - identities
+        unexpected = identities - expected
+        if missing:
+            problems.append(f"missing sensitivity calibration seeds: {len(missing)}")
+        if unexpected:
+            problems.append(f"unexpected sensitivity calibration seeds: {len(unexpected)}")
+        return ExperimentCompletion(
+            protocol_code=code,
+            complete=not problems,
+            expected_cells=len(expected),
+            observed_cells=len(files),
+            problems=tuple(problems),
+        )
+
+    @staticmethod
     def _source_order_workload(outputs_root: Path) -> ExperimentCompletion:
-        cells_root = outputs_root / "experiments" / "R12" / "cells"
+        cells_root = outputs_root / "experiments" / ExperimentCode.R12 / "cells"
         files = tuple(sorted(cells_root.glob("*.json"))) if cells_root.exists() else ()
         problems: list[str] = []
         identities: set[tuple[str, int, int]] = set()
         for path in files:
             payload = json.loads(path.read_text(encoding="utf-8"))
-            if payload.get("experiment") != "R12":
+            if payload.get("experiment") != ExperimentCode.R12:
                 problems.append(f"{path.name}: experiment code mismatch")
                 continue
             if payload.get("complete") is not True:
@@ -344,7 +399,7 @@ class ExperimentCompletionAuditor:
         if unexpected:
             problems.append(f"unexpected source-order model cells: {len(unexpected)}")
         return ExperimentCompletion(
-            protocol_code="R12",
+            protocol_code=ExperimentCode.R12,
             complete=not problems,
             expected_cells=len(expected),
             observed_cells=len(files),

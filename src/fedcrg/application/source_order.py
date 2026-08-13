@@ -7,7 +7,7 @@ from pathlib import Path
 from fedcrg.application.evaluate import EvaluatePolicies
 from fedcrg.artifacts.serialization import atomic_write_json
 from fedcrg.config.models import ExperimentConfig
-from fedcrg.core.enums import CalibrationAssignmentMode
+from fedcrg.core.enums import CalibrationAssignmentMode, ExperimentCode
 from fedcrg.scoring.cache import ScoreCache
 
 
@@ -32,8 +32,11 @@ class RunSourceOrderCalibration:
         atomic_write_json(
             output,
             {
-                "experiment": "R12",
-                "dataset": config.dataset.id.value,
+                "experiment": ExperimentCode.R12.value,
+                "complete": True,
+                "dataset_id": config.dataset.id.value,
+                "model_seed": int(descriptor.identity.model_seed),
+                "calibration_seed": config.dataset.primary_calibration_seed,
                 "calibration_assignment": CalibrationAssignmentMode.SOURCE_ORDER.value,
                 "score_cache_sha256": descriptor.cache_sha256.value,
                 "evaluation": EvaluatePolicies.to_serializable(bundle),

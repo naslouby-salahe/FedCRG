@@ -15,7 +15,7 @@ from fedcrg.artifacts.layout import RunLayout
 from fedcrg.artifacts.manifest import RunManifestStore
 from fedcrg.artifacts.serialization import atomic_write_json
 from fedcrg.artifacts.verification import ArtifactVerifier
-from fedcrg.core.enums import ExperimentId, ExperimentStatus, PolicyId
+from fedcrg.core.enums import ExperimentCode, ExperimentId, ExperimentStatus, PolicyId
 from fedcrg.experiments.completion import ExperimentCompletion, ExperimentCompletionAuditor
 from fedcrg.metrics.federation import utility_margin_satisfied
 
@@ -113,7 +113,14 @@ class ClaimGateEvaluator:
             else "second-detector robustness gate is incomplete or unsupported"
         )
 
-        required_stress = ("S3", "S4", "S5", "R8", "R9", "R12")
+        required_stress = (
+            ExperimentCode.S3,
+            ExperimentCode.S4,
+            ExperimentCode.S5,
+            ExperimentCode.R8,
+            ExperimentCode.R9,
+            ExperimentCode.R12,
+        )
         g7 = all(
             completion.get(code) is not None and completion[code].complete
             for code in required_stress
@@ -192,15 +199,15 @@ class ClaimGateEvaluator:
     def _statistical_core_integrity(
         self,
         outputs_root: Path,
-        completion: dict[str, ExperimentCompletion],
+        completion: dict[ExperimentCode, ExperimentCompletion],
     ) -> bool:
         from fedcrg.application.verify import VerifyOutputs
 
         precompute = VerifyOutputs.verify_protocol_precompute(outputs_root)
-        s1 = completion.get("S1")
-        if not precompute.valid or s1 is None or not getattr(s1, "complete", False):
+        s1 = completion.get(ExperimentCode.S1)
+        if not precompute.valid or s1 is None or not s1.complete:
             return False
-        path = outputs_root / "experiments" / "S1" / "results.json"
+        path = outputs_root / "experiments" / ExperimentCode.S1 / "results.json"
         if not path.is_file():
             return False
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -213,11 +220,11 @@ class ClaimGateEvaluator:
 
     def _data_integrity(
         self,
-        completion: dict[str, ExperimentCompletion],
+        completion: dict[ExperimentCode, ExperimentCompletion],
         run_dirs: tuple[Path, ...],
     ) -> bool:
-        r1 = completion.get("R1")
-        if r1 is None or not getattr(r1, "complete", False):
+        r1 = completion.get(ExperimentCode.R1)
+        if r1 is None or not r1.complete:
             return False
         primary = [
             path
@@ -339,12 +346,12 @@ class ClaimGateEvaluator:
     def _external_replication(
         cls,
         records: tuple[FederationResultRecord, ...],
-        completion: dict[str, ExperimentCompletion],
+        completion: dict[ExperimentCode, ExperimentCompletion],
     ) -> bool:
-        r10 = completion.get("R10")
+        r10 = completion.get(ExperimentCode.R10)
         return bool(
             r10 is not None
-            and getattr(r10, "complete", False)
+            and r10.complete
             and cls._reliability_claim(records, ExperimentId.EXTERNAL_DIAD, 2000)
         )
 
@@ -352,10 +359,10 @@ class ClaimGateEvaluator:
     def _detector_robustness(
         cls,
         records: tuple[FederationResultRecord, ...],
-        completion: dict[str, ExperimentCompletion],
+        completion: dict[ExperimentCode, ExperimentCompletion],
     ) -> bool:
-        r11 = completion.get("R11")
-        if r11 is None or not getattr(r11, "complete", False):
+        r11 = completion.get(ExperimentCode.R11)
+        if r11 is None or not r11.complete:
             return False
         selected = cls._cell_records(records, ExperimentId.SECOND_DETECTOR, 1000)
         method = [row.mebe for row in selected if row.policy is PolicyId.FEDCRG]
