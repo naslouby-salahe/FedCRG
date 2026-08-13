@@ -65,7 +65,7 @@ class EvaluationBundle:
     clients: tuple[PolicyEvaluation, ...]
     federations: tuple[FederationMetrics, ...]
     protocol_results: tuple[ClientProtocolResult, ...]
-    shrinkage_n0: int
+    shrinkage_n0: int | None
 
 
 @dataclass(frozen=True, slots=True)
