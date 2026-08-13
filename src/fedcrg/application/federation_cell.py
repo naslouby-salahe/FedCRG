@@ -9,14 +9,27 @@ from fedcrg.application.policy_cell import FrozenCacheInputs, PolicyCellMaterial
 from fedcrg.application.run_experiment import RunExperiment
 from fedcrg.config.models import ExperimentConfig
 from fedcrg.core.enums import CalibrationAssignmentMode, ExperimentId, PolicyId
+from fedcrg.core.ids import CalibrationSeed, ModelSeed
+
+
+@dataclass(frozen=True, slots=True)
+class PolicyRunDirectory:
+    policy: PolicyId
+    path: Path
 
 
 @dataclass(frozen=True, slots=True)
 class FederationCellResult:
     experiment_id: ExperimentId
-    model_seed: int
-    calibration_seed: int
-    run_directories: dict[PolicyId, Path]
+    model_seed: ModelSeed
+    calibration_seed: CalibrationSeed
+    run_directories: tuple[PolicyRunDirectory, ...]
+
+    def directory_for(self, policy: PolicyId) -> Path:
+        for entry in self.run_directories:
+            if entry.policy is policy:
+                return entry.path
+        raise KeyError(policy.value)
 
 
 class FederationCellMaterializer:
@@ -25,15 +38,17 @@ class FederationCellMaterializer:
     def __init__(
         self,
         policy_cells: PolicyCellMaterializer | None = None,
+        run_experiment: RunExperiment | None = None,
     ) -> None:
         self.policy_cells = policy_cells or PolicyCellMaterializer()
+        self.run_experiment = run_experiment or RunExperiment()
 
     def materialize(
         self,
         experiment_id: ExperimentId,
         config: ExperimentConfig,
-        model_seed: int,
-        calibration_seed: int,
+        model_seed: ModelSeed | int,
+        calibration_seed: CalibrationSeed | int,
         caches: FrozenCacheInputs,
         policies: tuple[PolicyId, ...] | None = None,
         assignment_mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
@@ -48,20 +63,21 @@ class FederationCellMaterializer:
                 + ", ".join(sorted(item.value for item in unknown))
             )
 
+        typed_model_seed = ModelSeed(int(model_seed))
+        typed_calibration_seed = CalibrationSeed(int(calibration_seed))
         bundle = self.policy_cells.evaluate_federation(
             config,
             caches,
-            calibration_seed,
+            typed_calibration_seed,
             assignment_mode,
         )
-        run_dirs: dict[PolicyId, Path] = {}
+        run_dirs: list[PolicyRunDirectory] = []
         for policy in selected:
-            runner = RunExperiment()
-            _, layout = runner.execute(
+            _, layout = self.run_experiment.execute(
                 experiment_id=experiment_id,
                 config=config,
-                model_seed=model_seed,
-                calibration_seed=calibration_seed,
+                model_seed=int(typed_model_seed),
+                calibration_seed=int(typed_calibration_seed),
                 policy=policy,
                 runner=lambda _plan, run_layout, p=policy: (
                     self.policy_cells.materialize_precomputed(
@@ -69,16 +85,16 @@ class FederationCellMaterializer:
                         p,
                         run_layout,
                         caches,
-                        calibration_seed,
+                        typed_calibration_seed,
                         bundle,
                         assignment_mode,
                     )
                 ),
             )
-            run_dirs[policy] = layout.root
+            run_dirs.append(PolicyRunDirectory(policy, layout.root))
         return FederationCellResult(
-            experiment_id,
-            model_seed,
-            calibration_seed,
-            run_dirs,
+            experiment_id=experiment_id,
+            model_seed=typed_model_seed,
+            calibration_seed=typed_calibration_seed,
+            run_directories=tuple(run_dirs),
         )
