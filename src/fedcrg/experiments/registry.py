@@ -1,4 +1,6 @@
-"""Typed experiment registry."""
+"""Lookup and validate the frozen experiment catalogue."""
+
+from __future__ import annotations
 
 from fedcrg.core.enums import ExperimentId
 from fedcrg.experiments.definitions import definitions
@@ -7,17 +9,17 @@ from fedcrg.experiments.models import ExperimentDefinition
 
 class ExperimentRegistry:
     def __init__(self) -> None:
-        items = definitions()
-        self._items = {item.id: item for item in items}
-        if len(self._items) != len(items):
-            raise RuntimeError("Duplicate experiment identifiers")
-        for item in items:
-            unknown = set(item.dependencies).difference(self._items)
-            if unknown:
-                raise RuntimeError(f"Unknown dependencies for {item.id}: {sorted(unknown)}")
+        rows = definitions()
+        self._definitions = {row.id: row for row in rows}
+        if len(rows) != 20 or len(self._definitions) != 20:
+            raise RuntimeError("The experiment registry must contain exactly S1-S6 and R1-R14")
+        codes = {row.protocol_code for row in rows}
+        expected = {f"S{i}" for i in range(1, 7)} | {f"R{i}" for i in range(1, 15)}
+        if codes != expected:
+            raise RuntimeError("Experiment registry does not exactly cover S1-S6/R1-R14")
 
     def get(self, experiment_id: ExperimentId) -> ExperimentDefinition:
-        return self._items[experiment_id]
+        return self._definitions[experiment_id]
 
     def all(self) -> tuple[ExperimentDefinition, ...]:
-        return tuple(self._items.values())
+        return tuple(self._definitions.values())

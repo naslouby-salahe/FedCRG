@@ -2,6 +2,7 @@
 
 from fedcrg.config.models import ExperimentConfig
 from fedcrg.core.enums import ExperimentId
+from fedcrg.core.ids import Sha256
 from fedcrg.experiments.models import ExperimentPlan
 from fedcrg.experiments.registry import ExperimentRegistry
 
@@ -23,7 +24,7 @@ class ExperimentPlanner:
             raise ValueError(f"Calibration seed {calibration_seed} is not configured")
         return ExperimentPlan(
             definition=self.registry.get(experiment_id),
-            config_hash=config.config_hash,
+            config_hash=Sha256(config.config_hash),
             model_seed=model_seed,
             calibration_seed=calibration_seed,
         )
