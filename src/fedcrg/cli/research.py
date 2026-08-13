@@ -2,21 +2,15 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
 from pathlib import Path
 
 import click
-import numpy as np
 
-from fedcrg.analysis.benchmark import benchmark
+from fedcrg.application.benchmark import RunBenchmark
+from fedcrg.application.precompute import ProtocolTablePrecomputer
 from fedcrg.application.robustness import RunRobustness
 from fedcrg.application.synthetic import RunSyntheticExperiments
-from fedcrg.artifacts.serialization import atomic_write_json
 from fedcrg.cli.shared import load_config
-from fedcrg.protocol.decision import ThresholdDecisionEngine
-from fedcrg.protocol.mismatch import ReferenceMismatchEvaluator
-from fedcrg.protocol.readiness import CalibrationReadinessEvaluator, ReadinessPlanCache
-from fedcrg.protocol.reference import ReferenceThresholdEstimator
 
 
 @click.group(name="tables")
@@ -29,14 +23,8 @@ def tables_group() -> None:
 @click.option("--output", type=click.Path(path_type=Path), default=Path("outputs/cache/precomputed/readiness_plans.json"))
 def precompute_readiness(config_path: Path, output: Path) -> None:
     config = load_config(config_path)
-    cache = ReadinessPlanCache(output)
-    counts = sorted({
-        config.dataset.split.calibration_benign,
-        149, 270, 500, 694, 1000, 1400, 1415, 1416, 1500, 2000, 2435, 2861, 3000, 5970,
-    })
-    for count in counts:
-        cache.precompute(count, config.protocol.band, config.protocol.readiness_assurance)
-    click.echo(str(output))
+    readiness_path, _mismatch_path = ProtocolTablePrecomputer().precompute(config, output.parent)
+    click.echo(str(readiness_path))
 
 
 @click.group(name="synthetic")
@@ -85,33 +73,8 @@ def second_detector(config_path: Path, prepared_root: Path, model_seed: int) -> 
 @click.option("--output", type=click.Path(path_type=Path), default=Path("outputs/reports/latest/benchmark.json"))
 def benchmark_command(config_path: Path, output: Path) -> None:
     config = load_config(config_path)
-    rng = np.random.default_rng(123456)
-    references = {f"client_{i}": rng.normal(size=config.dataset.split.reference_benign).astype(np.float64) for i in range(max(config.dataset.expected_clients or 9, 1))}
-    calibration = rng.normal(size=config.dataset.split.calibration_benign).astype(np.float64)
-    mismatch = rng.normal(size=config.dataset.split.mismatch_benign).astype(np.float64)
-    reference_estimator = ReferenceThresholdEstimator()
-    reference = reference_estimator.estimate(references, config.protocol.alpha)
-    readiness_cache = ReadinessPlanCache()
-    plan = readiness_cache.precompute(len(calibration), config.protocol.band, config.protocol.readiness_assurance)
-    readiness_evaluator = CalibrationReadinessEvaluator()
-    mismatch_evaluator = ReferenceMismatchEvaluator()
-    decision_engine = ThresholdDecisionEngine()
-
-    def reference_op() -> object: return reference_estimator.estimate(references, config.protocol.alpha)
-    def readiness_op() -> object: return readiness_evaluator.evaluate(calibration, plan)
-    def mismatch_op() -> object: return mismatch_evaluator.evaluate(mismatch, reference.value, config.protocol.band, config.protocol.mismatch_confidence)
-    readiness = readiness_op()
-    mismatch_result = mismatch_op()
-    def decision_op() -> object: return decision_engine.decide(reference, readiness, mismatch_result)
-
-    rows = [asdict(benchmark(name, operation)) for name, operation in {
-        "reference_construction": reference_op,
-        "readiness_lookup_and_order_statistic": readiness_op,
-        "reference_mismatch_interval": mismatch_op,
-        "policy_decision": decision_op,
-    }.items()]
-    atomic_write_json(output, {"benchmark": "R13", "rows": rows})
-    click.echo(str(output))
+    path = RunBenchmark().run_on_synthetic_evidence(config, output)
+    click.echo(str(path))
 
 
 @click.group(name="sensitivity")
@@ -119,27 +82,46 @@ def sensitivity_group() -> None:
     """Run pre-registered real-score sensitivities on a frozen score cache."""
 
 
+_MODEL_SEED_SENSITIVITIES = frozenset({"R2", "R3", "R4", "R5", "R6"})
+
+
 @sensitivity_group.command(name="run")
 @click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), required=True)
 @click.option("--score-root", type=click.Path(path_type=Path, exists=True), required=True)
+@click.option("--prepared-root", type=click.Path(path_type=Path, exists=True), required=True)
 @click.option("--experiment", type=click.Choice(["R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9"]), required=True)
+@click.option("--model-seed", type=int, default=None)
+@click.option("--calibration-seed", type=int, default=None)
 @click.option("--output", type=click.Path(path_type=Path), required=True)
-def sensitivity_run(config_path: Path, score_root: Path, experiment: str, output: Path) -> None:
+def sensitivity_run(
+    config_path: Path,
+    score_root: Path,
+    prepared_root: Path,
+    experiment: str,
+    model_seed: int | None,
+    calibration_seed: int | None,
+    output: Path,
+) -> None:
+    """Run one pre-registered R2-R9 real-score sensitivity on a frozen score cache."""
     from fedcrg.application.sensitivity import RunRealSensitivities
-    from fedcrg.scoring.cache import ScoreCache
 
     config = load_config(config_path)
-    scores = ScoreCache().load(score_root)
     runner = RunRealSensitivities()
-    actions = {
-        "R2": runner.readiness_sample_size,
-        "R3": runner.mismatch_sample_size,
-        "R4": runner.tolerance,
-        "R5": runner.target_fpr,
-        "R6": runner.assurance,
-        "R7": runner.multiplicity,
-        "R8": runner.source_order_test_blocks,
-        "R9": runner.real_contamination,
+    methods = {
+        "R2": runner.run_r2,
+        "R3": runner.run_r3,
+        "R4": runner.run_r4,
+        "R5": runner.run_r5,
+        "R6": runner.run_r6,
+        "R7": runner.run_r7,
+        "R8": runner.run_r8,
+        "R9": runner.run_r9,
     }
-    path = actions[experiment](config, scores, output)
+    method = methods[experiment]
+    if experiment in _MODEL_SEED_SENSITIVITIES:
+        if model_seed is None:
+            raise click.UsageError(f"{experiment} requires --model-seed")
+        path = method(config, score_root, prepared_root, model_seed, output, calibration_seed)
+    else:
+        path = method(config, score_root, prepared_root, output, calibration_seed)
     click.echo(str(path))

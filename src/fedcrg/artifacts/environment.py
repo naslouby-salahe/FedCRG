@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import platform
 import subprocess
 import sys
@@ -46,7 +47,7 @@ def capture_environment(repository_root: Path = Path(".")) -> dict[str, object]:
         "cuda_device_count": torch.cuda.device_count(),
         "git_commit": commit,
         "git_clean": dirty == "" if dirty is not None else None,
-        "git_patch_sha256": __import__("hashlib").sha256((patch or "").encode()).hexdigest() if dirty else None,
-        "environment_lock": str(lock_path) if lock_path else None,
-        "environment_lock_sha256": sha256_file(lock_path) if lock_path else None,
+        "git_patch_sha256": hashlib.sha256((patch or "").encode()).hexdigest() if dirty else None,
+        "environment_pin_kind": lock_path.name if lock_path else None,
+        "environment_pin_sha256": sha256_file(lock_path) if lock_path else None,
     }

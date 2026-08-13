@@ -1,4 +1,4 @@
-"""Locked figure builders; every numerical value comes from generated artifacts."""
+"""Locked figure builders, every numerical value comes from generated artifacts."""
 
 from __future__ import annotations
 

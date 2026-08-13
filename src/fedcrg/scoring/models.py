@@ -32,7 +32,13 @@ class RoleScoreInput:
 @dataclass(frozen=True, slots=True)
 class ClientScoreInput:
     client_id: ClientId
-    roles: dict[DataRole, RoleScoreInput]
+    roles: tuple[RoleScoreInput, ...]
+
+    def get(self, role: DataRole) -> RoleScoreInput:
+        for item in self.roles:
+            if item.role is role:
+                return item
+        raise KeyError(role.value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,7 +78,13 @@ class RoleScores:
 @dataclass(frozen=True, slots=True)
 class ClientScoreSet:
     client_id: ClientId
-    scores: dict[DataRole, RoleScores]
+    scores: tuple[RoleScores, ...]
+
+    def get(self, role: DataRole) -> RoleScores:
+        for item in self.scores:
+            if item.role is role:
+                return item
+        raise KeyError(role.value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,14 +96,20 @@ class ScoreManifest:
     training_spec_hash: Sha256
     dataset_manifest_hash: Sha256
     preprocessing_hash: Sha256
-    clients: dict[ClientId, ClientScoreSet]
+    clients: tuple[ClientScoreSet, ...]
     cache_sha256: Sha256 | None = None
+
+    def client(self, client_id: ClientId) -> ClientScoreSet:
+        for item in self.clients:
+            if item.client_id == client_id:
+                return item
+        raise KeyError(client_id.value)
 
     def role_hashes(self) -> dict[str, dict[str, str]]:
         return {
-            client_id.value: {
-                role.value: role_scores.sha256.value
-                for role, role_scores in client.scores.items()
+            client.client_id.value: {
+                role_scores.role.value: role_scores.sha256.value
+                for role_scores in client.scores
             }
-            for client_id, client in self.clients.items()
+            for client in self.clients
         }

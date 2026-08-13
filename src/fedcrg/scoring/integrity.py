@@ -29,8 +29,9 @@ _FORBIDDEN_DERIVED_ROLES = frozenset(
 def validate_score_manifest(manifest: ScoreManifest) -> None:
     if not manifest.clients:
         raise ValueError("Score manifest has no clients")
-    for client_id, client in manifest.clients.items():
-        present = set(client.scores)
+    for client in manifest.clients:
+        client_id = client.client_id
+        present = {item.role for item in client.scores}
         missing = _REQUIRED_BASE_ROLES - present
         if missing:
             names = ", ".join(sorted(role.value for role in missing))
@@ -42,7 +43,8 @@ def validate_score_manifest(manifest: ScoreManifest) -> None:
                 f"Score cache must not materialize calibration-assignment roles: {names}"
             )
         row_ids: set[str] = set()
-        for role, role_scores in client.scores.items():
+        for role_scores in client.scores:
+            role = role_scores.role
             if role_scores.values.dtype != np.float64:
                 raise ValueError("Cached scores must be float64")
             if not np.isfinite(role_scores.values).all():
@@ -53,9 +55,9 @@ def validate_score_manifest(manifest: ScoreManifest) -> None:
             row_ids.update(role_scores.row_ids)
             if len(role_scores.sha256.value) != 64:
                 raise ValueError("Invalid role-score hash")
-        if len(client.scores[DataRole.BENIGN_TEST].values) == 0:
+        if len(client.get(DataRole.BENIGN_TEST).values) == 0:
             raise ValueError(f"Final benign test is empty for {client_id}")
-        if len(client.scores[DataRole.ATTACK_TEST].values) == 0:
+        if len(client.get(DataRole.ATTACK_TEST).values) == 0:
             raise ValueError(f"Final attack test is empty for {client_id}")
 
 

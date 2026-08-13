@@ -20,10 +20,16 @@ from fedcrg.experiments.completion import ExperimentCompletionAuditor
 
 
 @dataclass(frozen=True, slots=True)
+class GateDiagnostic:
+    gate: str
+    message: str
+
+
+@dataclass(frozen=True, slots=True)
 class ClaimGateReport:
     evidence: ClaimGateEvidence
     assessment: ClaimAssessment
-    diagnostics: dict[str, str]
+    diagnostics: tuple[GateDiagnostic, ...]
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -33,7 +39,7 @@ class ClaimGateReport:
                 "failed_gates": list(self.assessment.failed_gates),
                 "release_blockers": list(self.assessment.release_blockers),
             },
-            "diagnostics": self.diagnostics,
+            "diagnostics": {item.gate: item.message for item in self.diagnostics},
         }
 
 
@@ -135,7 +141,11 @@ class ClaimGateEvaluator:
             assumption_stresses_reported=g7,
             reproducibility=g8,
         )
-        return ClaimGateReport(evidence, assess_claim_level(evidence), diagnostics)
+        return ClaimGateReport(
+            evidence,
+            assess_claim_level(evidence),
+            tuple(GateDiagnostic(gate, message) for gate, message in diagnostics.items()),
+        )
 
     def write(
         self,

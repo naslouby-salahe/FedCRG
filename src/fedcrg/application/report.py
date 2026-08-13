@@ -59,7 +59,7 @@ class ReportBuilder:
         lines.extend(
             [
                 "",
-                "This report is generated only from immutable run artifacts; it does not load a detector or retrain a model.",
+                "This report is generated only from immutable run artifacts, it does not load a detector or retrain a model.",
             ]
         )
         output = layout.reports / "summary.md"
@@ -104,7 +104,7 @@ class ReportBuilder:
         else:
             contrasts_payload = {
                 "status": "incomplete",
-                "reason": "R1 workload has not reconciled; confirmatory contrasts are withheld",
+                "reason": "R1 workload has not reconciled, confirmatory contrasts are withheld",
             }
         contrasts_path.write_text(
             json.dumps(contrasts_payload, indent=2) + "\n",
@@ -121,7 +121,7 @@ class ReportBuilder:
                 "complete": item.complete,
                 "expected_cells": item.expected_cells,
                 "observed_cells": item.observed_cells,
-                "problems": "; ".join(item.problems),
+                "problems": ", ".join(item.problems),
             }
             for item in verification.experiment_completion
         ]
@@ -144,14 +144,14 @@ class ReportBuilder:
         ]
         for item in verification.experiment_completion:
             status = "COMPLETE" if item.complete else "INCOMPLETE"
-            detail = "; ".join(item.problems) if item.problems else "ledger reconciled"
+            detail = ", ".join(item.problems) if item.problems else "ledger reconciled"
             lines.append(
-                f"- **{item.protocol_code}** — {status}; observed={item.observed_cells}; {detail}"
+                f"- **{item.protocol_code}** — {status}, observed={item.observed_cells}, {detail}"
             )
         lines.extend(
             [
                 "",
-                "The repository report is generated from immutable artifacts and workload ledgers. Missing experiments remain explicitly incomplete; report generation never fills missing evidence with inferred values.",
+                "The repository report is generated from immutable artifacts and workload ledgers. Missing experiments remain explicitly incomplete, report generation never fills missing evidence with inferred values.",
             ]
         )
         output = reports_root / "README.md"

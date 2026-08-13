@@ -60,7 +60,7 @@ class FedCRGProtocol:
         sample_count: int,
         config: ProtocolConfig,
     ) -> ReadinessPlan:
-        """Read a frozen plan; never optimize a rank during real-data evaluation."""
+        """Read a frozen plan, never optimize a rank during real-data evaluation."""
 
         return self.readiness_cache.require(
             sample_count,

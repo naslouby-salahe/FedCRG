@@ -86,8 +86,8 @@ class ScoreCache:
             ),
             (
                 role_scores
-                for client_id in sorted(manifest.clients)
-                for role_scores in manifest.clients[client_id].scores.values()
+                for client in sorted(manifest.clients, key=lambda item: item.client_id)
+                for role_scores in client.scores
             ),
             root,
         )
@@ -237,7 +237,7 @@ class ScoreCache:
                 missing = required - roles
                 extra = roles - required
                 raise ValueError(
-                    f"Score-cache role contract failed for {client_id.value}; "
+                    f"Score-cache role contract failed for {client_id.value}, "
                     f"missing={sorted(role.value for role in missing)}, "
                     f"extra={sorted(role.value for role in extra)}"
                 )
@@ -325,12 +325,12 @@ class ScoreCache:
         records = self._records_from_metadata(metadata)
         parquet_path = root / str(metadata["score_cache_file"])
         frame = pd.read_parquet(parquet_path, engine="pyarrow")
-        clients: dict[ClientId, ClientScoreSet] = {}
+        clients: list[ClientScoreSet] = []
         for client_id, client_frame in frame.groupby("client_id", sort=True):
-            score_map: dict[DataRole, RoleScores] = {}
+            score_list: list[RoleScores] = []
+            typed_client_id = ClientId(str(client_id))
             for role_value, role_frame in client_frame.groupby("phase", sort=True):
                 role = DataRole(str(role_value))
-                typed_client_id = ClientId(str(client_id))
                 role_scores = self._role_scores_from_frame(
                     typed_client_id, role, role_frame
                 )
@@ -339,9 +339,8 @@ class ScoreCache:
                     raise ValueError(
                         f"SCORE_CACHE_HASH_MISMATCH: {client_id}/{role.value}"
                     )
-                score_map[role] = role_scores
-            typed_client_id = ClientId(str(client_id))
-            clients[typed_client_id] = ClientScoreSet(typed_client_id, score_map)
+                score_list.append(role_scores)
+            clients.append(ClientScoreSet(typed_client_id, tuple(score_list)))
 
         manifest = ScoreManifest(
             dataset=DatasetId(str(metadata["dataset"])),
@@ -351,7 +350,7 @@ class ScoreCache:
             training_spec_hash=Sha256(str(metadata["training_spec_hash"])),
             dataset_manifest_hash=Sha256(str(metadata["dataset_manifest_hash"])),
             preprocessing_hash=Sha256(str(metadata["preprocessing_hash"])),
-            clients=clients,
+            clients=tuple(clients),
             cache_sha256=Sha256(str(metadata["score_cache_sha256"])),
         )
         validate_score_manifest(manifest)
@@ -383,8 +382,8 @@ class ScoreCache:
     ) -> Iterable[ClientScoreSet]:
         descriptor = self.load_descriptor(root)
         for client_id in descriptor.client_ids:
-            score_map = {role: self.read_role(root, client_id, role) for role in roles}
-            yield ClientScoreSet(client_id, score_map)
+            score_list = tuple(self.read_role(root, client_id, role) for role in roles)
+            yield ClientScoreSet(client_id, score_list)
 
     def _read_verified_metadata(self, root: Path) -> dict[str, object]:
         metadata_path = root / self.manifest_filename

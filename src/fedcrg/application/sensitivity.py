@@ -146,27 +146,27 @@ class RunRealSensitivities:
         calibration_n: int | None = None,
         mismatch_n: int | None = None,
     ) -> CalibrationScoreViews:
-        clients: dict[ClientId, ClientCalibrationScores] = {}
+        clients: list[ClientCalibrationScores] = []
         for client_id in views.client_ids:
-            source = views.clients[client_id]
-            roles = dict(source.roles)
-            if calibration_n is not None:
-                roles[DataRole.CALIBRATION] = truncate_view(
-                    source.get(DataRole.CALIBRATION),
-                    calibration_n,
+            source = views.client(client_id)
+
+            def _resize(item: RoleScores) -> RoleScores:
+                if item.role is DataRole.CALIBRATION and calibration_n is not None:
+                    return truncate_view(item, calibration_n)
+                if item.role is DataRole.MISMATCH and mismatch_n is not None:
+                    return truncate_view(item, mismatch_n)
+                return item
+
+            roles = tuple(_resize(item) for item in source.roles)
+            clients.append(
+                ClientCalibrationScores(
+                    client_id,
+                    source.calibration_seed,
+                    source.mode,
+                    roles,
                 )
-            if mismatch_n is not None:
-                roles[DataRole.MISMATCH] = truncate_view(
-                    source.get(DataRole.MISMATCH),
-                    mismatch_n,
-                )
-            clients[client_id] = ClientCalibrationScores(
-                client_id,
-                source.calibration_seed,
-                source.mode,
-                roles,
             )
-        return CalibrationScoreViews(views.calibration_seed, views.mode, clients)
+        return CalibrationScoreViews(views.calibration_seed, views.mode, tuple(clients))
 
     def _parameter_sweep(
         self,
@@ -514,35 +514,41 @@ class RunRealSensitivities:
         cells: list[SensitivityCell] = []
         for raw_fraction in definition.axis(ExperimentAxisId.FRACTION).values:
             fraction = float(raw_fraction)
-            clients: dict[ClientId, ClientCalibrationScores] = {}
+            clients: list[ClientCalibrationScores] = []
             for client_id in base_views.client_ids:
-                source = base_views.clients[client_id]
+                source = base_views.client(client_id)
                 attack_dev = self.score_cache.read_role(
                     score_root,
                     client_id,
                     DataRole.ATTACK_DEV,
                 ).values
-                roles = dict(source.roles)
-                for role in (DataRole.MISMATCH, DataRole.CALIBRATION):
-                    original = source.get(role)
-                    roles[role] = RoleScores(
-                        role=role,
+                contaminated_roles = {DataRole.MISMATCH, DataRole.CALIBRATION}
+
+                def _contaminate(item: RoleScores) -> RoleScores:
+                    if item.role not in contaminated_roles:
+                        return item
+                    return RoleScores(
+                        role=item.role,
                         values=contaminate_benign_scores(
-                            original.values,
+                            item.values,
                             attack_dev,
                             fraction,
                             config.randomness.attack_split_seed + int(fraction * 1_000_000),
                         ),
                         client_id=client_id,
-                        row_ids=original.row_ids,
+                        row_ids=item.row_ids,
                     )
-                clients[client_id] = ClientCalibrationScores(
-                    client_id,
-                    seed,
-                    base_views.mode,
-                    roles,
+
+                roles = tuple(_contaminate(item) for item in source.roles)
+                clients.append(
+                    ClientCalibrationScores(
+                        client_id,
+                        seed,
+                        base_views.mode,
+                        roles,
+                    )
                 )
-            contaminated = CalibrationScoreViews(seed, base_views.mode, clients)
+            contaminated = CalibrationScoreViews(seed, base_views.mode, tuple(clients))
             cells.append(
                 SensitivityCell(
                     settings=(ParameterSetting(ExperimentAxisId.FRACTION, fraction),),

@@ -24,12 +24,12 @@ def verify_command(outputs: Path, repository_root: Path, skip_tests: bool) -> No
     payload = {
         "valid": result.valid,
         "runs": {
-            name: {
-                "valid": item.valid,
-                "missing": item.missing,
-                "mismatched": item.mismatched,
+            entry.run_id: {
+                "valid": entry.result.valid,
+                "missing": entry.result.missing,
+                "mismatched": entry.result.mismatched,
             }
-            for name, item in result.runs.items()
+            for entry in result.runs
         },
         "experiments": [
             {

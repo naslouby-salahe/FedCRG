@@ -18,7 +18,7 @@ def validate_numeric_frame(frame, feature_columns: list[str]) -> None:
 def validate_split_disjointness(splits: ClientSplits, row_id_column: str = "row_id") -> None:
     seen: set[str] = set()
     for role in DataRole:
-        frame = splits.roles.get(role)
+        frame = splits.try_get(role)
         if frame is None:
             continue
         if row_id_column not in frame.columns:

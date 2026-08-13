@@ -11,10 +11,16 @@ from fedcrg.config.models import DatasetConfig
 from fedcrg.core.constants import ATTACK_DEVELOPMENT_SEED
 from fedcrg.core.enums import CalibrationAssignmentMode, DataRole, DatasetId, FailureCode
 from fedcrg.core.exceptions import DataIntegrityError
-from fedcrg.core.ids import AttackGroupId, CalibrationSeed, ClientId, RowId, Sha256
+from fedcrg.core.ids import AttackGroupId, CalibrationSeed, ClientId, RowId
 from fedcrg.data.integrity import validate_split_disjointness
 from fedcrg.data.manifests import hash_row_ids
-from fedcrg.data.models import CalibrationRoleAssignment, ClientData, ClientSplits
+from fedcrg.data.models import (
+    CalibrationRoleAssignment,
+    ClientData,
+    ClientSplits,
+    RoleFrame,
+    RolePositions,
+)
 
 _CALIBRATION_ROLES = (
     DataRole.REFERENCE,
@@ -189,7 +195,7 @@ class CalibrationAssignmentBuilder:
         expected = config.split.reservoir_size
         if len(reservoir) != expected:
             raise DataIntegrityError(
-                f"Reservoir has {len(reservoir)} rows; expected {expected}"
+                f"Reservoir has {len(reservoir)} rows, expected {expected}"
             )
         if int(seed) not in config.calibration_seeds:
             raise ValueError(f"Calibration seed {int(seed)} is not configured")
@@ -205,22 +211,22 @@ class CalibrationAssignmentBuilder:
             (DataRole.CALIBRATION, config.split.calibration_benign),
             (DataRole.BENIGN_GUARD, config.split.benign_guard),
         )
-        positions: dict[DataRole, tuple[int, ...]] = {}
-        row_hashes: dict[DataRole, Sha256] = {}
+        role_entries: list[RolePositions] = []
+        positions_by_role: dict[DataRole, tuple[int, ...]] = {}
         for role, count in counts:
             role_positions = tuple(
                 int(value) for value in order[cursor : cursor + count]
             )
-            positions[role] = role_positions
+            positions_by_role[role] = role_positions
             row_ids = (
                 reservoir.iloc[list(role_positions)]["row_id"].astype(str).tolist()
             )
-            row_hashes[role] = hash_row_ids(row_ids)
+            role_entries.append(RolePositions(role, role_positions, hash_row_ids(row_ids)))
             cursor += count
         if cursor != expected:
             raise RuntimeError("Calibration roles do not exactly cover the reservoir")
         flattened = [
-            value for role in _CALIBRATION_ROLES for value in positions[role]
+            value for role in _CALIBRATION_ROLES for value in positions_by_role[role]
         ]
         if len(flattened) != len(set(flattened)) or set(flattened) != set(range(expected)):
             raise RuntimeError("Calibration assignment is not a partition of the reservoir")
@@ -228,8 +234,7 @@ class CalibrationAssignmentBuilder:
             client_id=client_id,
             calibration_seed=seed,
             mode=mode,
-            positions=positions,
-            row_id_hashes=row_hashes,
+            roles=tuple(role_entries),
         )
 
     @staticmethod
@@ -255,24 +260,27 @@ class DataSplitter:
         attack = _ensure_row_ids(data.attack, data.dataset, data.client_id, "attack")
         if len(benign) < split.minimum_benign_rows:
             raise DataIntegrityError(
-                f"Client {data.client_id} has {len(benign)} benign rows; "
+                f"Client {data.client_id} has {len(benign)} benign rows, "
                 f"{split.minimum_benign_rows} required"
             )
 
         train_end = split.train_benign
         reservoir_end = train_end + split.reservoir_size
-        roles: dict[DataRole, pd.DataFrame] = {
+        attack_dev, attack_test = self._attack_roles(attack, data, config)
+        role_frames: dict[DataRole, pd.DataFrame] = {
             DataRole.TRAIN: benign.iloc[:train_end].copy(),
             DataRole.RESERVOIR: benign.iloc[train_end:reservoir_end].copy(),
             DataRole.BENIGN_TEST: benign.iloc[reservoir_end:].copy(),
+            DataRole.ATTACK_DEV: attack_dev,
+            DataRole.ATTACK_TEST: attack_test,
         }
-        attack_dev, attack_test = self._attack_roles(attack, data, config)
-        roles[DataRole.ATTACK_DEV] = attack_dev
-        roles[DataRole.ATTACK_TEST] = attack_test
-        for role, frame in roles.items():
+        for role, frame in role_frames.items():
             frame["role"] = role.value
 
-        result = ClientSplits(data.client_id, roles)
+        result = ClientSplits(
+            data.client_id,
+            tuple(RoleFrame(role, frame) for role, frame in role_frames.items()),
+        )
         validate_split_disjointness(result)
         self._validate_base_counts(result, config)
         return result
@@ -367,7 +375,7 @@ class DataSplitter:
         for role, count in expected.items():
             if len(splits.get(role)) != count:
                 raise DataIntegrityError(
-                    f"Role {role.value} has {len(splits.get(role))} rows; expected {count}"
+                    f"Role {role.value} has {len(splits.get(role))} rows, expected {count}"
                 )
         if len(splits.get(DataRole.BENIGN_TEST)) < config.split.min_benign_test:
             raise DataIntegrityError("Final benign test count is below the locked minimum")

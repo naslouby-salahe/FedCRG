@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from fedcrg.core.enums import ComputeDeviceId, DataRole, DatasetId
-from fedcrg.core.ids import ClientId, ModelSeed, Sha256
+from fedcrg.core.enums import ComputeDeviceId, DatasetId
+from fedcrg.core.ids import ModelSeed, Sha256
 from fedcrg.detectors.base import DetectorModel
 from fedcrg.scoring.models import ClientScoreInput, ClientScoreSet, RoleScores, ScoreManifest
 
@@ -49,18 +49,19 @@ class ScoreComputer:
         clients: tuple[ClientScoreInput, ...],
         device: ComputeDeviceId = ComputeDeviceId.CPU,
     ) -> ScoreManifest:
-        scored_clients: dict[ClientId, ClientScoreSet] = {}
+        scored_clients: list[ClientScoreSet] = []
         for client in clients:
-            role_scores: dict[DataRole, RoleScores] = {}
-            for role, role_input in client.roles.items():
-                role_scores[role] = RoleScores(
-                    role=role,
+            role_scores = tuple(
+                RoleScores(
+                    role=role_input.role,
                     values=self.compute(model, role_input.values, device),
                     client_id=client.client_id,
                     row_ids=role_input.row_ids,
                     attack_groups=role_input.attack_groups,
                 )
-            scored_clients[client.client_id] = ClientScoreSet(client.client_id, role_scores)
+                for role_input in client.roles
+            )
+            scored_clients.append(ClientScoreSet(client.client_id, role_scores))
         return ScoreManifest(
             dataset=dataset,
             model_seed=model_seed,
@@ -69,5 +70,5 @@ class ScoreComputer:
             training_spec_hash=training_spec_hash,
             dataset_manifest_hash=dataset_manifest_hash,
             preprocessing_hash=preprocessing_hash,
-            clients=scored_clients,
+            clients=tuple(scored_clients),
         )

@@ -38,7 +38,7 @@ from fedcrg.data.manifests import (
     hash_row_ids,
     source_file_manifest,
 )
-from fedcrg.data.models import ClientData, ClientSplits, EligibilityRecord
+from fedcrg.data.models import ClientData, ClientSplits, EligibilityRecord, RoleFrame
 from fedcrg.data.preprocessing import (
     ClientPreprocessingStatistics,
     FederatedPreprocessor,
@@ -176,10 +176,13 @@ class PrepareData:
     ]:
         records: list[EligibilityRecord] = []
         statistics: dict[ClientId, ClientPreprocessingStatistics] = {}
-        seen: list[ClientId] = []
-        for data in adapter.iter_clients(discovered):
-            client_id = data.client_id
-            seen.append(client_id)
+        for client_id in discovered:
+            data = adapter.load_client(client_id)
+            if data.client_id != client_id:
+                raise DataIntegrityError(
+                    f"{FailureCode.NONDETERMINISTIC_PARITY_FAIL.value}: "
+                    "adapter returned a client identity that does not match the request"
+                )
             if config.dataset.id is DatasetId.NBAIOT:
                 self._validate_nbaiot_count(config, data)
             record = self.eligibility.evaluate(data, config.dataset)
@@ -193,26 +196,20 @@ class PrepareData:
                 config.dataset.feature_count,
             )
             self._write_raw_splits(root, splits)
-
-        if tuple(seen) != tuple(discovered):
-            raise DataIntegrityError(
-                f"{FailureCode.NONDETERMINISTIC_PARITY_FAIL.value}: "
-                "adapter iteration changed the frozen client ordering"
-            )
         return tuple(records), statistics
 
     @staticmethod
     def _write_raw_splits(root: Path, splits: ClientSplits) -> None:
         client_root = root / "_raw" / splits.client_id.value
         client_root.mkdir(parents=True, exist_ok=True)
-        for role, frame in splits.roles.items():
+        for role, frame in ((item.role, item.frame) for item in splits.roles):
             frame.to_parquet(client_root / f"{role.value}.parquet", index=False)
 
     @staticmethod
     def _load_raw_splits(root: Path, client_id: ClientId) -> ClientSplits:
         client_root = root / "_raw" / client_id.value
-        roles = {
-            role: pd.read_parquet(client_root / f"{role.value}.parquet")
+        roles = tuple(
+            RoleFrame(role, pd.read_parquet(client_root / f"{role.value}.parquet"))
             for role in (
                 DataRole.TRAIN,
                 DataRole.RESERVOIR,
@@ -220,7 +217,7 @@ class PrepareData:
                 DataRole.ATTACK_DEV,
                 DataRole.ATTACK_TEST,
             )
-        }
+        )
         return ClientSplits(client_id, roles)
 
     def _finalize_staged_clients(
@@ -282,7 +279,7 @@ class PrepareData:
         client_root = root / "clients" / splits.client_id.value
         client_root.mkdir(parents=True)
         roles: list[RoleArtifactManifest] = []
-        for role, raw_frame in splits.roles.items():
+        for role, raw_frame in ((item.role, item.frame) for item in splits.roles):
             frame = preprocessing.transform(raw_frame, splits.client_id)
             path = client_root / f"{role.value}.csv.gz"
             temp = path.with_name(f".{path.name}.tmp")
@@ -322,11 +319,11 @@ class PrepareData:
         )
         roles = tuple(
             CalibrationRoleManifest(
-                role=role,
-                row_count=len(assignment.positions_for(role)),
-                row_id_sha256=assignment.row_id_hashes[role],
+                role=item.role,
+                row_count=len(item.positions),
+                row_id_sha256=item.row_id_hash,
             )
-            for role in sorted(assignment.positions, key=lambda item: item.value)
+            for item in sorted(assignment.roles, key=lambda item: item.role.value)
         )
         return ClientCalibrationManifest(splits.client_id, roles)
 
@@ -397,7 +394,7 @@ class PrepareData:
             if expected is not None and len(discovered) != expected:
                 raise DataIntegrityError(
                     f"{FailureCode.DIAD_DEVICE_COUNT_SOURCE_MISMATCH.value}: found "
-                    f"{len(discovered)} source identities; expected {expected}"
+                    f"{len(discovered)} source identities, expected {expected}"
                 )
         elif (
             config.dataset.expected_clients is not None
@@ -405,7 +402,7 @@ class PrepareData:
         ):
             raise DataIntegrityError(
                 f"{FailureCode.DATASET_COUNT_MISMATCH.value}: found {len(discovered)} "
-                f"clients; expected {config.dataset.expected_clients}"
+                f"clients, expected {config.dataset.expected_clients}"
             )
 
     @staticmethod

@@ -119,7 +119,7 @@ class NBaiotAdapter(DatasetAdapter):
             if frame.shape[1] != NBAIOT_EXPECTED_FEATURES:
                 raise DataIntegrityError(
                     f"{FailureCode.FEATURE_SCHEMA_MISMATCH.value}: {path} has "
-                    f"{frame.shape[1]} columns; expected {NBAIOT_EXPECTED_FEATURES}"
+                    f"{frame.shape[1]} columns, expected {NBAIOT_EXPECTED_FEATURES}"
                 )
             try:
                 numeric = frame.apply(pd.to_numeric, errors="raise")

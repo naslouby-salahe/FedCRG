@@ -28,24 +28,33 @@ class ClientCalibrationScores:
     client_id: ClientId
     calibration_seed: CalibrationSeed
     mode: CalibrationAssignmentMode
-    roles: dict[DataRole, RoleScores]
+    roles: tuple[RoleScores, ...]
 
     def get(self, role: DataRole) -> RoleScores:
-        return self.roles[role]
+        for item in self.roles:
+            if item.role is role:
+                return item
+        raise KeyError(role.value)
 
 
 @dataclass(frozen=True, slots=True)
 class CalibrationScoreViews:
     calibration_seed: CalibrationSeed
     mode: CalibrationAssignmentMode
-    clients: dict[ClientId, ClientCalibrationScores]
+    clients: tuple[ClientCalibrationScores, ...]
 
     @property
     def client_ids(self) -> tuple[ClientId, ...]:
-        return tuple(sorted(self.clients))
+        return tuple(sorted(item.client_id for item in self.clients))
+
+    def client(self, client_id: ClientId) -> ClientCalibrationScores:
+        for item in self.clients:
+            if item.client_id == client_id:
+                return item
+        raise KeyError(client_id.value)
 
     def get(self, client_id: ClientId, role: DataRole) -> RoleScores:
-        return self.clients[client_id].get(role)
+        return self.client(client_id).get(role)
 
 
 class CalibrationScoreViewBuilder:
@@ -61,7 +70,7 @@ class CalibrationScoreViewBuilder:
         mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
         prepared_root: Path | None = None,
     ) -> CalibrationScoreViews:
-        """Open reservoir scores only; final-test roles remain unopened."""
+        """Open reservoir scores only, final-test roles remain unopened."""
 
         seed = CalibrationSeed(int(calibration_seed))
         descriptor = cache.load_descriptor(score_root)
@@ -93,8 +102,8 @@ class CalibrationScoreViewBuilder:
         if scores.dataset is not dataset.id:
             raise ValueError("Score cache dataset does not match calibration configuration")
         reservoirs = {
-            client_id: client_scores.scores[DataRole.RESERVOIR]
-            for client_id, client_scores in scores.clients.items()
+            client_scores.client_id: client_scores.get(DataRole.RESERVOIR)
+            for client_scores in scores.clients
         }
         return self._build_from_reservoirs(
             scores.dataset,
@@ -115,7 +124,7 @@ class CalibrationScoreViewBuilder:
         prepared_root: Path | None,
     ) -> CalibrationScoreViews:
         expected = self._load_expected_manifest(prepared_root, calibration_seed, mode)
-        result: dict[ClientId, ClientCalibrationScores] = {}
+        result: list[ClientCalibrationScores] = []
         for client_id, reservoir in sorted(reservoirs.items()):
             frame = pd.DataFrame({"row_id": [row_id.value for row_id in reservoir.row_ids]})
             assignment = self.assignments.build(
@@ -126,31 +135,35 @@ class CalibrationScoreViewBuilder:
                 calibration_seed,
                 mode,
             )
-            role_views: dict[DataRole, RoleScores] = {}
+            role_views: list[RoleScores] = []
             for role in _CALIBRATION_ROLES:
                 positions = assignment.positions_for(role)
                 selected_values = reservoir.values[list(positions)]
                 selected_ids = tuple(reservoir.row_ids[index] for index in positions)
-                role_views[role] = RoleScores(
-                    role=role,
-                    values=selected_values,
-                    client_id=client_id,
-                    row_ids=selected_ids,
+                role_views.append(
+                    RoleScores(
+                        role=role,
+                        values=selected_values,
+                        client_id=client_id,
+                        row_ids=selected_ids,
+                    )
                 )
                 self._verify_expected(
                     expected,
                     client_id,
                     role,
                     len(selected_ids),
-                    assignment.row_id_hashes[role].value,
+                    assignment.row_id_hash_for(role).value,
                 )
-            result[client_id] = ClientCalibrationScores(
-                client_id=client_id,
-                calibration_seed=calibration_seed,
-                mode=mode,
-                roles=role_views,
+            result.append(
+                ClientCalibrationScores(
+                    client_id=client_id,
+                    calibration_seed=calibration_seed,
+                    mode=mode,
+                    roles=tuple(role_views),
+                )
             )
-        return CalibrationScoreViews(calibration_seed, mode, result)
+        return CalibrationScoreViews(calibration_seed, mode, tuple(result))
 
     @staticmethod
     def _load_expected_manifest(

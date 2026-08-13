@@ -20,13 +20,13 @@ def test_score_computer_emits_float64_manifest() -> None:
     )
     client = ClientScoreInput(
         client_id=client_id,
-        roles={
-            DataRole.TRAIN: RoleScoreInput(
+        roles=(
+            RoleScoreInput(
                 role=DataRole.TRAIN,
                 values=np.zeros((3, 2), dtype=np.float32),
                 row_ids=row_ids,
-            )
-        },
+            ),
+        ),
     )
     manifest = ScoreComputer().compute_manifest(
         model,
@@ -38,6 +38,6 @@ def test_score_computer_emits_float64_manifest() -> None:
         _SOME_HASH,
         (client,),
     )
-    scores = manifest.clients[client_id].scores[DataRole.TRAIN]
+    scores = manifest.client(client_id).get(DataRole.TRAIN)
     assert scores.values.dtype == np.float64
     assert len(scores.sha256.value) == 64

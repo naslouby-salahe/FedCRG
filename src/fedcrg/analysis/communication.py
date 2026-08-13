@@ -69,9 +69,9 @@ def threshold_policy_communication(config: ExperimentConfig, *, client_count: in
     summary_moment_bytes = 2 * (_INT64_BYTES + 2 * _FLOAT64_BYTES)
     candidate_f1_bytes = SUPERVISED_THRESHOLD_CANDIDATES * _FLOAT64_BYTES
     return (
-        PolicyCommunicationLedger(PolicyId.FEDCRG, client_count, reference_bytes, client_count * reference_bytes, "Reference scores only; mismatch can be logged as a count and local readiness needs no raw-score upload."),
+        PolicyCommunicationLedger(PolicyId.FEDCRG, client_count, reference_bytes, client_count * reference_bytes, "Reference scores only, mismatch can be logged as a count and local readiness needs no raw-score upload."),
         PolicyCommunicationLedger(PolicyId.GLOBAL_QUANTILE, client_count, full_score_bytes, client_count * full_score_bytes, "Reference implementation uploads the complete R+G+C benign policy budget."),
-        PolicyCommunicationLedger(PolicyId.THREE_SIGMA, client_count, full_score_bytes, client_count * full_score_bytes, "Naive score-upload reference implementation; optimized distributed moments are outside the locked comparator."),
+        PolicyCommunicationLedger(PolicyId.THREE_SIGMA, client_count, full_score_bytes, client_count * full_score_bytes, "Naive score-upload reference implementation, optimized distributed moments are outside the locked comparator."),
         PolicyCommunicationLedger(PolicyId.SUMMARY_STATISTIC_SELECT, client_count, summary_moment_bytes + candidate_f1_bytes, client_count * (summary_moment_bytes + candidate_f1_bytes), "Two class moment triples plus one 1,000-value F1 vector per client."),
-        PolicyCommunicationLedger(PolicyId.SUPERVISED_F1, client_count, candidate_f1_bytes, client_count * candidate_f1_bytes, "One 1,000-value F1 vector per client; candidate broadcasts are excluded."),
+        PolicyCommunicationLedger(PolicyId.SUPERVISED_F1, client_count, candidate_f1_bytes, client_count * candidate_f1_bytes, "One 1,000-value F1 vector per client, candidate broadcasts are excluded."),
     )

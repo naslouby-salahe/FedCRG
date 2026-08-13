@@ -32,8 +32,8 @@ class ClaimAssessment:
 def assess_claim_level(evidence: ClaimGateEvidence) -> ClaimAssessment:
     """Classify the strongest defensible claim without suppressing negative results.
 
-    G0 is a submission-week novelty discipline rather than a scientific outcome gate;
-    its failure blocks release of the novelty wording but does not turn otherwise valid
+    G0 is a submission-week novelty discipline rather than a scientific outcome gate.
+    Its failure blocks release of the novelty wording but does not turn otherwise valid
     experimental evidence into an invalid study. G1, G2, and G8 are the integrity
     gates that make the experimental package invalid when they fail.
     """

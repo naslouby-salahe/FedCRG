@@ -19,11 +19,17 @@ class ThresholdStability:
 
 
 @dataclass(frozen=True, slots=True)
+class StateFrequency:
+    state: DecisionState
+    frequency: float
+
+
+@dataclass(frozen=True, slots=True)
 class StateStability:
     count: int
     transition_count: int
     transition_frequency: float
-    state_frequencies: dict[DecisionState, float]
+    state_frequencies: tuple[StateFrequency, ...]
 
 
 def summarize_threshold_stability(values: tuple[float, ...]) -> ThresholdStability:
@@ -52,5 +58,7 @@ def summarize_state_stability(states: tuple[DecisionState, ...]) -> StateStabili
         count=total,
         transition_count=transitions,
         transition_frequency=transitions / max(1, total - 1),
-        state_frequencies={state: count / total for state, count in counts.items()},
+        state_frequencies=tuple(
+            StateFrequency(state, count / total) for state, count in counts.items()
+        ),
     )

@@ -47,7 +47,7 @@ def paired_model_seed_bootstrap(
     replicates: int = 10000,
     seed: int = 424242,
 ) -> PairedBootstrapInterval:
-    """Bootstrap paired model-seed indices; never treat calibration splits as subjects."""
+    """Bootstrap paired model-seed indices, never treat calibration splits as subjects."""
 
     left = np.asarray(method, dtype=np.float64)
     right = np.asarray(comparator, dtype=np.float64)

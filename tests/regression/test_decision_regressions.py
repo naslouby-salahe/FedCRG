@@ -1,9 +1,15 @@
 """Regression coverage for defects found in the pre-refactor implementation."""
 
 from fedcrg.core.enums import CalibrationReadinessState, DecisionState, MismatchOutcome
-from fedcrg.core.types import OperatingBand
+from fedcrg.core.types import ConfidenceInterval, OperatingBand
 from fedcrg.protocol.decision import ThresholdDecisionEngine
-from fedcrg.protocol.results import CalibrationReadiness, MismatchEvidence, ReadinessPlan, ReferenceThreshold
+from fedcrg.protocol.results import (
+    CalibrationReadiness,
+    ContinuityDiagnostics,
+    MismatchEvidence,
+    ReadinessPlan,
+    ReferenceThreshold,
+)
 
 
 def _reference() -> ReferenceThreshold:
@@ -11,11 +17,21 @@ def _reference() -> ReferenceThreshold:
 
 
 def _readiness() -> CalibrationReadiness:
-    return CalibrationReadiness(ReadinessPlan(100, 99, 0.99, CalibrationReadinessState.READY, OperatingBand(0.005, 0.015), 0.95), 2.0, 1)
+    diagnostics = ContinuityDiagnostics(
+        unique_score_fraction=1.0,
+        duplicate_count=0,
+        selected_threshold_multiplicity=1,
+        minimum_positive_spacing=0.01,
+    )
+    return CalibrationReadiness(
+        ReadinessPlan(100, 99, 0.99, CalibrationReadinessState.READY, OperatingBand(0.005, 0.015), 0.95),
+        2.0,
+        diagnostics,
+    )
 
 
 def _mismatch(outcome: MismatchOutcome) -> MismatchEvidence:
-    return MismatchEvidence(1000, 20, 0.02, None, outcome, 736, None, None)
+    return MismatchEvidence(1000, 20, 0.02, ConfidenceInterval(0.01, 0.03), outcome, 736, 0.5, 0.5)
 
 
 def test_previous_string_none_bug_cannot_recur() -> None:

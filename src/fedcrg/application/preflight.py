@@ -36,7 +36,7 @@ class ResearchPreflight:
         audit = self.data_auditor.audit(prepared_root, config)
         if not audit.valid:
             raise RuntimeError(
-                "Prepared-data preflight failed: " + "; ".join(audit.problems)
+                "Prepared-data preflight failed: " + ", ".join(audit.problems)
             )
         readiness, mismatch = self.table_precomputer.precompute(config)
         return PreflightResult(

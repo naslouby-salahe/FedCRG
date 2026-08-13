@@ -84,7 +84,7 @@ class ReadinessPlanCache:
     """Persistent pre-data plan table consumed by real-data policy evaluation.
 
     Persistence is intentionally tiny and dependency-free. Application code decides
-    when the table is generated; runtime evaluation may only call :meth:`require`.
+    when the table is generated, runtime evaluation may only call :meth:`require`.
     """
 
     def __init__(
@@ -97,6 +97,9 @@ class ReadinessPlanCache:
         self._plans: dict[str, ReadinessPlan] = {}
         if path is not None and path.is_file():
             self._load(path)
+
+    def __len__(self) -> int:
+        return len(self._plans)
 
     @staticmethod
     def key(

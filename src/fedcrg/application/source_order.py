@@ -12,7 +12,7 @@ from fedcrg.scoring.cache import ScoreCache
 
 
 class RunSourceOrderCalibration:
-    """Reassign the frozen reservoir in source order; never retrain or rescore."""
+    """Reassign the frozen reservoir in source order, never retrain or rescore."""
 
     def run(
         self,

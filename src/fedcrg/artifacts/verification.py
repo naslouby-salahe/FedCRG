@@ -17,11 +17,23 @@ from fedcrg.experiments.models import ExperimentDefinition
 
 
 @dataclass(frozen=True, slots=True)
+class FileHashRecord:
+    relative_path: str
+    sha256: str
+
+
+@dataclass(frozen=True, slots=True)
 class VerificationResult:
     valid: bool
     missing: tuple[str, ...]
     mismatched: tuple[str, ...]
-    hashes: dict[str, str]
+    hashes: tuple[FileHashRecord, ...]
+
+    def hash_for(self, relative_path: str) -> str | None:
+        for record in self.hashes:
+            if record.relative_path == relative_path:
+                return record.sha256
+        return None
 
 
 class ArtifactVerifier:
@@ -84,10 +96,10 @@ class ArtifactVerifier:
             for path in self.required_files(layout, definition)
             if not path.exists()
         )
-        hashes = {
-            str(path.relative_to(layout.root)): sha256_file(path)
+        hashes = tuple(
+            FileHashRecord(str(path.relative_to(layout.root)), sha256_file(path))
             for path in self._hashable_files(layout)
-        }
+        )
         mismatched = tuple(sorted(self._semantic_mismatches(layout)))
         result = VerificationResult(not missing and not mismatched, missing, mismatched, hashes)
         atomic_write_json(
@@ -95,7 +107,7 @@ class ArtifactVerifier:
             {
                 "missing": list(missing),
                 "mismatched": list(mismatched),
-                "hashes": hashes,
+                "hashes": {record.relative_path: record.sha256 for record in hashes},
             },
         )
         return result
@@ -103,17 +115,20 @@ class ArtifactVerifier:
     def verify(self, layout: RunLayout) -> VerificationResult:
         evidence_path = layout.verification / "hashes.json"
         if not evidence_path.exists():
-            return VerificationResult(False, ("verification/hashes.json",), (), {})
+            return VerificationResult(False, ("verification/hashes.json",), (), ())
         evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
-        expected: dict[str, str] = evidence.get("hashes", {})
+        expected_raw: dict[str, str] = evidence.get("hashes", {})
+        expected = tuple(
+            FileHashRecord(path, digest) for path, digest in expected_raw.items()
+        )
         missing = tuple(
-            sorted(path for path in expected if not (layout.root / path).exists())
+            sorted(path for path in expected_raw if not (layout.root / path).exists())
         )
         mismatched = {
-            path
-            for path, expected_hash in expected.items()
-            if (layout.root / path).exists()
-            and sha256_file(layout.root / path) != expected_hash
+            record.relative_path
+            for record in expected
+            if (layout.root / record.relative_path).exists()
+            and sha256_file(layout.root / record.relative_path) != record.sha256
         }
         mismatched.update(self._semantic_mismatches(layout))
         originally_missing = tuple(str(item) for item in evidence.get("missing", []))

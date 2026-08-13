@@ -30,8 +30,8 @@ def _role_scores(role: DataRole, count: int) -> RoleScores:
 
 
 def _manifest() -> ScoreManifest:
-    scores = {
-        role: _role_scores(role, 5)
+    scores = tuple(
+        _role_scores(role, 5)
         for role in (
             DataRole.TRAIN,
             DataRole.RESERVOIR,
@@ -39,7 +39,7 @@ def _manifest() -> ScoreManifest:
             DataRole.ATTACK_DEV,
             DataRole.ATTACK_TEST,
         )
-    }
+    )
     return ScoreManifest(
         dataset=DatasetId.NBAIOT,
         model_seed=ModelSeed(11),
@@ -48,7 +48,7 @@ def _manifest() -> ScoreManifest:
         training_spec_hash=_SOME_HASH,
         dataset_manifest_hash=_SOME_HASH,
         preprocessing_hash=_SOME_HASH,
-        clients={_CLIENT: ClientScoreSet(_CLIENT, scores)},
+        clients=(ClientScoreSet(_CLIENT, scores),),
     )
 
 

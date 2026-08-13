@@ -27,14 +27,36 @@ class ClientData:
 
 
 @dataclass(frozen=True, slots=True)
+class RoleFrame:
+    role: DataRole
+    frame: pd.DataFrame
+
+
+@dataclass(frozen=True, slots=True)
 class ClientSplits:
     """A typed set of materialized role frames for one client."""
 
     client_id: ClientId
-    roles: dict[DataRole, pd.DataFrame]
+    roles: tuple[RoleFrame, ...]
 
     def get(self, role: DataRole) -> pd.DataFrame:
-        return self.roles[role]
+        for item in self.roles:
+            if item.role is role:
+                return item.frame
+        raise KeyError(role.value)
+
+    def try_get(self, role: DataRole) -> pd.DataFrame | None:
+        for item in self.roles:
+            if item.role is role:
+                return item.frame
+        return None
+
+
+@dataclass(frozen=True, slots=True)
+class RolePositions:
+    role: DataRole
+    positions: tuple[int, ...]
+    row_id_hash: Sha256
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,8 +66,7 @@ class CalibrationRoleAssignment:
     client_id: ClientId
     calibration_seed: CalibrationSeed
     mode: CalibrationAssignmentMode
-    positions: dict[DataRole, tuple[int, ...]]
-    row_id_hashes: dict[DataRole, Sha256]
+    roles: tuple[RolePositions, ...]
 
     def positions_for(self, role: DataRole) -> tuple[int, ...]:
         if role not in {
@@ -55,7 +76,16 @@ class CalibrationRoleAssignment:
             DataRole.BENIGN_GUARD,
         }:
             raise ValueError(f"{role.value} is not a calibration-reservoir role")
-        return self.positions[role]
+        for item in self.roles:
+            if item.role is role:
+                return item.positions
+        raise KeyError(role.value)
+
+    def row_id_hash_for(self, role: DataRole) -> Sha256:
+        for item in self.roles:
+            if item.role is role:
+                return item.row_id_hash
+        raise KeyError(role.value)
 
 
 @dataclass(frozen=True, slots=True)

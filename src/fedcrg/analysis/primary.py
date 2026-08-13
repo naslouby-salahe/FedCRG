@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 
 from fedcrg.analysis.statistics import (
+    DescriptiveSummary,
+    PairedBootstrapInterval,
     describe,
     paired_model_seed_bootstrap,
     split_sensitivity_summary,
@@ -24,15 +26,16 @@ class FederationResultRecord:
     policy: PolicyId
     mebe: float
     high_excess: float
+    band_violation_rate: float
     attack_balanced_macro_tpr: float | None
 
 
 @dataclass(frozen=True, slots=True)
 class ContrastMetricResult:
     metric: str
-    method_summary: dict[str, object]
-    comparator_summary: dict[str, object]
-    paired_difference: dict[str, object]
+    method_summary: DescriptiveSummary
+    comparator_summary: DescriptiveSummary
+    paired_difference: PairedBootstrapInterval
     relative_difference: float | None
 
 
@@ -65,6 +68,7 @@ def load_federation_results(run_dirs: tuple[Path, ...]) -> tuple[FederationResul
                 policy=PolicyId(str(manifest["policy_id"])),
                 mebe=float(federation["mebe"]),
                 high_excess=float(federation["high_excess"]),
+                band_violation_rate=float(federation["band_violation_rate"]),
                 attack_balanced_macro_tpr=(
                     None
                     if federation.get("attack_balanced_macro_tpr") is None
@@ -100,7 +104,7 @@ def confirmatory_contrasts(
     if observed_method_seeds != expected_seeds:
         raise ValueError(
             "Confirmatory contrasts require exactly model seeds 11,22,33,44,55 "
-            f"for FedCRG; observed {sorted(observed_method_seeds)}"
+            f"for FedCRG, observed {sorted(observed_method_seeds)}"
         )
     method_by_seed = {
         row.model_seed: row
@@ -142,9 +146,9 @@ def confirmatory_contrasts(
             metrics.append(
                 ContrastMetricResult(
                     metric=metric,
-                    method_summary=asdict(describe(left)),
-                    comparator_summary=asdict(describe(right)),
-                    paired_difference=asdict(bootstrap),
+                    method_summary=describe(left),
+                    comparator_summary=describe(right),
+                    paired_difference=bootstrap,
                     relative_difference=relative,
                 )
             )

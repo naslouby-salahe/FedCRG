@@ -6,15 +6,74 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Callable
 
+import numpy as np
+
 from fedcrg.analysis.benchmark import benchmark, configure_single_thread_execution
 from fedcrg.artifacts.environment import capture_environment
 from fedcrg.artifacts.experiment_results import ExperimentResultEnvelope
 from fedcrg.config.models import ExperimentConfig
-from fedcrg.core.ids import Sha256
+from fedcrg.core.ids import ClientId, Sha256
+from fedcrg.protocol.decision import ThresholdDecisionEngine
+from fedcrg.protocol.mismatch import ReferenceMismatchEvaluator
+from fedcrg.protocol.readiness import CalibrationReadinessEvaluator, ReadinessPlanCache
+from fedcrg.protocol.reference import ReferenceThresholdEstimator
 
 
 class RunBenchmark:
     """Execute the four locked R13 primitive measurements."""
+
+    def run_on_synthetic_evidence(
+        self,
+        config: ExperimentConfig,
+        output: Path,
+        repository_root: Path = Path("."),
+        synthetic_seed: int = 123456,
+    ) -> Path:
+        """Build representative-sized synthetic benign evidence, then benchmark the primitives.
+
+        R13 measures per-primitive wall time/memory at deployment-representative input
+        sizes, it is not a claim about the frozen protocol's statistical behavior, so
+        synthetic benign scores are sufficient input evidence.
+        """
+
+        rng = np.random.default_rng(synthetic_seed)
+        client_count = max(config.dataset.expected_clients or 9, 1)
+        references = {
+            ClientId(f"benchmark-client-{i:03d}"): rng.normal(
+                size=config.dataset.split.reference_benign
+            ).astype(np.float64)
+            for i in range(client_count)
+        }
+        calibration = rng.normal(size=config.dataset.split.calibration_benign).astype(np.float64)
+        mismatch = rng.normal(size=config.dataset.split.mismatch_benign).astype(np.float64)
+
+        reference_estimator = ReferenceThresholdEstimator()
+        reference = reference_estimator.estimate(references, config.protocol.alpha)
+        plan = ReadinessPlanCache().precompute(
+            len(calibration), config.protocol.band, config.protocol.readiness_assurance
+        )
+        readiness_evaluator = CalibrationReadinessEvaluator()
+        mismatch_evaluator = ReferenceMismatchEvaluator()
+        decision_engine = ThresholdDecisionEngine()
+
+        readiness = readiness_evaluator.evaluate(calibration, plan)
+        mismatch_result = mismatch_evaluator.evaluate(
+            mismatch, reference.value, config.protocol.band, config.protocol.mismatch_confidence
+        )
+
+        operations: dict[str, Callable[[], object]] = {
+            "reference_construction": lambda: reference_estimator.estimate(
+                references, config.protocol.alpha
+            ),
+            "readiness_lookup_and_order_statistic": lambda: readiness_evaluator.evaluate(
+                calibration, plan
+            ),
+            "reference_mismatch_interval": lambda: mismatch_evaluator.evaluate(
+                mismatch, reference.value, config.protocol.band, config.protocol.mismatch_confidence
+            ),
+            "policy_decision": lambda: decision_engine.decide(reference, readiness, mismatch_result),
+        }
+        return self.run(config, operations, output, repository_root)
 
     def run(
         self,
