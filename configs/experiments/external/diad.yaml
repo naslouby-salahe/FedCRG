@@ -6,16 +6,16 @@ training: ../../training/diad_autoencoder.yaml
 randomness: ../../randomness/external_validation.yaml
 statistics: ../../statistics/confirmatory.yaml
 policies:
-  - REF-Q99-R
-  - GLOBAL-Q99-FULL
-  - LOCAL-Q99-FULL
-  - GATE-A-ONLY
-  - GATE-B-ONLY
-  - SHRINKAGE
-  - FEDDETECT-3SIGMA
-  - DEV-F1-LG-SELECT
-  - LARIDI-STYLE-SS
-  - SUP-F1-1000
-  - ORACLE-TEST
-  - FEDCRG
+  - reference_quantile
+  - global_quantile
+  - local_quantile
+  - readiness_only
+  - mismatch_only
+  - shrinkage
+  - three_sigma
+  - development_f1_selection
+  - summary_statistic
+  - supervised_f1
+  - oracle_test
+  - fedcrg
 outputs_root: outputs

@@ -137,18 +137,18 @@ class OptimizerId(StrEnum):
 
 
 class PolicyId(StrEnum):
-    REFERENCE_QUANTILE = "REF-Q99-R"
-    GLOBAL_QUANTILE = "GLOBAL-Q99-FULL"
-    LOCAL_QUANTILE = "LOCAL-Q99-FULL"
-    READINESS_ONLY = "GATE-A-ONLY"
-    MISMATCH_ONLY = "GATE-B-ONLY"
-    SHRINKAGE = "SHRINKAGE"
-    THREE_SIGMA = "FEDDETECT-3SIGMA"
-    DEV_F1_SELECT = "DEV-F1-LG-SELECT"
-    SUMMARY_STATISTIC_SELECT = "LARIDI-STYLE-SS"
-    SUPERVISED_F1 = "SUP-F1-1000"
-    ORACLE_TEST = "ORACLE-TEST"
-    FEDCRG = "FEDCRG"
+    REFERENCE_QUANTILE = "reference_quantile"
+    GLOBAL_QUANTILE = "global_quantile"
+    LOCAL_QUANTILE = "local_quantile"
+    READINESS_ONLY = "readiness_only"
+    MISMATCH_ONLY = "mismatch_only"
+    SHRINKAGE = "shrinkage"
+    THREE_SIGMA = "three_sigma"
+    DEV_F1_SELECT = "development_f1_selection"
+    SUMMARY_STATISTIC_SELECT = "summary_statistic"
+    SUPERVISED_F1 = "supervised_f1"
+    ORACLE_TEST = "oracle_test"
+    FEDCRG = "fedcrg"
 
 
 class PolicyEvaluationStatus(StrEnum):

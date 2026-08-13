@@ -38,7 +38,7 @@ class PolicyThresholdSet:
 
     def for_client(self, policy: PolicyId, client_id: ClientId) -> float | None:
         if policy is PolicyId.ORACLE_TEST:
-            raise ValueError("ORACLE-TEST is not available before final-test evidence opens")
+            raise ValueError("oracle_test is not available before final-test evidence opens")
         for entry in self.entries:
             if entry.policy is policy and entry.client_id == client_id:
                 return entry.threshold

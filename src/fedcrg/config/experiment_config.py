@@ -69,14 +69,14 @@ class ExperimentConfig(BaseModel):
             )
         return self
 
-    def canonical_json(self) -> str:
-        """Canonical scientific configuration, independent of output location."""
+    def serialized_payload(self) -> str:
+        """Stable scientific configuration, independent of output location."""
         payload = self.model_dump(mode="json", exclude={"outputs_root"})
         return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
     @property
     def config_hash(self) -> str:
-        return hashlib.sha256(self.canonical_json().encode("utf-8")).hexdigest()
+        return hashlib.sha256(self.serialized_payload().encode("utf-8")).hexdigest()
 
     @property
     def data_spec_hash(self) -> str:

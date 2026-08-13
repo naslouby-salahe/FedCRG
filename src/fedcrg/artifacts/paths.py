@@ -1,4 +1,4 @@
-"""Canonical immutable output layout and run-identity construction."""
+"""Immutable output layout and run-identity construction."""
 
 from __future__ import annotations
 

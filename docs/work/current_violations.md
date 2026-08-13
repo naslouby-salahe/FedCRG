@@ -5,26 +5,17 @@ matrix IDs (`docs/FedCRG Audit Matrix.md`).
 
 ## A. Forbidden vocabulary and naming (prompt §8)
 
-- A1. `canonical` in production source:
-  - `src/fedcrg/artifacts/manifests.py:107` local variable `canonical`
-  - `src/fedcrg/config/experiment_config.py:69` method `canonical_json()`
-  - `src/fedcrg/artifacts/paths.py:1` docstring "Canonical immutable output layout"
-  - `src/fedcrg/artifacts/environment.py:100` local `canonical_name`
-  - Rename to `serialized_payload` / `stable_representation` / `resolved_*` per prompt.
-  - Matrix: R04.
-
-- A2. Opaque `PolicyId` enum values (prompt §7): `REF-Q99-R`, `GLOBAL-Q99-FULL`,
-  `LOCAL-Q99-FULL`, `GATE-A-ONLY`, `GATE-B-ONLY`, `SHRINKAGE`, `FEDDETECT-3SIGMA`,
-  `DEV-F1-LG-SELECT`, `LARIDI-STYLE-SS`, `SUP-F1-1000`, `ORACLE-TEST`, `FEDCRG`.
-  Replace with descriptive values (`reference_quantile`, `global_quantile`,
-  `local_quantile`, `readiness_only`, `mismatch_only`, `shrinkage`, `three_sigma`,
+- A1. ~~`canonical` in production source~~ RESOLVED 2026-08-13: `serialized_payload()`,
+  `serialized`, `normalized_name`, docstrings cleaned; `rg -i canonical src tests` clean
+  (only a test function name). Matrix: R04.
+- A2. ~~Opaque `PolicyId` enum values~~ RESOLVED 2026-08-13: values renamed to
+  descriptive snake_case (`reference_quantile`, `global_quantile`, `local_quantile`,
+  `readiness_only`, `mismatch_only`, `shrinkage`, `three_sigma`,
   `development_f1_selection`, `summary_statistic`, `supervised_f1`, `oracle_test`,
-  `fedcrg`). Publication labels move to reporting. Matrix: E07.
-  Note: configs, run IDs, manifests, tests, and comparators all reference these values.
-
-- A3. Vague/legacy README: describes `core/`, `protocol/`, `policies/`, `metrics/`,
-  `application/` that no longer exist; links `docs/protocol_implementation_ledger.md`
-  which does not exist. Matrix: H01.
+  `fedcrg`); YAML configs and reporting updated; roadmap shorthand remains only in the
+  normative spec tables. Matrix: E07.
+- A3. ~~Vague/legacy README~~ RESOLVED 2026-08-13: architecture section matches tree;
+  broken ledger link replaced with the audit matrix. Matrix: H01.
 
 ## B. Configuration ownership (prompt §5, §9)
 

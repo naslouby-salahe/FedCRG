@@ -7,26 +7,28 @@ FedCRG is a **post-training operating-point governance protocol**. It does not i
 1. the federation reference threshold is shown to be materially outside the client’s pre-registered benign FPR band; and
 2. an independent local calibration sample is large enough to construct an order-statistic threshold with the locked finite-sample in-band readiness assurance.
 
-The normative research specification is [`docs/roadmap.md`](docs/roadmap.md). The roadmap-to-code mapping is [`docs/protocol_implementation_ledger.md`](docs/protocol_implementation_ledger.md).
+The normative research specification is [`docs/roadmap.md`](docs/roadmap.md). The live roadmap-to-code control document is [`docs/FedCRG Audit Matrix.md`](docs/FedCRG%20Audit%20Matrix.md).
 
 ## Repository architecture
 
 ```text
-configs/                 composable protocol, dataset, detector, and experiment profiles
+configs/                 YAML profiles: method, training, randomness, statistics,
+                         datasets, detectors, and per-experiment compositions
 src/fedcrg/
-  core/                  enums, IDs, value types, exceptions, constants
+  domain/                enums, identifiers, value objects, errors
   config/                typed configuration resolution and validation
-  protocol/              reference estimation, readiness, mismatch evidence, decision
+  method/                reference estimation, readiness, mismatch evidence, decision
   data/                  natural-client adapters, splitting, eligibility, preprocessing
   detectors/             autoencoder and Deep-SVDD score generators
-  federated/             deterministic client/server training and aggregation
+  federation/            deterministic client/server training and aggregation
   scoring/               immutable score caches and calibration views
-  policies/              benign-only, supervised-development, and oracle comparators
-  metrics/               client/federation reliability and utility metrics
+  thresholds/            benign-only, supervised-development, and oracle comparators
+  evaluation/            client/federation reliability and utility metrics
   experiments/           S1-S6 / R1-R14 catalogue, lifecycle, dependencies, ledgers
   analysis/              statistics, communication, stability, figures, tables, claims
   artifacts/             immutable layouts, manifests, hashes, environment evidence
-  application/           audited research workflows and publication/report orchestration
+  reporting/             publication and report orchestration
+  pipeline/              prepared-data audit, training, scoring, verification workflows
   cli/                   thin research command surface
 tests/                   contract, regression, unit, and integration verification
 outputs/                 generated caches, runs, experiment evidence, and reports
@@ -40,7 +42,6 @@ Generated evidence is deliberately separated by lifecycle:
 ```text
 outputs/
 ├── cache/
-│   ├── datasets/
 │   ├── models/
 │   ├── scores/
 │   └── precomputed/
@@ -73,12 +74,13 @@ Representative commands:
 
 ```bash
 fedcrg doctor
+fedcrg config validate --path configs/experiments/primary/nbaiot.yaml
 fedcrg data prepare --config configs/experiments/primary/nbaiot.yaml --data-root /path/to/nbaiot
 fedcrg tables precompute-readiness --config configs/experiments/primary/nbaiot.yaml
-fedcrg train --config configs/experiments/primary/nbaiot.yaml --prepared-root outputs/cache/datasets/<data-spec-hash> --model-seed 11
-fedcrg score --config configs/experiments/primary/nbaiot.yaml --prepared-root ... --model-path ... --model-seed 11
-fedcrg experiment execute-grid --config configs/experiments/primary/nbaiot.yaml --prepared-root ...
-fedcrg report build --outputs outputs
+fedcrg train --config configs/experiments/primary/nbaiot.yaml --prepared-root <preprocessed-root> --model-seed 11
+fedcrg score --config configs/experiments/primary/nbaiot.yaml --prepared-root <preprocessed-root> --model-path ... --model-seed 11
+fedcrg experiment execute-grid --config configs/experiments/primary/nbaiot.yaml --prepared-root <preprocessed-root>
+fedcrg report build-repository --outputs outputs --config configs/experiments/primary/nbaiot.yaml
 fedcrg verify --outputs outputs
 ```
 
@@ -113,4 +115,4 @@ The codebase implements the registered S1-S6 / R1-R14 paths and evidence contrac
 
 ## Status
 
-The active pull request is a **draft** while the implementation is being hardened section-by-section against the v2.0 roadmap. See the implementation ledger for the current distinction between executable code and evidence that still requires experimental execution.
+The implementation is being hardened against the v2.0 roadmap, tracked in `docs/FedCRG Audit Matrix.md` and `docs/work/`. See the audit matrix for the current distinction between executable code and evidence that still requires experimental execution.

@@ -97,8 +97,8 @@ class EnvironmentLocker:
                 raise RuntimeError(
                     f"Required distribution is not installed: {distribution}"
                 ) from exc
-            canonical_name = metadata.metadata(distribution).get("Name", distribution)
-            normalized.append((canonical_name, version))
+            normalized_name = metadata.metadata(distribution).get("Name", distribution)
+            normalized.append((normalized_name, version))
         normalized.sort(key=lambda item: item[0].lower())
         content = "".join(f"{name}=={version}\n" for name, version in normalized)
         atomic_write_text(path, content)

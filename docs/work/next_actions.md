@@ -12,10 +12,9 @@ statistics threaded through analysis, `validate.py` structural-only, tests updat
 
 ## Batch 2 — Vocabulary and PolicyId (matrix R04, E07, A1, A2)
 
-1. Remove all `canonical` from production source.
-2. Rename `PolicyId` enum values to descriptive names; update comparators, run-ID
-   factory, manifests, configs, reporting labels, tests.
-3. Fix README (remove stale structure, fix missing link).
+DONE 2026-08-13: `canonical` removed from production source; `PolicyId` enum values
+renamed to descriptive snake_case (configs, reporting, tests updated); README rewritten
+to match the actual tree and CLI.
 
 ## Batch 3 — Preprocessed root and outputs layout (matrix R06, R08, D05, D12, C2, C3)
 

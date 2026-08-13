@@ -9,9 +9,9 @@ randomness:
   synthetic_seed: 123456
 statistics: ../../statistics/confirmatory.yaml
 policies:
-  - GLOBAL-Q99-FULL
-  - LOCAL-Q99-FULL
-  - SHRINKAGE
-  - GATE-A-ONLY
-  - FEDCRG
+  - global_quantile
+  - local_quantile
+  - shrinkage
+  - readiness_only
+  - fedcrg
 outputs_root: outputs

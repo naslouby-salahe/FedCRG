@@ -104,7 +104,7 @@ class PreparedDatasetManifestStore:
             "external_replication_supported": external_replication_supported,
             "dataset_level_code": dataset_level_code,
         }
-        canonical = json.dumps(
+        serialized = json.dumps(
             to_json_value(deterministic),
             sort_keys=True,
             separators=(",", ":"),
@@ -121,7 +121,7 @@ class PreparedDatasetManifestStore:
             external_replication_supported=external_replication_supported,
             dataset_level_code=dataset_level_code,
             created_at=datetime.now(UTC),
-            deterministic_payload_sha256=Sha256(hashlib.sha256(canonical).hexdigest()),
+            deterministic_payload_sha256=Sha256(hashlib.sha256(serialized).hexdigest()),
         )
 
     def save(self, path: Path, manifest: PreparedDatasetManifest) -> None:
