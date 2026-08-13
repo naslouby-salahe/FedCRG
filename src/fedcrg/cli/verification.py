@@ -7,7 +7,7 @@ from pathlib import Path
 
 import click
 
-from fedcrg.application.verify import VerifyOutputs
+from fedcrg.pipeline.verify_outputs import VerifyOutputs
 
 
 @click.command(name="verify")

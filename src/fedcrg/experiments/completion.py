@@ -10,8 +10,10 @@ from pathlib import Path
 from fedcrg.artifacts.layout import RunLayout
 from fedcrg.artifacts.manifest import RunManifest, RunManifestStore
 from fedcrg.domain.enums import ExperimentCode, ExperimentId, ExperimentStatus, PolicyId
-from fedcrg.experiments.definitions import SECOND_DETECTOR_POLICIES
-from fedcrg.experiments.registry import ExperimentRegistry
+from fedcrg.experiments.experiment_definition import (
+    SECOND_DETECTOR_POLICIES,
+    all_experiment_definitions,
+)
 
 _PRIMARY_MODEL_SEEDS = (11, 22, 33, 44, 55)
 _NBAIOT_CALIBRATION_SEEDS = tuple(range(1000, 1050))
@@ -33,13 +35,12 @@ class ExperimentCompletionAuditor:
     """Reconcile every pre-registered workload without inferring missing evidence."""
 
     def __init__(self) -> None:
-        self.registry = ExperimentRegistry()
         self.manifests = RunManifestStore()
 
     def audit(self, outputs_root: Path) -> tuple[ExperimentCompletion, ...]:
         runs = self._completed_runs(outputs_root / "runs")
         rows: list[ExperimentCompletion] = []
-        for definition in self.registry.all():
+        for definition in all_experiment_definitions():
             experiment_id = definition.id
             code = definition.protocol_code
             if experiment_id is ExperimentId.PRIMARY_NBAIOT:

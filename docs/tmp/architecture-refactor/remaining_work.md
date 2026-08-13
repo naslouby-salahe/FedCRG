@@ -7,7 +7,7 @@ Update this file as phases complete. Status values: TODO / IN_PROGRESS / DONE.
 - [x] Phase 3: federation + scoring      STATUS: DONE
 - [x] Phase 4: method + thresholds       STATUS: DONE
 - [x] Phase 5: evaluation + analysis/reporting split   STATUS: DONE
-- [ ] Phase 6: application/ removed -> pipeline/ + experiments/definitions/   STATUS: TODO
+- [x] Phase 6: application/ removed -> pipeline/ + experiments/definitions/   STATUS: DONE
 - [ ] Phase 7: artifacts consolidation   STATUS: TODO
 - [ ] Phase 8: reporting + cli           STATUS: TODO
 - [ ] Phase 9: final hostile audit + full validation suite   STATUS: TODO
@@ -216,6 +216,106 @@ Do not run full pytest/mypy/ruff after every micro-edit -- only at phase complet
 - Validation: ruff check/format clean; mypy (py312 override) shows only the one pre-existing
   error in reporting/publication.py:297 (untyped-def, present before this phase too, not
   newly introduced); full pytest -n auto suite passes (130 tests, unchanged).
+
+## Phase 6 completion notes (application/ removed -> pipeline/ + experiments/)
+This was the largest phase: application/ (23 files) deleted entirely; its responsibilities
+redistributed across a new pipeline/ package, analysis/, reporting/, and
+experiments/definitions/.
+
+- New pipeline/ package (the single execution spine): train_detector.py (was train.py),
+  compute_scores.py (was score.py), run_experiment.py (unchanged), verify_outputs.py (was
+  verify.py), select_thresholds.py (was precompute.py -- ProtocolTablePrecomputer),
+  evaluate_policies.py (was evaluate.py), prepare_dataset.py (was prepare_data.py, now also
+  hosting PrepareDiadFeatureSensitivity), preflight.py (merges application/preflight.py's
+  ResearchPreflight with data/audit.py's PreparedDatasetAuditor -- data/audit.py reads
+  already-persisted artifact JSON and gates training, which is pipeline/preflight territory,
+  not a data/-package concern), run_policy_evaluation.py (merges policy_cell.py's
+  PolicyCellMaterializer with federation_cell.py's FederationCellMaterializer -- one
+  materializes a single policy cell, the other wraps it for every requested policy in one
+  federation cell, a single cohesive responsibility), run_all_experiments.py (merges
+  pipeline.py's ExecuteFrozenWorkload with research_pipeline.py's ExecuteResearchPipeline
+  into one RunAllExperiments class -- this collapses two of the four previously-parallel
+  orchestration layers identified in the pre-migration audit finding #1).
+- reporting/report.py: application/report.py moved as-is (ReportBuilder), imports repointed.
+- analysis/claim_gates.py: merged application/claims.py's ClaimGateEvaluator (derives G0-G8
+  from frozen evidence) into the existing pure evidence-assessment file -- this matches
+  prompt.md's explicit analysis/ allowance ("claim-gate assessment") and analysis/ is now
+  correctly positioned to import pipeline/ (analysis sits below pipeline in the target
+  dependency chain, so this direction is valid, unlike the old application/*->analysis/*
+  imports flagged as backwards in finding #10).
+- analysis/computational_benchmark.py: merged application/benchmark.py's RunBenchmark into
+  the existing benchmark-harness file, for the same reason (R13 benchmark orchestration is
+  "computational benchmark analysis", explicitly allowed in analysis/).
+- experiments/definitions/synthetic.py (new subpackage, one file): merges
+  experiments/synthetic.py's statistical kernels, analysis/robustness_analysis.py's
+  temporal_dependence_stress/calibration_shift_stress/RobustnessCell (these generate live
+  Monte Carlo trial data during S3/S4 execution, not post-hoc analysis of completed
+  evidence -- relocating them resolves finding #10's other half), and
+  application/synthetic.py's RunSyntheticExperiments orchestration for the full locked S1-S6
+  programme (kept together since one class already executes all six as one cohesive unit).
+- experiments/definitions/sensitivity.py (new subpackage, one file): merges
+  experiments/real_sensitivity.py's kernels, application/sensitivity.py's
+  RunRealSensitivities (R2-R9), application/source_order.py's RunSourceOrderCalibration
+  (R12), application/feature_sensitivity.py's R14 contract-derivation
+  (BuildDiadFeatureSensitivityContract/r14_config -- PrepareDiadFeatureSensitivity itself
+  went to pipeline/prepare_dataset.py instead, since it's a data-preparation step), and
+  config/variants.py's ExperimentVariantFactory (its only consumer was
+  application/sensitivity.py, and it's explicit/typed config-variant construction, not a
+  registry). **Deleted RunRealSensitivities.run_r12 as genuine dead code**: cli/research.py's
+  dispatcher routes R12 exclusively to RunSourceOrderCalibration and never called
+  RunRealSensitivities.run_r12, and the two methods wrote incompatible JSON shapes (only
+  RunSourceOrderCalibration's shape matches what experiments/completion.py's
+  _source_order_workload expects) -- this was silent duplication, not equivalent code.
+- experiments/registry.py's PolicyRegistry-style ExperimentRegistry class dissolved (finding
+  #4's second half) into plain module-level functions `get_experiment_definition(id)` /
+  `all_experiment_definitions()` / catalogue-completeness validated at import time, defined
+  in new experiments/experiment_definition.py alongside the merged
+  experiments/models.py + experiments/definitions.py content. Deliberately kept as ONE file
+  rather than prompt.md's literal experiments/definitions/{synthetic,primary,sensitivity,
+  robustness,external_validation,computational_benchmark}.py split for the catalogue itself:
+  the 20 ExperimentDefinition entries cross-reference each other's dependencies
+  (`primary`/`external` ids) across type boundaries, so a reader needs the whole table
+  either way, and primary/external_validation/computational_benchmark have no bespoke
+  execution logic beyond their catalogue entry (unlike synthetic/sensitivity, which do --
+  those two got real definitions/ subpackage files because they hold genuine per-type
+  execution logic, not just data).
+- experiments/lifecycle.py folded into new experiments/execution.py alongside
+  ExperimentPlan/ExperimentExecution/ExperimentRunner (from models.py) -- eliminates the
+  local `from fedcrg.experiments.lifecycle import assert_transition` import that
+  ExperimentExecution.transition() previously needed only to dodge a circular import;
+  now they're in the same file so no import is needed at all (finding #11 instance fixed).
+  experiments/planner.py -> experiments/planning.py (registry dependency removed, now calls
+  get_experiment_definition directly). experiments/dependencies.py's DependencyResolver no
+  longer takes an injected registry (calls get_experiment_definition directly).
+- experiments/executor.py (ExperimentExecutor) deleted as dead code (finding #6): confirmed
+  its only reference anywhere was tests/unit/experiments/test_models.py, which itself only
+  tested ExperimentExecutor. Deleted that test file; its one still-relevant test
+  (dependency-order-includes-prerequisites) moved to new
+  tests/unit/experiments/test_dependencies.py.
+- application/robustness.py (RunRobustness, a 25-line pass-through to TrainDetector) deleted
+  (finding #7); its one caller (cli/research.py's train_deep_svdd command) now calls
+  TrainDetector directly with the Deep-SVDD check inlined.
+- Rewrote tests/contract/test_architecture_boundaries.py's dependency-direction tests:
+  domain-forbidden-imports list now says "fedcrg.pipeline" instead of the removed
+  "fedcrg.application" (plus added fedcrg.analysis/fedcrg.reporting, which hadn't been
+  listed before); method-boundary test renamed
+  test_method_does_not_depend_on_pipeline_cli_or_artifact_io; added explicit
+  test_legacy_repository_layers_are_absent assertions that application/, core/, protocol/,
+  policies/, metrics/, federated/ no longer exist under src/fedcrg.
+- Rewrote/renamed several experiments-catalogue tests against the new
+  experiment_definition module: test_experiment_registry.py ->
+  test_experiment_catalogue_completeness.py, test_experiment_catalogue_exact.py updated.
+- Bulk-updated every cli/*.py module (claims.py, verification.py, evaluation.py, data.py,
+  experiments.py, training.py, research.py) and ~10 test files that imported the deleted
+  application.*/experiments.{models,definitions,registry,lifecycle,planner,executor,
+  synthetic,real_sensitivity}/config.variants/data.audit/analysis.robustness_analysis paths.
+- Validation: ruff check/format clean; mypy (py312 override) shows the same 10 pre-existing
+  errors as before this phase (all in files that were moved-not-rewritten: reporting/
+  publication.py, reporting/report.py, analysis/claim_gates.py, detectors/deep_svdd.py,
+  detectors/autoencoder.py, scoring/cache.py, cli/research.py x2,
+  pipeline/run_policy_evaluation.py) -- zero new errors; full pytest -n auto suite passes
+  (125 tests; net -5 vs Phase 5's 130 from deleting the ExperimentExecutor-only test file's
+  3 dead tests and consolidating 2 others, offset by 1 new dependency-order test).
 
 ## Notes / open decisions to resolve during implementation
 - config/validate.py must not import thresholds/ (downward dependency violation in old

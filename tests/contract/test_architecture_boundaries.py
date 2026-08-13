@@ -36,6 +36,12 @@ def test_legacy_repository_layers_are_absent() -> None:
     assert not (ROOT / "scripts").exists()
     assert not (ROOT / "fedcrg").exists()
     assert not (ROOT / "setup.py").exists()
+    assert not (SRC / "application").exists()
+    assert not (SRC / "core").exists()
+    assert not (SRC / "protocol").exists()
+    assert not (SRC / "policies").exists()
+    assert not (SRC / "metrics").exists()
+    assert not (SRC / "federated").exists()
 
 
 def test_legacy_protocol_shorthand_modules_are_absent() -> None:
@@ -68,7 +74,7 @@ def test_no_forbidden_implementation_shortcuts() -> None:
 
 def test_domain_is_dependency_free_from_outer_layers() -> None:
     forbidden_prefixes = (
-        "fedcrg.application",
+        "fedcrg.pipeline",
         "fedcrg.artifacts",
         "fedcrg.cli",
         "fedcrg.config",
@@ -80,6 +86,8 @@ def test_domain_is_dependency_free_from_outer_layers() -> None:
         "fedcrg.method",
         "fedcrg.thresholds",
         "fedcrg.scoring",
+        "fedcrg.analysis",
+        "fedcrg.reporting",
     )
     violations: list[str] = []
     for path in _python_files(SRC / "domain"):
@@ -89,9 +97,9 @@ def test_domain_is_dependency_free_from_outer_layers() -> None:
     assert not violations, "\n".join(violations)
 
 
-def test_method_does_not_depend_on_application_cli_or_artifact_io() -> None:
+def test_method_does_not_depend_on_pipeline_cli_or_artifact_io() -> None:
     forbidden_prefixes = (
-        "fedcrg.application",
+        "fedcrg.pipeline",
         "fedcrg.cli",
         "fedcrg.experiments",
     )
@@ -116,4 +124,4 @@ def test_cli_never_imports_statistical_or_training_implementation_directly() -> 
         for imported in _imports(path):
             if imported.startswith(forbidden_prefixes):
                 violations.append(f"{path.relative_to(ROOT)} -> {imported}")
-    assert not violations, "CLI must call application services only:\n" + "\n".join(violations)
+    assert not violations, "CLI must call pipeline services only:\n" + "\n".join(violations)

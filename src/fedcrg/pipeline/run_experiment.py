@@ -16,9 +16,8 @@ from fedcrg.artifacts.verification import ArtifactVerifier
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import ExperimentId, ExperimentStatus, PolicyId
 from fedcrg.domain.identifiers import RunId
-from fedcrg.experiments.lifecycle import assert_transition
-from fedcrg.experiments.models import ExperimentPlan
-from fedcrg.experiments.planner import ExperimentPlanner
+from fedcrg.experiments.execution import ExperimentPlan, assert_transition
+from fedcrg.experiments.planning import ExperimentPlanner
 
 
 class RunExperiment:

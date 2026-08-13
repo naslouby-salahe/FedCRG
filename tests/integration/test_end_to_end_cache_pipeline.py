@@ -7,9 +7,9 @@ from pathlib import PurePosixPath
 import numpy as np
 import pandas as pd
 
-from fedcrg.application.evaluate import EvaluatePolicies
-from fedcrg.application.score import ComputeScores
-from fedcrg.application.train import TrainDetector
+from fedcrg.pipeline.evaluate_policies import EvaluatePolicies
+from fedcrg.pipeline.compute_scores import ComputeScores
+from fedcrg.pipeline.train_detector import TrainDetector
 from fedcrg.artifacts.dataset import PreparedDatasetManifestStore
 from fedcrg.artifacts.hashing import sha256_file
 from fedcrg.artifacts.serialization import atomic_write_json

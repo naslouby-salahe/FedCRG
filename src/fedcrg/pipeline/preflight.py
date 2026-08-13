@@ -1,4 +1,4 @@
-"""Independent audit of prepared dataset caches before detector training."""
+"""Require independently audited prepared data and frozen statistical tables before training."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.domain.constants import DIAD_EXPECTED_SOURCE_CLIENTS
 from fedcrg.domain.enums import CalibrationAssignmentMode, DataRole, DatasetId
 from fedcrg.domain.identifiers import ClientId
+from fedcrg.pipeline.select_thresholds import ProtocolTablePrecomputer
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,7 +29,9 @@ class PreparedDatasetAuditor:
         problems: list[str] = []
         manifest = self._load_object(prepared_root / "manifest.json", problems)
         preprocessing = self._load_object(prepared_root / "preprocessing.json", problems)
-        eligibility_name = "diad_eligibility.json" if config.dataset.id is DatasetId.DIAD else "eligibility.json"
+        eligibility_name = (
+            "diad_eligibility.json" if config.dataset.id is DatasetId.DIAD else "eligibility.json"
+        )
         eligibility = self._load_object(prepared_root / eligibility_name, problems)
 
         if manifest:
@@ -56,7 +59,10 @@ class PreparedDatasetAuditor:
             if preprocessing.get("dataset") != config.dataset.id.value:
                 problems.append("preprocessing dataset id differs from config")
             feature_columns = preprocessing.get("feature_columns")
-            if not isinstance(feature_columns, list) or len(feature_columns) != config.dataset.feature_count:
+            if (
+                not isinstance(feature_columns, list)
+                or len(feature_columns) != config.dataset.feature_count
+            ):
                 problems.append("preprocessing feature count differs from frozen config")
             clients_raw = preprocessing.get("clients")
             covered = (
@@ -74,13 +80,29 @@ class PreparedDatasetAuditor:
             if not payload:
                 continue
             calibration_count += 1
-            self._audit_assignment(payload, seed, CalibrationAssignmentMode.SEEDED_PERMUTATION, eligible_clients, config, problems)
+            self._audit_assignment(
+                payload,
+                seed,
+                CalibrationAssignmentMode.SEEDED_PERMUTATION,
+                eligible_clients,
+                config,
+                problems,
+            )
 
         source_order = self._load_object(prepared_root / "splits" / "source_order.json", problems)
         if source_order:
-            self._audit_assignment(source_order, config.dataset.primary_calibration_seed, CalibrationAssignmentMode.SOURCE_ORDER, eligible_clients, config, problems)
+            self._audit_assignment(
+                source_order,
+                config.dataset.primary_calibration_seed,
+                CalibrationAssignmentMode.SOURCE_ORDER,
+                eligible_clients,
+                config,
+                problems,
+            )
 
-        return PreparedDataAudit(not problems, tuple(problems), len(eligible_clients), calibration_count)
+        return PreparedDataAudit(
+            not problems, tuple(problems), len(eligible_clients), calibration_count
+        )
 
     @staticmethod
     def _load_object(path: Path, problems: list[str]) -> dict[str, object]:
@@ -105,7 +127,14 @@ class PreparedDatasetAuditor:
         return {ClientId(str(value)) for value in values}
 
     @staticmethod
-    def _audit_assignment(payload: dict[str, object], expected_seed: int, expected_mode: CalibrationAssignmentMode, eligible_clients: set[ClientId], config: ExperimentConfig, problems: list[str]) -> None:
+    def _audit_assignment(
+        payload: dict[str, object],
+        expected_seed: int,
+        expected_mode: CalibrationAssignmentMode,
+        eligible_clients: set[ClientId],
+        config: ExperimentConfig,
+        problems: list[str],
+    ) -> None:
         if as_json_int(payload.get("calibration_seed", -1)) != expected_seed:
             problems.append(f"calibration assignment seed mismatch: expected {expected_seed}")
         if payload.get("mode") != expected_mode.value:
@@ -145,10 +174,46 @@ class PreparedDatasetAuditor:
                 if len(digest) != 64:
                     problems.append(f"{client}/{role.value}: invalid row-id hash")
                 if digest in hashes:
-                    problems.append(f"{client}: duplicate calibration role hash suggests role reuse")
+                    problems.append(
+                        f"{client}: duplicate calibration role hash suggests role reuse"
+                    )
                 hashes.add(digest)
                 total += max(count, 0)
             if total != config.dataset.split.reservoir_size:
                 problems.append(f"{client}: calibration roles do not cover the full reservoir")
         if observed != eligible_clients:
             problems.append("calibration assignment client set differs from eligibility")
+
+
+@dataclass(frozen=True, slots=True)
+class PreflightResult:
+    prepared_data: PreparedDataAudit
+    readiness_table: Path
+    mismatch_table: Path
+
+    @property
+    def valid(self) -> bool:
+        return self.prepared_data.valid
+
+
+class ResearchPreflight:
+    """Require independently audited data and frozen statistical tables before training."""
+
+    def __init__(
+        self,
+        data_auditor: PreparedDatasetAuditor | None = None,
+        table_precomputer: ProtocolTablePrecomputer | None = None,
+    ) -> None:
+        self.data_auditor = data_auditor or PreparedDatasetAuditor()
+        self.table_precomputer = table_precomputer or ProtocolTablePrecomputer()
+
+    def run(self, config: ExperimentConfig, prepared_root: Path) -> PreflightResult:
+        audit = self.data_auditor.audit(prepared_root, config)
+        if not audit.valid:
+            raise RuntimeError("Prepared-data preflight failed: " + ", ".join(audit.problems))
+        readiness, mismatch = self.table_precomputer.precompute(config)
+        return PreflightResult(
+            prepared_data=audit,
+            readiness_table=readiness,
+            mismatch_table=mismatch,
+        )

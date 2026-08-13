@@ -6,7 +6,7 @@ from pathlib import Path
 
 import click
 
-from fedcrg.application.claims import ClaimGateEvaluator
+from fedcrg.analysis.claim_gates import ClaimGateEvaluator
 
 
 @click.group(name="claims")

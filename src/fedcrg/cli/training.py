@@ -7,8 +7,8 @@ from pathlib import Path
 
 import click
 
-from fedcrg.application.score import ComputeScores
-from fedcrg.application.train import TrainDetector
+from fedcrg.pipeline.compute_scores import ComputeScores
+from fedcrg.pipeline.train_detector import TrainDetector
 from fedcrg.cli.shared import load_config
 
 

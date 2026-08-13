@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from fedcrg.application.run_experiment import RunExperiment
+from fedcrg.pipeline.run_experiment import RunExperiment
 from fedcrg.artifacts.manifest import RunManifestStore
 from fedcrg.config.dataset_config import DatasetConfig, SplitConfig
 from fedcrg.config.experiment_config import ExperimentConfig
@@ -15,7 +15,7 @@ from fedcrg.domain.enums import (
     ExperimentStatus,
     PolicyId,
 )
-from fedcrg.experiments.models import ExperimentPlan
+from fedcrg.experiments.execution import ExperimentPlan
 
 
 def _config(root: Path) -> ExperimentConfig:

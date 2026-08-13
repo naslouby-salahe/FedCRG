@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from fedcrg.application.prepare_data import PrepareData
+from fedcrg.pipeline.prepare_dataset import PrepareData
 from fedcrg.config.dataset_config import DatasetConfig, SplitConfig
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.config.method_config import ProtocolConfig

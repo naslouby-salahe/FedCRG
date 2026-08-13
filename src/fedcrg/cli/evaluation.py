@@ -7,8 +7,8 @@ from pathlib import Path
 
 import click
 
-from fedcrg.application.evaluate import EvaluatePolicies
-from fedcrg.application.report import ReportBuilder
+from fedcrg.pipeline.evaluate_policies import EvaluatePolicies
+from fedcrg.reporting.report import ReportBuilder
 from fedcrg.artifacts.serialization import atomic_write_json
 from fedcrg.cli.shared import load_config
 

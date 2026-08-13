@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from fedcrg.application.train import TrainDetector, feature_columns
+from fedcrg.pipeline.train_detector import TrainDetector, feature_columns
 from fedcrg.artifacts.dataset import PreparedDatasetManifestStore
 from fedcrg.artifacts.hashing import sha256_file
 from fedcrg.artifacts.training import TrainingManifestStore

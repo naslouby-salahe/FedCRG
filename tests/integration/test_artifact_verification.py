@@ -11,7 +11,7 @@ from fedcrg.domain.enums import (
     PolicyId,
 )
 from fedcrg.domain.identifiers import CalibrationSeed, ModelSeed, RunId, Sha256
-from fedcrg.experiments.models import ExperimentDefinition
+from fedcrg.experiments.experiment_definition import ExperimentDefinition
 
 
 def test_artifact_verifier_hashes_run_files(tmp_path: Path) -> None:

@@ -10,7 +10,7 @@ from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.config.method_config import ProtocolConfig
 from fedcrg.domain.enums import ExperimentAxisId, ExperimentId
 from fedcrg.domain.values import OperatingBand
-from fedcrg.experiments.registry import ExperimentRegistry
+from fedcrg.experiments.experiment_definition import get_experiment_definition
 from fedcrg.method.mismatch_detection import (
     clopper_pearson_interval,
     minimum_bidirectional_sample_count,
@@ -31,9 +31,6 @@ class MismatchCutoffCell:
 class ProtocolTablePrecomputer:
     """Freeze every readiness/cutoff entry needed by the registered programme."""
 
-    def __init__(self, registry: ExperimentRegistry | None = None) -> None:
-        self.registry = registry or ExperimentRegistry()
-
     def precompute(
         self,
         config: ExperimentConfig,
@@ -51,7 +48,7 @@ class ProtocolTablePrecomputer:
                 protocol.readiness_assurance,
             )
 
-        mismatch_definition = self.registry.get(ExperimentId.MISMATCH_POWER)
+        mismatch_definition = get_experiment_definition(ExperimentId.MISMATCH_POWER)
         mismatch_counts = tuple(
             int(value) for value in mismatch_definition.axis(ExperimentAxisId.MISMATCH_N).values
         )
@@ -111,7 +108,7 @@ class ProtocolTablePrecomputer:
         )
 
         for value in (
-            self.registry.get(ExperimentId.READINESS_SAMPLE_SIZE)
+            get_experiment_definition(ExperimentId.READINESS_SAMPLE_SIZE)
             .axis(ExperimentAxisId.CALIBRATION_N)
             .values
         ):
@@ -123,7 +120,9 @@ class ProtocolTablePrecomputer:
             )
 
         for value in (
-            self.registry.get(ExperimentId.TOLERANCE_SENSITIVITY).axis(ExperimentAxisId.RHO).values
+            get_experiment_definition(ExperimentId.TOLERANCE_SENSITIVITY)
+            .axis(ExperimentAxisId.RHO)
+            .values
         ):
             add(
                 primary_n,
@@ -133,7 +132,9 @@ class ProtocolTablePrecomputer:
             )
 
         for value in (
-            self.registry.get(ExperimentId.TARGET_FPR_REAL).axis(ExperimentAxisId.ALPHA).values
+            get_experiment_definition(ExperimentId.TARGET_FPR_REAL)
+            .axis(ExperimentAxisId.ALPHA)
+            .values
         ):
             add(
                 primary_n,
@@ -143,7 +144,7 @@ class ProtocolTablePrecomputer:
             )
 
         for value in (
-            self.registry.get(ExperimentId.ASSURANCE_SENSITIVITY)
+            get_experiment_definition(ExperimentId.ASSURANCE_SENSITIVITY)
             .axis(ExperimentAxisId.READINESS_ASSURANCE)
             .values
         ):
@@ -171,7 +172,7 @@ class ProtocolTablePrecomputer:
                 assurance=config.protocol.readiness_assurance,
             )
 
-        for cell in self.registry.get(ExperimentId.TARGET_FPR_SYNTHETIC).coupled_cells:
+        for cell in get_experiment_definition(ExperimentId.TARGET_FPR_SYNTHETIC).coupled_cells:
             add(
                 int(cell.value(ExperimentAxisId.CALIBRATION_N)),
                 alpha=float(cell.value(ExperimentAxisId.ALPHA)),

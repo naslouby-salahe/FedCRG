@@ -9,7 +9,7 @@ import click
 
 from fedcrg.cli.shared import load_config
 from fedcrg.domain.enums import ExperimentId, PolicyId
-from fedcrg.experiments.planner import ExperimentPlanner
+from fedcrg.experiments.planning import ExperimentPlanner
 
 
 @click.group(name="experiment")
@@ -73,8 +73,8 @@ def run_policy_cell(
     score_root: Path,
 ) -> None:
     """Materialize one immutable pre-registered policy cell from frozen caches."""
-    from fedcrg.application.policy_cell import FrozenCacheInputs, PolicyCellMaterializer
-    from fedcrg.application.run_experiment import RunExperiment
+    from fedcrg.pipeline.run_experiment import RunExperiment
+    from fedcrg.pipeline.run_policy_evaluation import FrozenCacheInputs, PolicyCellMaterializer
 
     config = load_config(config_path)
     experiment_id = ExperimentId(experiment) if experiment is not None else config.id
@@ -118,8 +118,7 @@ def materialize_federation_cell(
     score_root: Path,
 ) -> None:
     """Evaluate one federation once and materialize every configured policy run."""
-    from fedcrg.application.federation_cell import FederationCellMaterializer
-    from fedcrg.application.policy_cell import FrozenCacheInputs
+    from fedcrg.pipeline.run_policy_evaluation import FederationCellMaterializer, FrozenCacheInputs
 
     config = load_config(config_path)
     experiment_id = ExperimentId(experiment) if experiment is not None else config.id
@@ -155,7 +154,7 @@ def execute_grid(
 ) -> None:
     """Audit prepared evidence, then execute each model seed once, score once, and
     materialize the requested policy grid."""
-    from fedcrg.application.research_pipeline import ExecuteResearchPipeline
+    from fedcrg.pipeline.run_all_experiments import RunAllExperiments
 
     config = load_config(config_path)
     experiment_id = ExperimentId(experiment) if experiment is not None else config.id
@@ -164,7 +163,7 @@ def execute_grid(
         if named_only
         else config.dataset.calibration_seeds
     )
-    execution = ExecuteResearchPipeline().execute(
+    execution = RunAllExperiments().execute(
         experiment_id,
         config,
         prepared_root,

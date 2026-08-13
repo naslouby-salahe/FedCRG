@@ -1,17 +1,17 @@
-"""End-to-end execution of frozen detector and policy workloads from prepared data."""
+"""Audited end-to-end execution of frozen detector and policy workloads from prepared data."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
 
-from fedcrg.application.federation_cell import FederationCellMaterializer
-from fedcrg.application.policy_cell import FrozenCacheInputs
-from fedcrg.application.score import ComputeScores
-from fedcrg.application.train import TrainDetector
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import ExperimentId
 from fedcrg.domain.identifiers import CalibrationSeed, ModelSeed
+from fedcrg.pipeline.compute_scores import ComputeScores
+from fedcrg.pipeline.preflight import PreflightResult, ResearchPreflight
+from fedcrg.pipeline.run_policy_evaluation import FederationCellMaterializer, FrozenCacheInputs
+from fedcrg.pipeline.train_detector import TrainDetector
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,20 +29,47 @@ class WorkloadExecution:
     run_directories: tuple[Path, ...]
 
 
-class ExecuteFrozenWorkload:
-    """Train/score each model seed once, then materialize all policy cells from caches."""
+@dataclass(frozen=True, slots=True)
+class ResearchExecution:
+    preflight: PreflightResult
+    workload: WorkloadExecution
+
+
+class RunAllExperiments:
+    """Audit prepared evidence, then train/score each model seed once and materialize
+    every requested policy cell -- the single execution spine from prepared data to
+    completed policy runs."""
 
     def __init__(
         self,
+        preflight: ResearchPreflight | None = None,
         trainer: TrainDetector | None = None,
         scorer: ComputeScores | None = None,
         federation_cells: FederationCellMaterializer | None = None,
     ) -> None:
+        self.preflight = preflight or ResearchPreflight()
         self.trainer = trainer or TrainDetector()
         self.scorer = scorer or ComputeScores()
         self.federation_cells = federation_cells or FederationCellMaterializer()
 
     def execute(
+        self,
+        experiment_id: ExperimentId,
+        config: ExperimentConfig,
+        prepared_root: Path,
+        *,
+        calibration_seeds: tuple[int, ...] | None = None,
+    ) -> ResearchExecution:
+        preflight = self.preflight.run(config, prepared_root)
+        workload = self._execute_workload(
+            experiment_id,
+            config,
+            prepared_root,
+            calibration_seeds=calibration_seeds,
+        )
+        return ResearchExecution(preflight=preflight, workload=workload)
+
+    def _execute_workload(
         self,
         experiment_id: ExperimentId,
         config: ExperimentConfig,

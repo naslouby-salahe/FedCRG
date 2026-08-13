@@ -13,7 +13,7 @@ from fedcrg.artifacts.manifest import RunManifestStore
 from fedcrg.artifacts.verification import ArtifactVerifier, VerificationResult
 from fedcrg.domain.enums import ExperimentStatus
 from fedcrg.experiments.completion import ExperimentCompletion, ExperimentCompletionAuditor
-from fedcrg.experiments.registry import ExperimentRegistry
+from fedcrg.experiments.experiment_definition import all_experiment_definitions
 from fedcrg.method.mismatch_detection import minimum_bidirectional_sample_count
 from fedcrg.method.calibration_readiness import ReadinessPlanCache
 
@@ -48,7 +48,6 @@ class VerifyOutputs:
     def __init__(self) -> None:
         self.verifier = ArtifactVerifier()
         self.manifests = RunManifestStore()
-        self.registry = ExperimentRegistry()
         self.completion = ExperimentCompletionAuditor()
 
     @staticmethod
@@ -104,7 +103,7 @@ class VerifyOutputs:
         manifest = self.manifests.load(layout.manifest)
         if manifest.status is not ExperimentStatus.COMPLETE:
             return VerificationResult(False, ("manifest:not_complete",), (), ())
-        if manifest.experiment_id not in {item.id for item in self.registry.all()}:
+        if manifest.experiment_id not in {item.id for item in all_experiment_definitions()}:
             return VerificationResult(False, ("manifest:unknown_experiment",), (), ())
         return self.verifier.verify(layout)
 

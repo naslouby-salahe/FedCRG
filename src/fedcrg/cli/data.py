@@ -6,7 +6,7 @@ from pathlib import Path
 
 import click
 
-from fedcrg.application.prepare_data import PrepareData
+from fedcrg.pipeline.prepare_dataset import PrepareData
 from fedcrg.cli.shared import load_config
 
 
@@ -44,7 +44,7 @@ def prepare_feature_sensitivity(
     feature_manifest: Path,
 ) -> None:
     """Freeze the R14 training-schema-only DIAD feature contract and prepare its cache."""
-    from fedcrg.application.feature_sensitivity import PrepareDiadFeatureSensitivity
+    from fedcrg.pipeline.prepare_dataset import PrepareDiadFeatureSensitivity
 
     config, cache_root = PrepareDiadFeatureSensitivity().prepare(
         load_config(config_path),

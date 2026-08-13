@@ -1,6 +1,14 @@
-"""The complete pre-registered S1-S6 / R1-R14 experiment catalogue."""
+"""The complete pre-registered S1-S6 / R1-R14 experiment catalogue and lookup.
+
+This is intentionally kept as one cohesive catalogue rather than split by
+``ExperimentType`` per definition: dependencies are wired across type boundaries
+(e.g. every sensitivity/robustness experiment depends on the primary R1 experiment),
+so a reader must see the whole table to understand the dependency graph either way.
+"""
 
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 from fedcrg.domain.enums import (
     ArtifactType,
@@ -14,13 +22,101 @@ from fedcrg.domain.enums import (
     PolicyId,
     SyntheticDistribution,
 )
-from fedcrg.experiments.models import (
-    ExperimentDefinition,
-    ParameterAxis,
-    ParameterCell,
-    ParameterSetting,
-    WorkloadExpectation,
+
+AxisValue = (
+    int
+    | float
+    | SyntheticDistribution
+    | ContaminationDirection
+    | MultiplicityProcedure
+    | CalibrationAssignmentMode
 )
+
+
+@dataclass(frozen=True, slots=True)
+class ParameterAxis:
+    """An independent axis whose values may be crossed with other independent axes."""
+
+    id: ExperimentAxisId
+    values: tuple[AxisValue, ...]
+
+    def __post_init__(self) -> None:
+        if not self.values:
+            raise ValueError(f"Experiment axis {self.id.value} must contain values")
+        if len(set(self.values)) != len(self.values):
+            raise ValueError(f"Experiment axis {self.id.value} contains duplicate values")
+
+
+@dataclass(frozen=True, slots=True)
+class ParameterSetting:
+    axis: ExperimentAxisId
+    value: AxisValue
+
+
+@dataclass(frozen=True, slots=True)
+class ParameterCell:
+    """A coupled combination that must be evaluated together, not Cartesian-crossed."""
+
+    settings: tuple[ParameterSetting, ...]
+
+    def __post_init__(self) -> None:
+        if not self.settings:
+            raise ValueError("A parameter cell must contain at least one setting")
+        axes = tuple(item.axis for item in self.settings)
+        if len(set(axes)) != len(axes):
+            raise ValueError("A parameter cell cannot assign the same axis twice")
+
+    def value(self, axis: ExperimentAxisId) -> AxisValue:
+        for setting in self.settings:
+            if setting.axis is axis:
+                return setting.value
+        raise KeyError(axis.value)
+
+
+@dataclass(frozen=True, slots=True)
+class WorkloadExpectation:
+    monte_carlo_trials: int = 0
+    exact_cells: int = 0
+    detector_trainings: int = 0
+
+    def __post_init__(self) -> None:
+        if min(self.monte_carlo_trials, self.exact_cells, self.detector_trainings) < 0:
+            raise ValueError("Workload expectations cannot be negative")
+
+
+@dataclass(frozen=True, slots=True)
+class ExperimentDefinition:
+    id: ExperimentId
+    protocol_code: ExperimentCode
+    type: ExperimentType
+    axes: tuple[ParameterAxis, ...] = ()
+    coupled_cells: tuple[ParameterCell, ...] = ()
+    dependencies: tuple[ExperimentId, ...] = ()
+    policies: tuple[PolicyId, ...] = ()
+    required_artifacts: tuple[ArtifactType, ...] = ()
+    workload: WorkloadExpectation = WorkloadExpectation()
+    confirmatory: bool = False
+    description: str = ""
+
+    def __post_init__(self) -> None:
+        independent_axes = tuple(axis.id for axis in self.axes)
+        if len(set(independent_axes)) != len(independent_axes):
+            raise ValueError(f"Duplicate axis in {self.protocol_code.value}")
+        if len(set(self.dependencies)) != len(self.dependencies):
+            raise ValueError(f"Duplicate dependency in {self.protocol_code.value}")
+        if self.id in self.dependencies:
+            raise ValueError(f"Experiment {self.protocol_code.value} cannot depend on itself")
+        if len(set(self.policies)) != len(self.policies):
+            raise ValueError(f"Duplicate policy in {self.protocol_code.value}")
+
+    def axis(self, axis_id: ExperimentAxisId) -> ParameterAxis:
+        for item in self.axes:
+            if item.id is axis_id:
+                return item
+        raise KeyError(
+            f"Experiment {self.protocol_code.value} has no independent {axis_id.value} axis"
+        )
+
 
 ALL_POLICIES = tuple(PolicyId)
 SECOND_DETECTOR_POLICIES = (
@@ -60,7 +156,7 @@ def target_fpr_cell(alpha: float, sample_count: int) -> ParameterCell:
     )
 
 
-def definitions() -> tuple[ExperimentDefinition, ...]:
+def _catalogue() -> tuple[ExperimentDefinition, ...]:
     primary = ExperimentId.PRIMARY_NBAIOT
     external = ExperimentId.EXTERNAL_DIAD
     return (
@@ -367,3 +463,18 @@ def definitions() -> tuple[ExperimentDefinition, ...]:
             description="Training-schema-derived DIAD numeric-safe feature sensitivity",
         ),
     )
+
+
+_CATALOGUE: dict[ExperimentId, ExperimentDefinition] = {row.id: row for row in _catalogue()}
+if len(_CATALOGUE) != len(ExperimentCode) or {
+    row.protocol_code for row in _CATALOGUE.values()
+} != set(ExperimentCode):
+    raise RuntimeError("The experiment catalogue must contain exactly S1-S6 and R1-R14")
+
+
+def get_experiment_definition(experiment_id: ExperimentId) -> ExperimentDefinition:
+    return _CATALOGUE[experiment_id]
+
+
+def all_experiment_definitions() -> tuple[ExperimentDefinition, ...]:
+    return tuple(_CATALOGUE.values())

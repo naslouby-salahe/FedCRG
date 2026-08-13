@@ -3,14 +3,11 @@
 from fedcrg.config.experiment_config import ExperimentConfig
 from fedcrg.domain.enums import ExperimentId
 from fedcrg.domain.identifiers import CalibrationSeed, ModelSeed, Sha256
-from fedcrg.experiments.models import ExperimentPlan
-from fedcrg.experiments.registry import ExperimentRegistry
+from fedcrg.experiments.execution import ExperimentPlan
+from fedcrg.experiments.experiment_definition import get_experiment_definition
 
 
 class ExperimentPlanner:
-    def __init__(self, registry: ExperimentRegistry | None = None) -> None:
-        self.registry = registry or ExperimentRegistry()
-
     def create(
         self,
         experiment_id: ExperimentId,
@@ -29,11 +26,11 @@ class ExperimentPlanner:
             raise ValueError(f"Model seed {int(typed_model_seed)} is not configured")
         if int(typed_calibration_seed) not in config.dataset.calibration_seeds:
             raise ValueError(f"Calibration seed {int(typed_calibration_seed)} is not configured")
-        definition = self.registry.get(experiment_id)
+        definition = get_experiment_definition(experiment_id)
         if definition.policies and not set(config.policies).issubset(definition.policies):
             extra = set(config.policies) - set(definition.policies)
             raise ValueError(
-                "Config contains policies outside the experiment registry: "
+                "Config contains policies outside the experiment catalogue: "
                 + ", ".join(sorted(item.value for item in extra))
             )
         return ExperimentPlan(

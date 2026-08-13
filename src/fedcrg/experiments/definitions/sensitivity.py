@@ -1,4 +1,9 @@
-"""Execution of the pre-registered real-score sensitivities R2-R9 and R12."""
+"""Execution of the pre-registered real-score sensitivities R2-R9 and R12.
+
+Includes the R14 DIAD training-schema-only feature-contract derivation, which is a
+sensitivity variant of the external DIAD experiment rather than a distinct pipeline
+step.
+"""
 
 from __future__ import annotations
 
@@ -7,13 +12,17 @@ from pathlib import Path
 
 import numpy as np
 
-from fedcrg.application.evaluate import EvaluatePolicies
+from fedcrg.artifacts.dataset import EligibilityManifestStore
 from fedcrg.artifacts.serialization import atomic_write_json
 from fedcrg.config.experiment_config import ExperimentConfig
-from fedcrg.config.variants import ExperimentVariantFactory
+from fedcrg.config.method_config import ProtocolConfig
+from fedcrg.config.validate import validate_experiment_config
+from fedcrg.data.diad import DiadAdapter
+from fedcrg.data.feature_sensitivity import NumericSafeFeatureContract, derive_numeric_safe_features
 from fedcrg.domain.enums import (
     CalibrationAssignmentMode,
     DataRole,
+    DatasetFeatureContractId,
     ExperimentAxisId,
     ExperimentCode,
     ExperimentId,
@@ -22,20 +31,16 @@ from fedcrg.domain.enums import (
     PolicyId,
 )
 from fedcrg.domain.identifiers import CalibrationSeed, ClientId
-from fedcrg.experiments.models import ParameterSetting
-from fedcrg.experiments.real_sensitivity import (
-    contaminate_benign_scores,
-    source_order_blocks,
-)
-from fedcrg.experiments.registry import ExperimentRegistry
 from fedcrg.evaluation.evaluation_results import EvaluationBundle
+from fedcrg.experiments.experiment_definition import ParameterSetting, get_experiment_definition
+from fedcrg.method.calibration_readiness import familywise_readiness_assurance
 from fedcrg.method.mismatch_detection import (
     FleetMismatchDecision,
     bonferroni_fleet_sensitivity,
     holm_directional_fleet_sensitivity,
 )
-from fedcrg.method.calibration_readiness import familywise_readiness_assurance
 from fedcrg.method.results import ClientEvaluationResult
+from fedcrg.pipeline.evaluate_policies import EvaluatePolicies
 from fedcrg.scoring.cache import ScoreCache
 from fedcrg.scoring.calibration_scores import (
     CalibrationScoreViews,
@@ -43,6 +48,179 @@ from fedcrg.scoring.calibration_scores import (
     RoleScores,
     truncate_view,
 )
+
+# --- Real-score sensitivity kernels -------------------------------------------------
+
+
+def source_order_blocks(scores: np.ndarray, block_count: int = 5) -> tuple[np.ndarray, ...]:
+    values = np.asarray(scores, dtype=np.float64)
+    if block_count <= 0 or len(values) < block_count:
+        raise ValueError("Source-order block analysis needs at least one row per block")
+    return tuple(
+        np.asarray(block, dtype=np.float64) for block in np.array_split(values, block_count)
+    )
+
+
+def contaminate_benign_scores(
+    benign: np.ndarray,
+    attack_dev: np.ndarray,
+    fraction: float,
+    seed: int,
+) -> np.ndarray:
+    values = np.asarray(benign, dtype=np.float64).copy()
+    attacks = np.asarray(attack_dev, dtype=np.float64)
+    if not 0.0 <= fraction <= 1.0:
+        raise ValueError("Contamination fraction must be in [0,1]")
+    count = int(round(fraction * len(values)))
+    if count == 0:
+        return values
+    if count > len(attacks):
+        raise ValueError("Attack-development cache is too small for requested contamination")
+    rng = np.random.Generator(np.random.PCG64(seed))
+    target = rng.choice(len(values), size=count, replace=False)
+    source = rng.choice(len(attacks), size=count, replace=False)
+    values[target] = attacks[source]
+    return values
+
+
+# --- R14 DIAD training-schema-only feature contract ---------------------------------
+
+
+class BuildDiadFeatureSensitivityContract:
+    """Derive R14 features strictly from frozen eligible clients' training rows."""
+
+    def build(
+        self,
+        data_root: Path,
+        eligibility_manifest: Path,
+        output: Path,
+        train_count: int = 2000,
+    ) -> NumericSafeFeatureContract:
+        eligible = EligibilityManifestStore().load(eligibility_manifest).eligible_clients
+        if not eligible:
+            raise ValueError("R14 requires a frozen non-empty DIAD eligibility list")
+        adapter = DiadAdapter(data_root)
+        discovered = set(adapter.discover_clients())
+        missing = tuple(client for client in eligible if client not in discovered)
+        if missing:
+            raise ValueError(
+                "Frozen eligible clients are absent from the acquired DIAD source: "
+                + ", ".join(client.value for client in missing)
+            )
+        training_frames = {
+            client: adapter.load_training_schema(client, train_count) for client in eligible
+        }
+        contract = derive_numeric_safe_features(training_frames)
+        atomic_write_json(
+            output,
+            {
+                "experiment": "R14",
+                "source": "training_schema_only",
+                "eligible_clients": [client.value for client in eligible],
+                "feature_contract": contract,
+            },
+        )
+        return contract
+
+
+def r14_config(
+    base_config: ExperimentConfig, contract: NumericSafeFeatureContract
+) -> ExperimentConfig:
+    """Create the R14-only derived config after the training-schema feature freeze.
+
+    Rebuilds the full validated payload and revalidates through the model instead of
+    an unchecked partial-field update, so the DIAD-training-schema cross-field
+    invariants (feature_contract/feature_names/feature_count) are enforced.
+    """
+    payload = base_config.model_dump(mode="python")
+    payload["id"] = ExperimentId.DIAD_FEATURE_SENSITIVITY
+    dataset = dict(payload["dataset"])
+    dataset["feature_contract"] = DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE
+    dataset["feature_count"] = contract.dimension
+    dataset["feature_names"] = contract.features
+    dataset["calibration_seeds"] = (base_config.dataset.primary_calibration_seed,)
+    payload["dataset"] = dataset
+    detector = dict(payload["detector"])
+    detector["hidden_dims"] = contract.encoder_hidden_dims
+    payload["detector"] = detector
+    payload["policies"] = (
+        PolicyId.GLOBAL_QUANTILE,
+        PolicyId.LOCAL_QUANTILE,
+        PolicyId.SHRINKAGE,
+        PolicyId.FEDCRG,
+    )
+    return ExperimentConfig.model_validate(payload)
+
+
+# --- Explicit, typed experiment-config variants (no policy or protocol registry) ----
+
+
+class ExperimentVariantFactory:
+    """Rebuild complete configs instead of bypassing validators with ``model_copy``."""
+
+    def protocol_variant(
+        self,
+        config: ExperimentConfig,
+        *,
+        experiment_id: ExperimentId | None = None,
+        alpha: float | None = None,
+        rho: float | None = None,
+        readiness_assurance: float | None = None,
+        mismatch_confidence: float | None = None,
+    ) -> ExperimentConfig:
+        protocol = ProtocolConfig(
+            id=config.protocol.id,
+            version=config.protocol.version,
+            alpha=config.protocol.alpha if alpha is None else alpha,
+            rho=config.protocol.rho if rho is None else rho,
+            readiness_assurance=(
+                config.protocol.readiness_assurance
+                if readiness_assurance is None
+                else readiness_assurance
+            ),
+            mismatch_confidence=(
+                config.protocol.mismatch_confidence
+                if mismatch_confidence is None
+                else mismatch_confidence
+            ),
+            strict_exceedance=config.protocol.strict_exceedance,
+            reject_calibration_ties=config.protocol.reject_calibration_ties,
+        )
+        variant = ExperimentConfig(
+            id=config.id if experiment_id is None else experiment_id,
+            protocol=protocol,
+            dataset=config.dataset,
+            detector=config.detector,
+            training=config.training,
+            randomness=config.randomness,
+            policies=config.policies,
+            outputs_root=config.outputs_root,
+        )
+        validate_experiment_config(variant)
+        return variant
+
+    def policy_subset(
+        self,
+        config: ExperimentConfig,
+        policies: tuple[PolicyId, ...],
+        *,
+        experiment_id: ExperimentId | None = None,
+    ) -> ExperimentConfig:
+        variant = ExperimentConfig(
+            id=config.id if experiment_id is None else experiment_id,
+            protocol=config.protocol,
+            dataset=config.dataset,
+            detector=config.detector,
+            training=config.training,
+            randomness=config.randomness,
+            policies=policies,
+            outputs_root=config.outputs_root,
+        )
+        validate_experiment_config(variant)
+        return variant
+
+
+# --- R2-R9 real-score sensitivity envelopes ------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,12 +276,10 @@ class RunRealSensitivities:
     def __init__(
         self,
         evaluator: EvaluatePolicies | None = None,
-        registry: ExperimentRegistry | None = None,
         variants: ExperimentVariantFactory | None = None,
         score_cache: ScoreCache | None = None,
     ) -> None:
         self.evaluator = evaluator or EvaluatePolicies()
-        self.registry = registry or ExperimentRegistry()
         self.variants = variants or ExperimentVariantFactory()
         self.score_cache = score_cache or ScoreCache()
 
@@ -202,7 +378,7 @@ class RunRealSensitivities:
         calibration_seed: CalibrationSeed,
         output: Path,
     ) -> Path:
-        definition = self.registry.get(experiment_id)
+        definition = get_experiment_definition(experiment_id)
         base_views = self._base_views(
             config,
             score_root,
@@ -268,7 +444,7 @@ class RunRealSensitivities:
         calibration_seed: CalibrationSeed | int | None = None,
     ) -> Path:
         seed = self._seed(config, calibration_seed)
-        definition = self.registry.get(ExperimentId.READINESS_SAMPLE_SIZE)
+        definition = get_experiment_definition(ExperimentId.READINESS_SAMPLE_SIZE)
         base_views = self._base_views(config, score_root, prepared_root, seed)
         variant = self.variants.protocol_variant(
             config,
@@ -311,7 +487,7 @@ class RunRealSensitivities:
         calibration_seed: CalibrationSeed | int | None = None,
     ) -> Path:
         seed = self._seed(config, calibration_seed)
-        definition = self.registry.get(ExperimentId.MISMATCH_SAMPLE_SIZE)
+        definition = get_experiment_definition(ExperimentId.MISMATCH_SAMPLE_SIZE)
         base_views = self._base_views(config, score_root, prepared_root, seed)
         variant = self.variants.protocol_variant(
             config,
@@ -416,7 +592,7 @@ class RunRealSensitivities:
         calibration_seed: CalibrationSeed | int | None = None,
     ) -> Path:
         seed = self._seed(config, calibration_seed)
-        definition = self.registry.get(ExperimentId.MULTIPLICITY_SENSITIVITY)
+        definition = get_experiment_definition(ExperimentId.MULTIPLICITY_SENSITIVITY)
         views = self._base_views(config, score_root, prepared_root, seed)
         fedcrg_only = self.variants.policy_subset(
             config,
@@ -482,7 +658,7 @@ class RunRealSensitivities:
         calibration_seed: CalibrationSeed | int | None = None,
     ) -> Path:
         seed = self._seed(config, calibration_seed)
-        definition = self.registry.get(ExperimentId.SOURCE_ORDER_TEST)
+        definition = get_experiment_definition(ExperimentId.SOURCE_ORDER_TEST)
         block_count = int(definition.axis(ExperimentAxisId.BLOCKS).values[0])
         variant = self.variants.protocol_variant(
             config,
@@ -540,7 +716,7 @@ class RunRealSensitivities:
         calibration_seed: CalibrationSeed | int | None = None,
     ) -> Path:
         seed = self._seed(config, calibration_seed)
-        definition = self.registry.get(ExperimentId.REAL_CONTAMINATION)
+        definition = get_experiment_definition(ExperimentId.REAL_CONTAMINATION)
         variant = self.variants.policy_subset(
             config,
             (PolicyId.FEDCRG,),
@@ -596,44 +772,37 @@ class RunRealSensitivities:
             ),
         )
 
-    def run_r12(
+
+class RunSourceOrderCalibration:
+    """R12: reassign the frozen reservoir in source order, never retrain or rescore."""
+
+    def run(
         self,
         config: ExperimentConfig,
-        score_root: Path,
         prepared_root: Path,
+        score_root: Path,
         output: Path,
     ) -> Path:
-        seed = CalibrationSeed(config.dataset.primary_calibration_seed)
-        definition = self.registry.get(ExperimentId.SOURCE_ORDER_CALIBRATION)
-        variant = self.variants.protocol_variant(
+        evaluator = EvaluatePolicies()
+        descriptor = ScoreCache().load_descriptor(score_root)
+        bundle = evaluator.evaluate_from_cache(
             config,
-            experiment_id=ExperimentId.SOURCE_ORDER_CALIBRATION,
-        )
-        bundle = self.evaluator.evaluate_from_cache(
-            variant,
             score_root,
-            calibration_seed=seed,
+            calibration_seed=config.dataset.primary_calibration_seed,
             mode=CalibrationAssignmentMode.SOURCE_ORDER,
             prepared_root=prepared_root,
         )
-        return self._write(
+        atomic_write_json(
             output,
-            SensitivityEnvelope(
-                ExperimentId.SOURCE_ORDER_CALIBRATION,
-                definition.protocol_code,
-                int(self.score_cache.load_descriptor(score_root).identity.model_seed),
-                seed,
-                (
-                    SensitivityCell(
-                        settings=(
-                            ParameterSetting(
-                                ExperimentAxisId.ASSIGNMENT,
-                                CalibrationAssignmentMode.SOURCE_ORDER,
-                            ),
-                        ),
-                        config_hash=variant.config_hash,
-                        evaluation=bundle,
-                    ),
-                ),
-            ),
+            {
+                "experiment": ExperimentCode.R12.value,
+                "complete": True,
+                "dataset_id": config.dataset.id.value,
+                "model_seed": int(descriptor.identity.model_seed),
+                "calibration_seed": config.dataset.primary_calibration_seed,
+                "calibration_assignment": CalibrationAssignmentMode.SOURCE_ORDER.value,
+                "score_cache_sha256": descriptor.cache_sha256.value,
+                "evaluation": EvaluatePolicies.to_serializable(bundle),
+            },
         )
+        return output

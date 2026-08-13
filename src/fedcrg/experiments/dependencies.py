@@ -3,20 +3,17 @@
 from __future__ import annotations
 
 from fedcrg.domain.enums import ExperimentId, ExperimentStatus
-from fedcrg.experiments.registry import ExperimentRegistry
+from fedcrg.experiments.experiment_definition import get_experiment_definition
 
 
 class DependencyResolver:
-    def __init__(self, registry: ExperimentRegistry) -> None:
-        self.registry = registry
-
     def blockers(
         self,
         experiment_id: ExperimentId,
         statuses: dict[ExperimentId, ExperimentStatus],
     ) -> tuple[ExperimentId, ...]:
         blockers = []
-        for dependency in self.registry.get(experiment_id).dependencies:
+        for dependency in get_experiment_definition(experiment_id).dependencies:
             if statuses.get(dependency) is not ExperimentStatus.COMPLETE:
                 blockers.append(dependency)
         return tuple(blockers)
@@ -27,7 +24,7 @@ class DependencyResolver:
         stack = list(requested)
         while stack:
             current = stack.pop()
-            for dependency in self.registry.get(current).dependencies:
+            for dependency in get_experiment_definition(current).dependencies:
                 if dependency not in expanded:
                     expanded.add(dependency)
                     stack.append(dependency)
@@ -38,7 +35,7 @@ class DependencyResolver:
                 (
                     item
                     for item in remaining
-                    if all(dep in ordered for dep in self.registry.get(item).dependencies)
+                    if all(dep in ordered for dep in get_experiment_definition(item).dependencies)
                 ),
                 key=str,
             )

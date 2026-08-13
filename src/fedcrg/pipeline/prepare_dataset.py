@@ -466,3 +466,35 @@ class PrepareData:
             dataset_level_code=code,
         )
         self.manifests.save(root / "manifest.json", manifest)
+
+
+class PrepareDiadFeatureSensitivity:
+    """Derive/freeze R14 features and prepare the named DIAD role assignment."""
+
+    def prepare(
+        self,
+        base_config: ExperimentConfig,
+        data_root: Path,
+        eligibility_manifest: Path,
+        feature_manifest: Path,
+    ) -> tuple[ExperimentConfig, Path]:
+        from fedcrg.data.diad import DiadFeatureSensitivityAdapter
+        from fedcrg.experiments.definitions.sensitivity import (
+            BuildDiadFeatureSensitivityContract,
+            r14_config,
+        )
+
+        contract = BuildDiadFeatureSensitivityContract().build(
+            data_root,
+            eligibility_manifest,
+            feature_manifest,
+            train_count=base_config.dataset.split.train_benign,
+        )
+        config = r14_config(base_config, contract)
+        adapter = DiadFeatureSensitivityAdapter(data_root, contract.features)
+        prepared = PrepareData().prepare(
+            config,
+            data_root,
+            adapter_override=adapter,
+        )
+        return config, prepared

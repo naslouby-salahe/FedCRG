@@ -6,11 +6,12 @@ from pathlib import Path
 
 import click
 
-from fedcrg.application.benchmark import RunBenchmark
-from fedcrg.application.precompute import ProtocolTablePrecomputer
-from fedcrg.application.robustness import RunRobustness
-from fedcrg.application.synthetic import RunSyntheticExperiments
+from fedcrg.analysis.computational_benchmark import RunBenchmark
 from fedcrg.cli.shared import load_config
+from fedcrg.domain.enums import DetectorId
+from fedcrg.experiments.definitions.synthetic import RunSyntheticExperiments
+from fedcrg.pipeline.select_thresholds import ProtocolTablePrecomputer
+from fedcrg.pipeline.train_detector import TrainDetector
 
 
 @click.group(name="tables")
@@ -77,9 +78,10 @@ def robustness_group() -> None:
 @click.option("--model-seed", type=int, required=True)
 def train_deep_svdd(config_path: Path, prepared_root: Path, model_seed: int) -> None:
     """Train the mandatory outcome-independent Deep-SVDD second score generator."""
-    model, manifest = RunRobustness().train_second_detector(
-        load_config(config_path), prepared_root, model_seed
-    )
+    config = load_config(config_path)
+    if config.detector.id is not DetectorId.DEEP_SVDD:
+        raise ValueError("Second-detector robustness requires the Deep-SVDD config")
+    model, manifest = TrainDetector().train_from_cache(config, prepared_root, model_seed)
     click.echo(f"model={model}\nmanifest={manifest}")
 
 
@@ -130,8 +132,10 @@ def sensitivity_run(
     output: Path,
 ) -> None:
     """Run one pre-registered R2-R9/R12 real-score sensitivity on a frozen score cache."""
-    from fedcrg.application.sensitivity import RunRealSensitivities
-    from fedcrg.application.source_order import RunSourceOrderCalibration
+    from fedcrg.experiments.definitions.sensitivity import (
+        RunRealSensitivities,
+        RunSourceOrderCalibration,
+    )
 
     config = load_config(config_path)
 
