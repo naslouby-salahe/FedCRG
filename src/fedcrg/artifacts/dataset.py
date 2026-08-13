@@ -8,7 +8,14 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
 from fedcrg.artifacts.serialization import atomic_write_json, to_json_value
-from fedcrg.core.enums import CalibrationAssignmentMode, DataRole, DatasetId, FailureCode
+from fedcrg.core.enums import (
+    CalibrationAssignmentMode,
+    ChronologyStatus,
+    DataRole,
+    DatasetId,
+    EligibilityStatus,
+    FailureCode,
+)
 from fedcrg.core.ids import CalibrationSeed, ClientId, Sha256
 from fedcrg.data.manifests import (
     CalibrationAssignmentManifest,
@@ -16,10 +23,12 @@ from fedcrg.data.manifests import (
     CalibrationRoleManifest,
     ClientCalibrationManifest,
     ClientDatasetManifest,
+    EligibilityManifest,
     PreparedDatasetManifest,
     RoleArtifactManifest,
     SourceFileManifest,
 )
+from fedcrg.data.models import EligibilityRecord
 
 
 class PreparedDatasetManifestStore:
@@ -138,6 +147,44 @@ class PreparedDatasetManifestStore:
         if rebuilt.deterministic_payload_sha256 != manifest.deterministic_payload_sha256:
             raise ValueError("Prepared dataset deterministic payload hash mismatch")
         return manifest
+
+
+class EligibilityManifestStore:
+    def save(self, path: Path, manifest: EligibilityManifest) -> None:
+        atomic_write_json(path, manifest)
+
+    def load(self, path: Path) -> EligibilityManifest:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        return EligibilityManifest(
+            dataset_id=DatasetId(str(raw["dataset_id"])),
+            discovered_clients=tuple(
+                ClientId(str(value)) for value in raw["discovered_clients"]
+            ),
+            eligible_clients=tuple(
+                ClientId(str(value)) for value in raw["eligible_clients"]
+            ),
+            records=tuple(
+                EligibilityRecord(
+                    client_id=ClientId(str(item["client_id"])),
+                    status=EligibilityStatus(str(item["status"])),
+                    benign_count=int(item["benign_count"]),
+                    malicious_count=int(item["malicious_count"]),
+                    attack_development_capacity=int(
+                        item["attack_development_capacity"]
+                    ),
+                    primary_code=(
+                        None
+                        if item["primary_code"] is None
+                        else FailureCode(str(item["primary_code"]))
+                    ),
+                    secondary_codes=tuple(
+                        FailureCode(str(code)) for code in item["secondary_codes"]
+                    ),
+                    chronology=ChronologyStatus(str(item["chronology"])),
+                )
+                for item in raw["records"]
+            ),
+        )
 
 
 class CalibrationAssignmentManifestStore:
