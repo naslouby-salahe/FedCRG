@@ -28,6 +28,6 @@ policies:
   - GLOBAL-Q99-FULL
   - LOCAL-Q99-FULL
   - SHRINKAGE
-  - READINESS-ONLY
+  - GATE-A-ONLY
   - FEDCRG
 outputs_root: outputs

@@ -13,6 +13,7 @@ import scipy
 import torch
 
 from fedcrg.cli.data import data_group
+from fedcrg.cli.environment import environment_group
 from fedcrg.cli.evaluation import evaluate_command, report_group
 from fedcrg.cli.experiments import experiment_group
 from fedcrg.cli.research import (
@@ -60,6 +61,7 @@ def validate_config(config_path: Path) -> None:
 
 
 cli.add_command(data_group)
+cli.add_command(environment_group)
 cli.add_command(tables_group)
 cli.add_command(synthetic_group)
 cli.add_command(train_command)

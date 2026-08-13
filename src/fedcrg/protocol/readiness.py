@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import math
 import os
-from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
@@ -234,16 +233,13 @@ class CalibrationReadinessEvaluator:
             return CalibrationReadiness(
                 plan=plan,
                 threshold=None,
-                tie_count=0,
                 diagnostics=diagnostics,
             )
         ordered = np.sort(values, kind="stable")
         threshold = float(ordered[plan.rank - 1])
-        tie_count = int(np.count_nonzero(ordered == threshold))
         return CalibrationReadiness(
             plan=plan,
             threshold=threshold,
-            tie_count=tie_count,
             diagnostics=diagnostics,
         )
 

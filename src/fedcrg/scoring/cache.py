@@ -41,14 +41,29 @@ class ScoreCacheIdentity:
 
 
 @dataclass(frozen=True, slots=True)
+class ScoreRoleCacheRecord:
+    """One client/role partition's serialized identity within the physical cache."""
+
+    client_id: ClientId
+    role: DataRole
+    score_array_sha256: Sha256
+    row_count: int
+
+
+@dataclass(frozen=True, slots=True)
 class ScoreCacheDescriptor:
     """Small metadata object returned after a streaming cache is finalized."""
 
     identity: ScoreCacheIdentity
     cache_sha256: Sha256
     client_ids: tuple[ClientId, ...]
-    role_hashes: dict[str, dict[str, str]]
-    role_counts: dict[str, dict[str, int]]
+    records: tuple[ScoreRoleCacheRecord, ...]
+
+    def record_for(self, client_id: ClientId, role: DataRole) -> ScoreRoleCacheRecord:
+        for record in self.records:
+            if record.client_id == client_id and record.role is role:
+                return record
+        raise KeyError(f"{client_id.value}/{role.value}")
 
 
 class ScoreCache:
@@ -93,8 +108,7 @@ class ScoreCache:
         staging.mkdir()
         parquet_path = staging / self.filename
         writer = None
-        role_hashes: dict[str, dict[str, str]] = {}
-        role_counts: dict[str, dict[str, int]] = {}
+        records: list[ScoreRoleCacheRecord] = []
         observed_roles: dict[ClientId, set[DataRole]] = {}
 
         try:
@@ -133,8 +147,14 @@ class ScoreCache:
                         write_statistics=True,
                     )
                 writer.write_table(table)
-                role_hashes.setdefault(cid.value, {})[scores.role.value] = scores.sha256.value
-                role_counts.setdefault(cid.value, {})[scores.role.value] = len(scores.values)
+                records.append(
+                    ScoreRoleCacheRecord(
+                        client_id=cid,
+                        role=scores.role,
+                        score_array_sha256=scores.sha256,
+                        row_count=len(scores.values),
+                    )
+                )
                 del table, frame
 
             if writer is None:
@@ -144,14 +164,16 @@ class ScoreCache:
             self._validate_stream_roles(observed_roles)
             cache_hash = Sha256(sha256_file(parquet_path))
             client_ids = tuple(sorted(observed_roles))
+            frozen_records = tuple(
+                sorted(records, key=lambda item: (item.client_id.value, item.role.value))
+            )
             atomic_write_json(
                 staging / self.manifest_filename,
                 self._metadata_payload(
                     identity,
                     cache_hash,
                     client_ids,
-                    role_hashes,
-                    role_counts,
+                    frozen_records,
                 ),
             )
             os.replace(staging, root)
@@ -159,8 +181,7 @@ class ScoreCache:
                 identity=identity,
                 cache_sha256=cache_hash,
                 client_ids=client_ids,
-                role_hashes=role_hashes,
-                role_counts=role_counts,
+                records=frozen_records,
             )
         except Exception:
             if writer is not None:
@@ -186,11 +207,16 @@ class ScoreCache:
                 "phase": scores.role.value,
                 "model_seed": int(identity.model_seed),
                 "score_float64": np.asarray(scores.values, dtype=np.float64),
-                "label_test_only": [label] * len(scores.values),
-                "attack_family_test_only": (
-                    [None if group is None else group.value for group in groups]
-                    if scores.role is DataRole.ATTACK_TEST
-                    else [None] * len(scores.values)
+                # Nullable dtypes keep the schema identical across roles so a single
+                # streaming ParquetWriter can accept every role's frame in sequence.
+                "label_test_only": pd.array([label] * len(scores.values), dtype="Int64"),
+                "attack_family_test_only": pd.array(
+                    (
+                        [None if group is None else group.value for group in groups]
+                        if scores.role is DataRole.ATTACK_TEST
+                        else [None] * len(scores.values)
+                    ),
+                    dtype="string",
                 ),
             }
         )
@@ -222,8 +248,7 @@ class ScoreCache:
         identity: ScoreCacheIdentity,
         cache_hash: Sha256,
         client_ids: tuple[ClientId, ...],
-        role_hashes: dict[str, dict[str, str]],
-        role_counts: dict[str, dict[str, int]],
+        records: tuple[ScoreRoleCacheRecord, ...],
     ) -> dict[str, object]:
         return {
             "dataset": identity.dataset,
@@ -236,8 +261,15 @@ class ScoreCache:
             "score_cache_file": cls.filename,
             "score_cache_sha256": cache_hash,
             "client_ids": client_ids,
-            "role_hashes": role_hashes,
-            "role_counts": role_counts,
+            "records": [
+                {
+                    "client_id": record.client_id.value,
+                    "role": record.role.value,
+                    "score_array_sha256": record.score_array_sha256.value,
+                    "row_count": record.row_count,
+                }
+                for record in records
+            ],
         }
 
     def load_descriptor(self, root: Path) -> ScoreCacheDescriptor:
@@ -255,20 +287,42 @@ class ScoreCache:
             identity=identity,
             cache_sha256=Sha256(str(metadata["score_cache_sha256"])),
             client_ids=tuple(ClientId(str(value)) for value in metadata["client_ids"]),
-            role_hashes={
-                str(client): {str(role): str(value) for role, value in roles.items()}
-                for client, roles in metadata["role_hashes"].items()
-            },
-            role_counts={
-                str(client): {str(role): int(value) for role, value in roles.items()}
-                for client, roles in metadata["role_counts"].items()
-            },
+            records=self._records_from_metadata(metadata),
         )
+
+    @staticmethod
+    def _records_from_metadata(metadata: dict[str, object]) -> tuple[ScoreRoleCacheRecord, ...]:
+        raw = metadata["records"]
+        assert isinstance(raw, list)
+        records: list[ScoreRoleCacheRecord] = []
+        for entry in raw:
+            assert isinstance(entry, dict)
+            records.append(
+                ScoreRoleCacheRecord(
+                    client_id=ClientId(str(entry["client_id"])),
+                    role=DataRole(str(entry["role"])),
+                    score_array_sha256=Sha256(str(entry["score_array_sha256"])),
+                    row_count=int(entry["row_count"]),
+                )
+            )
+        return tuple(records)
+
+    @staticmethod
+    def _record_lookup(
+        records: tuple[ScoreRoleCacheRecord, ...],
+        client_id: ClientId,
+        role: DataRole,
+    ) -> ScoreRoleCacheRecord:
+        for record in records:
+            if record.client_id == client_id and record.role is role:
+                return record
+        raise KeyError(f"{client_id.value}/{role.value}")
 
     def load(self, root: Path) -> ScoreManifest:
         """Materialize the full score cache for deliberately small in-memory workflows."""
 
         metadata = self._read_verified_metadata(root)
+        records = self._records_from_metadata(metadata)
         parquet_path = root / str(metadata["score_cache_file"])
         frame = pd.read_parquet(parquet_path, engine="pyarrow")
         clients: dict[ClientId, ClientScoreSet] = {}
@@ -276,10 +330,11 @@ class ScoreCache:
             score_map: dict[DataRole, RoleScores] = {}
             for role_value, role_frame in client_frame.groupby("phase", sort=True):
                 role = DataRole(str(role_value))
+                typed_client_id = ClientId(str(client_id))
                 role_scores = self._role_scores_from_frame(
-                    ClientId(str(client_id)), role, role_frame
+                    typed_client_id, role, role_frame
                 )
-                expected = metadata["role_hashes"][str(client_id)][role.value]
+                expected = self._record_lookup(records, typed_client_id, role).score_array_sha256.value
                 if role_scores.sha256.value != expected:
                     raise ValueError(
                         f"SCORE_CACHE_HASH_MISMATCH: {client_id}/{role.value}"
@@ -315,7 +370,8 @@ class ScoreCache:
         if frame.empty:
             raise KeyError(f"Score cache has no {client_id.value}/{role.value} partition")
         scores = self._role_scores_from_frame(client_id, role, frame)
-        expected = metadata["role_hashes"][client_id.value][role.value]
+        records = self._records_from_metadata(metadata)
+        expected = self._record_lookup(records, client_id, role).score_array_sha256.value
         if scores.sha256.value != expected:
             raise ValueError(f"SCORE_CACHE_HASH_MISMATCH: {client_id.value}/{role.value}")
         return scores

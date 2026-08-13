@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from fedcrg.core.ids import ClientId
-from fedcrg.data.r14_feature_contract import derive_r14_feature_contract
+from fedcrg.data.feature_sensitivity import derive_numeric_safe_features
 
 
 def test_r14_keeps_stream_behavior_features_but_excludes_direct_stream_identifier() -> None:
@@ -17,7 +17,7 @@ def test_r14_keeps_stream_behavior_features_but_excludes_direct_stream_identifie
             "numeric_behavior": np.linspace(1.0, 2.0, 100),
         }
     )
-    result = derive_r14_feature_contract({ClientId("diad_example0001"): frame})
+    result = derive_numeric_safe_features({ClientId("diad_example0001"): frame})
     assert "stream" not in result.features
     assert "device_mac" not in result.features
     assert "src_port" not in result.features

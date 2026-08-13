@@ -1,7 +1,13 @@
 from fedcrg.core.enums import CalibrationReadinessState, DecisionState, MismatchOutcome, ThresholdSource
-from fedcrg.core.types import OperatingBand
+from fedcrg.core.types import ConfidenceInterval, OperatingBand
 from fedcrg.protocol.decision import ThresholdDecisionEngine
-from fedcrg.protocol.results import CalibrationReadiness, MismatchEvidence, ReadinessPlan, ReferenceThreshold
+from fedcrg.protocol.results import (
+    CalibrationReadiness,
+    ContinuityDiagnostics,
+    MismatchEvidence,
+    ReadinessPlan,
+    ReferenceThreshold,
+)
 
 
 def _reference() -> ReferenceThreshold:
@@ -10,11 +16,17 @@ def _reference() -> ReferenceThreshold:
 
 def _readiness(ready: bool = True, ties: int = 1) -> CalibrationReadiness:
     plan = ReadinessPlan(sample_count=100, rank=99, coverage_probability=0.99 if ready else 0.5, state=CalibrationReadinessState.READY if ready else CalibrationReadinessState.NOT_READY, band=OperatingBand(0.005, 0.015), assurance=0.95)
-    return CalibrationReadiness(plan, 2.0 if ready else None, ties)
+    diagnostics = ContinuityDiagnostics(
+        unique_score_fraction=1.0,
+        duplicate_count=0,
+        selected_threshold_multiplicity=ties,
+        minimum_positive_spacing=0.01,
+    )
+    return CalibrationReadiness(plan, 2.0 if ready else None, diagnostics)
 
 
 def _mismatch(outcome: MismatchOutcome) -> MismatchEvidence:
-    return MismatchEvidence(1000, 20, 0.02, None, outcome, 736, None, None)
+    return MismatchEvidence(1000, 20, 0.02, ConfidenceInterval(0.01, 0.03), outcome, 736, 0.5, 0.5)
 
 
 def test_no_material_difference_always_retains_reference() -> None:

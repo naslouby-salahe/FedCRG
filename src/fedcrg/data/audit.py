@@ -54,8 +54,13 @@ class PreparedDatasetAuditor:
             feature_columns = preprocessing.get("feature_columns")
             if not isinstance(feature_columns, list) or len(feature_columns) != config.dataset.feature_count:
                 problems.append("preprocessing feature count differs from frozen config")
-            row_hashes = preprocessing.get("training_row_hashes")
-            if not isinstance(row_hashes, dict) or set(row_hashes) != {client.value for client in eligible_clients}:
+            clients_raw = preprocessing.get("clients")
+            covered = (
+                {str(item.get("client_id")) for item in clients_raw if isinstance(item, dict)}
+                if isinstance(clients_raw, list)
+                else set()
+            )
+            if covered != {client.value for client in eligible_clients}:
                 problems.append("preprocessing fit-row hashes do not cover the eligible clients")
 
         calibration_count = 0

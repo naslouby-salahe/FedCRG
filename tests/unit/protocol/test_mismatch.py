@@ -2,7 +2,7 @@ import numpy as np
 
 from fedcrg.core.enums import MismatchOutcome
 from fedcrg.core.types import OperatingBand
-from fedcrg.protocol.mismatch import ReferenceMismatchEvaluator, minimum_mismatch_sample_count
+from fedcrg.protocol.mismatch import ReferenceMismatchEvaluator, minimum_bidirectional_sample_count
 
 
 def _scores(n: int, x: int) -> np.ndarray:
@@ -10,7 +10,7 @@ def _scores(n: int, x: int) -> np.ndarray:
 
 
 def test_primary_minimum_sample_count() -> None:
-    assert minimum_mismatch_sample_count(0.005, 0.95) == 736
+    assert minimum_bidirectional_sample_count(0.005, 0.95) == 736
 
 
 def test_exact_mismatch_cutoffs() -> None:
@@ -24,4 +24,5 @@ def test_exact_mismatch_cutoffs() -> None:
 def test_insufficient_evidence_is_explicit() -> None:
     result = ReferenceMismatchEvaluator().evaluate(np.zeros(735), 1.0, OperatingBand(0.005, 0.015), 0.95)
     assert result.outcome is MismatchOutcome.INSUFFICIENT_EVIDENCE
-    assert result.interval is None
+    assert result.sample_count < (result.minimum_sample_count or 0)
+    assert result.interval is not None

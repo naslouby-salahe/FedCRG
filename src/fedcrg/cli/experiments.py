@@ -111,7 +111,12 @@ def materialize_federation_cell(
         calibration_seed,
         FrozenCacheInputs(prepared_root, model_path, training_manifest, score_root),
     )
-    click.echo(json.dumps({policy.value: str(path) for policy, path in result.run_directories.items()}, indent=2))
+    click.echo(
+        json.dumps(
+            {entry.policy.value: str(entry.path) for entry in result.run_directories},
+            indent=2,
+        )
+    )
 
 
 @experiment_group.command(name="execute-grid")
@@ -125,8 +130,9 @@ def execute_grid(
     experiment: str | None,
     named_only: bool,
 ) -> None:
-    """Execute each model seed once, score once, and materialize the requested policy grid."""
-    from fedcrg.application.pipeline import ExecuteFrozenWorkload
+    """Audit prepared evidence, then execute each model seed once, score once, and
+    materialize the requested policy grid."""
+    from fedcrg.application.research_pipeline import ExecuteResearchPipeline
 
     config = load_config(config_path)
     experiment_id = ExperimentId(experiment) if experiment is not None else config.id
@@ -135,12 +141,13 @@ def execute_grid(
         if named_only
         else config.dataset.calibration_seeds
     )
-    result = ExecuteFrozenWorkload().execute(
+    execution = ExecuteResearchPipeline().execute(
         experiment_id,
         config,
         prepared_root,
         calibration_seeds=calibration_seeds,
     )
+    result = execution.workload
     click.echo(
         json.dumps(
             {
@@ -149,6 +156,7 @@ def execute_grid(
                 "model_count": len(result.models),
                 "policy_run_count": len(result.run_directories),
                 "calibration_seeds": list(calibration_seeds),
+                "preflight_client_count": execution.preflight.prepared_data.client_count,
             },
             indent=2,
         )

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import fields
 from pathlib import PurePosixPath
+from typing import get_type_hints
 
 from fedcrg.artifacts.manifest import RunManifest
 from fedcrg.artifacts.references import CacheReference
@@ -9,7 +9,6 @@ from fedcrg.core.ids import (
     CalibrationSeed,
     ClientId,
     ModelSeed,
-    RowId,
     RunId,
     Sha256,
 )
@@ -18,7 +17,7 @@ from fedcrg.scoring.models import RoleScores
 
 
 def _field_type(cls: type[object], name: str) -> object:
-    return next(field.type for field in fields(cls) if field.name == name)
+    return get_type_hints(cls)[name]
 
 
 def test_run_manifest_uses_domain_ids_not_primitives() -> None:

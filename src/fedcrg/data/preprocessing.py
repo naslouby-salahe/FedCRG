@@ -27,6 +27,9 @@ _METADATA = {
     "capture_time",
 }
 
+# Matches the float64 serialization convention in fedcrg.analysis.communication.
+_FLOAT64_BYTES = 8
+
 
 def model_feature_columns(frame: pd.DataFrame, expected: int) -> tuple[str, ...]:
     columns = tuple(column for column in frame.columns if column not in _METADATA)
@@ -36,7 +39,11 @@ def model_feature_columns(frame: pd.DataFrame, expected: int) -> tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
-class ClientImputer:
+class ClientPreprocessingParameters:
+    """One client's frozen local imputation parameters and training-row identity."""
+
+    client_id: ClientId
+    training_row_sha256: Sha256
     medians: tuple[float, ...] | None
 
 
@@ -44,8 +51,7 @@ class ClientImputer:
 class PreprocessingModel:
     dataset: DatasetId
     feature_columns: tuple[str, ...]
-    client_imputers: dict[ClientId, ClientImputer]
-    training_row_hashes: dict[ClientId, Sha256]
+    clients: tuple[ClientPreprocessingParameters, ...]
     global_minima: tuple[float, ...]
     global_maxima: tuple[float, ...]
 
@@ -53,11 +59,25 @@ class PreprocessingModel:
     def constant_features(self) -> tuple[bool, ...]:
         return tuple(low == high for low, high in zip(self.global_minima, self.global_maxima, strict=True))
 
+    @property
+    def extrema_upload_bytes_per_client(self) -> int:
+        return 2 * len(self.feature_columns) * _FLOAT64_BYTES
+
+    @property
+    def extrema_upload_bytes_total(self) -> int:
+        return self.extrema_upload_bytes_per_client * len(self.clients)
+
+    def parameters_for(self, client_id: ClientId) -> ClientPreprocessingParameters:
+        for item in self.clients:
+            if item.client_id == client_id:
+                return item
+        raise KeyError(client_id.value)
+
     def transform(self, frame: pd.DataFrame, client_id: ClientId) -> pd.DataFrame:
         values = frame.loc[:, list(self.feature_columns)].to_numpy(dtype=np.float64, copy=True)
-        imputer = self.client_imputers[client_id]
-        if imputer.medians is not None:
-            medians = np.asarray(imputer.medians, dtype=np.float64)
+        parameters = self.parameters_for(client_id)
+        if parameters.medians is not None:
+            medians = np.asarray(parameters.medians, dtype=np.float64)
             missing = ~np.isfinite(values)
             if missing.any():
                 rows, columns = np.nonzero(missing)
@@ -78,19 +98,36 @@ class PreprocessingModel:
         return {
             "dataset": self.dataset.value,
             "feature_columns": list(self.feature_columns),
-            "training_row_hashes": {client.value: hash_value.value for client, hash_value in sorted(self.training_row_hashes.items())},
-            "client_medians": {
-                client_id.value: None if item.medians is None else list(item.medians)
-                for client_id, item in self.client_imputers.items()
-            },
+            "clients": [
+                {
+                    "client_id": item.client_id.value,
+                    "training_row_sha256": item.training_row_sha256.value,
+                    "medians": None if item.medians is None else list(item.medians),
+                }
+                for item in sorted(self.clients, key=lambda item: item.client_id)
+            ],
             "global_minima": list(self.global_minima),
             "global_maxima": list(self.global_maxima),
             "constant_features": list(self.constant_features),
+            "extrema_upload_bytes_per_client": self.extrema_upload_bytes_per_client,
+            "extrema_upload_bytes_total": self.extrema_upload_bytes_total,
         }
 
 
+@dataclass(frozen=True, slots=True)
+class ClientPreprocessingStatistics:
+    """One client's local training-row statistics, safe to retain after the raw frame is discarded."""
+
+    client_id: ClientId
+    feature_columns: tuple[str, ...]
+    training_row_hash: Sha256
+    local_minima: tuple[float, ...]
+    local_maxima: tuple[float, ...]
+    medians: tuple[float, ...] | None
+
+
 class FederatedPreprocessor:
-    """Fit imputers locally and aggregate only train-set feature extrema."""
+    """Compute per-client statistics locally, then aggregate only train-set feature extrema."""
 
     def validate_training_rows(
         self,
@@ -113,54 +150,65 @@ class FederatedPreprocessor:
                 )
         return columns
 
-    def fit(
+    def client_statistics(
         self,
-        splits_by_client: dict[ClientId, ClientSplits],
+        splits: ClientSplits,
         dataset: DatasetId,
         expected_features: int,
+    ) -> ClientPreprocessingStatistics:
+        """Fit one client's local imputer and training-row extrema without a global pass."""
+
+        columns = self.validate_training_rows(splits, dataset, expected_features)
+        train_frame = splits.get(DataRole.TRAIN)
+        training_row_hash = hash_row_ids(train_frame["row_id"].astype(str).tolist())
+        train_values = train_frame.loc[:, list(columns)].to_numpy(dtype=np.float64, copy=True)
+        if dataset is DatasetId.DIAD:
+            medians = np.nanmedian(np.where(np.isfinite(train_values), train_values, np.nan), axis=0)
+            if not np.isfinite(medians).all():
+                raise DataIntegrityError(f"DIAD imputation median is undefined for {splits.client_id}")
+            missing = ~np.isfinite(train_values)
+            if missing.any():
+                rows, indices = np.nonzero(missing)
+                train_values[rows, indices] = medians[indices]
+            median_tuple: tuple[float, ...] | None = tuple(float(value) for value in medians)
+        else:
+            median_tuple = None
+        return ClientPreprocessingStatistics(
+            client_id=splits.client_id,
+            feature_columns=columns,
+            training_row_hash=training_row_hash,
+            local_minima=tuple(float(value) for value in np.min(train_values, axis=0)),
+            local_maxima=tuple(float(value) for value in np.max(train_values, axis=0)),
+            medians=median_tuple,
+        )
+
+    def aggregate(
+        self,
+        statistics: tuple[ClientPreprocessingStatistics, ...],
+        dataset: DatasetId,
     ) -> PreprocessingModel:
-        if not splits_by_client:
+        """Combine local client statistics into the federation-wide scaling contract."""
+
+        if not statistics:
             raise DataIntegrityError("Cannot fit preprocessing without clients")
-        feature_columns: tuple[str, ...] | None = None
-        imputers: dict[ClientId, ClientImputer] = {}
-        training_row_hashes: dict[ClientId, Sha256] = {}
-        local_minima: list[np.ndarray] = []
-        local_maxima: list[np.ndarray] = []
-        for client_id in sorted(splits_by_client):
-            splits = splits_by_client[client_id]
-            columns = self.validate_training_rows(splits, dataset, expected_features)
-            if feature_columns is None:
-                feature_columns = columns
-            elif columns != feature_columns:
+        ordered = tuple(sorted(statistics, key=lambda item: item.client_id))
+        feature_columns = ordered[0].feature_columns
+        for item in ordered[1:]:
+            if item.feature_columns != feature_columns:
                 raise DataIntegrityError("Model feature order differs across clients")
-            train_frame = splits.get(DataRole.TRAIN)
-            training_row_hashes[client_id] = Sha256(hash_row_ids(
-                train_frame["row_id"].astype(str).tolist()
-            ))
-            train_values = train_frame.loc[:, list(columns)].to_numpy(
-                dtype=np.float64, copy=True
-            )
-            if dataset is DatasetId.DIAD:
-                medians = np.nanmedian(np.where(np.isfinite(train_values), train_values, np.nan), axis=0)
-                if not np.isfinite(medians).all():
-                    raise DataIntegrityError(f"DIAD imputation median is undefined for {client_id}")
-                missing = ~np.isfinite(train_values)
-                if missing.any():
-                    rows, indices = np.nonzero(missing)
-                    train_values[rows, indices] = medians[indices]
-                imputers[client_id] = ClientImputer(tuple(float(value) for value in medians))
-            else:
-                imputers[client_id] = ClientImputer(None)
-            local_minima.append(np.min(train_values, axis=0))
-            local_maxima.append(np.max(train_values, axis=0))
-        assert feature_columns is not None
-        global_minima = np.min(np.stack(local_minima), axis=0)
-        global_maxima = np.max(np.stack(local_maxima), axis=0)
+        global_minima = np.min(np.stack([item.local_minima for item in ordered]), axis=0)
+        global_maxima = np.max(np.stack([item.local_maxima for item in ordered]), axis=0)
         return PreprocessingModel(
             dataset=dataset,
             feature_columns=feature_columns,
-            client_imputers=imputers,
-            training_row_hashes=training_row_hashes,
+            clients=tuple(
+                ClientPreprocessingParameters(
+                    client_id=item.client_id,
+                    training_row_sha256=item.training_row_hash,
+                    medians=item.medians,
+                )
+                for item in ordered
+            ),
             global_minima=tuple(float(value) for value in global_minima),
             global_maxima=tuple(float(value) for value in global_maxima),
         )
