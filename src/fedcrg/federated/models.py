@@ -1,8 +1,8 @@
-"""Typed federated-training diagnostics and manifests."""
+"""Typed federated-training diagnostics."""
 
 from dataclasses import dataclass
 
-from fedcrg.core.ids import ClientId, Sha256
+from fedcrg.core.ids import ClientId, ModelSeed, Sha256
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,7 +31,7 @@ class RoundResult:
 
 @dataclass(frozen=True, slots=True)
 class TrainingResult:
-    model_seed: int
+    model_seed: ModelSeed
     rounds: tuple[RoundResult, ...]
     final_model_hash: Sha256
     trainable_parameter_count: int
