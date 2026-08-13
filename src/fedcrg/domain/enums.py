@@ -151,6 +151,15 @@ class PolicyId(StrEnum):
     FEDCRG = "fedcrg"
 
 
+class CampaignStatusValue(StrEnum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETE = "complete"
+    FAILED = "failed"
+    BLOCKED = "blocked"
+    SKIPPED = "skipped"
+
+
 class PolicyEvaluationStatus(StrEnum):
     EVALUATED = "evaluated"
     UNDEFINED = "undefined"

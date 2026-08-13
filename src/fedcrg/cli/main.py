@@ -13,6 +13,7 @@ import scipy
 import torch
 
 from fedcrg.cli.benchmark import benchmark_command
+from fedcrg.cli.campaign import campaign_group
 from fedcrg.cli.claims import claims_group
 from fedcrg.cli.data import data_group
 from fedcrg.cli.environment import environment_group
@@ -25,6 +26,7 @@ from fedcrg.cli.experiments import (
 )
 from fedcrg.cli.monitoring import monitor_command
 from fedcrg.cli.reporting import report_group
+from fedcrg.cli.results import results_group
 from fedcrg.cli.scoring import score_command, tables_group
 from fedcrg.cli.training import train_command
 from fedcrg.cli.verification import verify_command
@@ -87,6 +89,8 @@ cli.add_command(report_group)
 cli.add_command(experiment_group)
 cli.add_command(verify_command)
 cli.add_command(monitor_command)
+cli.add_command(campaign_group)
+cli.add_command(results_group)
 
 if __name__ == "__main__":
     cli()

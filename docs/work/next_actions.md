@@ -32,11 +32,10 @@ runtime unit tests added. Remaining: Rich progress (L08) lands with campaign wor
 
 ## Batch 5 — Campaign and results (matrix R09, L04, L05, P03-P05, C4)
 
-1. Campaign concept: `fedcrg campaign run|status`; persistent status store.
-2. `fedcrg results build [CAMPAIGN_ID]` and `results verify [CAMPAIGN_ID]` sharing one
-   builder; campaign completion auto-invokes the same builder.
-3. Publication bundle under `results/<campaign_id>/` (manifest, checksums, configs,
-   metrics, statistics, tables, figures, reports, provenance).
+DONE 2026-08-13: `experiments/campaign.py` (persistent CampaignStatusStore,
+dependency-aware runner, telemetry per stage, auto results build on completion);
+`reporting/results.py` (ResultsBuilder + ResultsVerifier; bundle layout matches §14);
+CLI `campaign run|status|list` and `results build|verify`; unit + e2e tests.
 
 ## Batch 6 — Execution spine and package layout (matrix R01, R02, E09, C1, C5)
 

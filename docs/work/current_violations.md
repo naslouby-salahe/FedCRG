@@ -43,7 +43,10 @@ matrix IDs (`docs/FedCRG Audit Matrix.md`).
 - C3. ~~Outputs layout~~ RESOLVED 2026-08-13: `outputs/logs/` + `outputs/monitoring/`
   added; `cache/precomputed/` renamed to `cache/analysis/`; README and .gitignore
   updated. Matrix: R08.
-- C4. No `results/`, no campaign, no `fedcrg results build|verify`. Matrix: R09, L04, L05.
+- C4. ~~No `results/`, no campaign, no `fedcrg results build|verify`~~ RESOLVED
+  2026-08-13: `experiments/campaign.py` + `reporting/results.py` + CLI
+  (`campaign run|status|list`, `results build|verify`); campaign completion invokes the
+  same ResultsBuilder. Matrix: R09, L04, L05, P03-P05.
 - C5. Package names deviate from target (`config/`, `data/`, `method/`+`thresholds/`,
   `runtime.py`->runtime/ done in b4; `cli/`). Matrix: R01.
 
