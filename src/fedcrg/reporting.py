@@ -815,13 +815,23 @@ class ResultsBuilder:
         self._write_provenance(outputs_root, destination / "provenance")
         self._copy_tables_and_figures(outputs_root, destination)
 
-        checksums = self._checksums(destination)
-        atomic_write_json(destination / "checksums.json", checksums)
+        # The manifest itself must be covered by the checksum ledger, so it is
+        # written before the ledger is computed (checksums.json is the only
+        # file excluded from its own ledger).
         complete = self._evidence_complete(outputs_root)
+        checksums = self._checksums(destination)
         manifest = self._manifest(
-            campaign_id, outputs_root, destination, config, checksums, complete
+            campaign_id,
+            outputs_root,
+            destination,
+            config,
+            checksums,
+            complete,
+            file_count=len(checksums) + 1,
         )
         atomic_write_json(destination / "manifest.json", manifest)
+        checksums = self._checksums(destination)
+        atomic_write_json(destination / "checksums.json", checksums)
         return destination
 
     @staticmethod
@@ -973,6 +983,7 @@ class ResultsBuilder:
         config: ExperimentConfig,
         checksums: tuple[ChecksumRecord, ...],
         complete: bool,
+        file_count: PositiveCount | None = None,
     ) -> ResultsManifest:
         detector = config.detector
         return ResultsManifest(
@@ -984,7 +995,7 @@ class ResultsBuilder:
             model_seeds=tuple(config.randomness.model_seeds),
             calibration_seeds=tuple(config.dataset.calibration_seeds),
             outputs_root=str(outputs_root),
-            file_count=len(checksums),
+            file_count=file_count if file_count is not None else len(checksums),
             source_policy="all numerical content is derived from immutable FedCRG artifacts",
         )
 
