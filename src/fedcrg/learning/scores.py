@@ -102,7 +102,7 @@ class ClientScoreInput(BaseModel):
         for item in self.roles:
             if item.role is role:
                 return item
-        raise KeyError(role.value)
+        raise KeyError(role)
 
 
 class RoleScores(BaseModel):
@@ -130,7 +130,7 @@ class RoleScores(BaseModel):
     @property
     def sha256(self) -> Sha256:
         digest = hashlib.sha256()
-        digest.update(self.role.value.encode("utf-8"))
+        digest.update(self.role.encode("utf-8"))
         digest.update(self.client_id.encode("utf-8"))
         for row_id, value in zip(self.row_ids, self.values, strict=True):
             digest.update(row_id.encode("ascii"))
@@ -165,7 +165,7 @@ class ClientScoreSet(BaseModel):
         for item in self.scores:
             if item.role is role:
                 return item
-        raise KeyError(role.value)
+        raise KeyError(role)
 
 
 class ScoreManifest(BaseModel):
@@ -212,7 +212,7 @@ class ClientCalibrationScores(BaseModel):
         for item in self.roles:
             if item.role is role:
                 return item
-        raise KeyError(role.value)
+        raise KeyError(role)
 
 
 class CalibrationScoreViews(BaseModel):
@@ -239,7 +239,7 @@ class CalibrationScoreViews(BaseModel):
 def truncate_view(role_scores: RoleScores, sample_count: SampleCount) -> RoleScores:
     if sample_count <= 0 or sample_count > len(role_scores.values):
         raise ValueError(
-            f"Cannot take {sample_count} values from {len(role_scores.values)} {role_scores.role.value} scores"
+            f"Cannot take {sample_count} values from {len(role_scores.values)} {role_scores.role} scores"
         )
     return RoleScores(
         role=role_scores.role,
@@ -299,7 +299,7 @@ class CalibrationAssignment:
 def _assignment_seed(
     dataset_id: DatasetId, calibration_seed: CalibrationSeed, client_id: ClientId
 ) -> RngSeed:
-    text = f"fedcrg|{dataset_id.value}|calibration|{calibration_seed}|{client_id}"
+    text = f"fedcrg|{dataset_id}|calibration|{calibration_seed}|{client_id}"
     digest = hashlib.sha256(text.encode("utf-8")).digest()
     return int.from_bytes(digest[:8], "big", signed=False)
 
@@ -455,7 +455,7 @@ class ScoreCache:
                 cid = scores.client_id
                 observed_roles.setdefault(cid, set())
                 if scores.role in observed_roles[cid]:
-                    raise ValueError(f"Duplicate score block: {cid}/{scores.role.value}")
+                    raise ValueError(f"Duplicate score block: {cid}/{scores.role}")
                 observed_roles[cid].add(scores.role)
 
                 frame = self._role_frame(identity, scores)
@@ -486,7 +486,7 @@ class ScoreCache:
             cache_hash = sha256_file(parquet_path)
             client_ids = tuple(sorted(observed_roles))
             frozen_records = tuple(
-                sorted(records, key=lambda item: (item.client_id, item.role.value))
+                sorted(records, key=lambda item: (item.client_id, item.role))
             )
             self._write_metadata(staging, identity, cache_hash, client_ids, frozen_records)
             os.replace(staging, root)
@@ -516,16 +516,16 @@ class ScoreCache:
             
         return pd.DataFrame(
             {
-                ScoreCacheColumn.DATASET_ID.value: identity.dataset.value,
-                ScoreCacheColumn.CLIENT_ID.value: scores.client_id,
-                PreparedColumn.ROW_ID.value: list(scores.row_ids),
-                ScoreCacheColumn.PHASE.value: scores.role.value,
-                ScoreCacheColumn.MODEL_SEED.value: int(identity.model_seed),
-                ScoreCacheColumn.SCORE_FLOAT64.value: np.asarray(scores.values, dtype=np.float64),
-                ScoreCacheColumn.LABEL_TEST_ONLY.value: pd.array(
+                ScoreCacheColumn.DATASET_ID: identity.dataset,
+                ScoreCacheColumn.CLIENT_ID: scores.client_id,
+                PreparedColumn.ROW_ID: list(scores.row_ids),
+                ScoreCacheColumn.PHASE: scores.role,
+                ScoreCacheColumn.MODEL_SEED: int(identity.model_seed),
+                ScoreCacheColumn.SCORE_FLOAT64: np.asarray(scores.values, dtype=np.float64),
+                ScoreCacheColumn.LABEL_TEST_ONLY: pd.array(
                     [label] * n_samples, dtype="Int64"
                 ),
-                ScoreCacheColumn.ATTACK_FAMILY_TEST_ONLY.value: pd.array(
+                ScoreCacheColumn.ATTACK_FAMILY_TEST_ONLY: pd.array(
                     (
                         list(groups)
                         if scores.role is DataRole.ATTACK_TEST and groups is not None
@@ -546,8 +546,8 @@ class ScoreCache:
                 extra = roles - _REQUIRED_BASE_ROLES
                 raise ValueError(
                     f"Score-cache role contract failed for {client_id}, "
-                    f"missing={sorted(role.value for role in missing)}, "
-                    f"extra={sorted(role.value for role in extra)}"
+                    f"missing={sorted(role for role in missing)}, "
+                    f"extra={sorted(role for role in extra)}"
                 )
 
     @classmethod
@@ -622,15 +622,15 @@ class ScoreCache:
         parquet_path = root / metadata.score_cache_file
         frame = pd.read_parquet(parquet_path)
         clients: list[ClientScoreSet] = []
-        for client_id, client_frame in frame.groupby(ScoreCacheColumn.CLIENT_ID.value, sort=True):
+        for client_id, client_frame in frame.groupby(ScoreCacheColumn.CLIENT_ID, sort=True):
             score_list: list[RoleScores] = []
             typed_client_id = str(client_id)
-            for role_value, role_frame in client_frame.groupby(ScoreCacheColumn.PHASE.value, sort=True):
+            for role_value, role_frame in client_frame.groupby(ScoreCacheColumn.PHASE, sort=True):
                 role = DataRole(str(role_value))
                 role_scores = self._role_scores_from_frame(typed_client_id, role, role_frame)
                 expected = self._record_lookup(records, typed_client_id, role).score_array_sha256
                 if role_scores.sha256 != expected:
-                    raise ValueError(f"SCORE_CACHE_HASH_MISMATCH: {client_id}/{role.value}")
+                    raise ValueError(f"SCORE_CACHE_HASH_MISMATCH: {client_id}/{role}")
                 score_list.append(role_scores)
             clients.append(ClientScoreSet(client_id=typed_client_id, scores=tuple(score_list)))
 
@@ -654,17 +654,17 @@ class ScoreCache:
         frame = pd.read_parquet(
             parquet_path,
             filters=[
-                (ScoreCacheColumn.CLIENT_ID.value, "==", client_id),
-                (ScoreCacheColumn.PHASE.value, "==", role.value),
+                (ScoreCacheColumn.CLIENT_ID, "==", client_id),
+                (ScoreCacheColumn.PHASE, "==", role),
             ],
         )
         if frame.empty:
-            raise KeyError(f"Score cache has no {client_id}/{role.value} partition")
+            raise KeyError(f"Score cache has no {client_id}/{role} partition")
         scores = self._role_scores_from_frame(client_id, role, frame)
         records = self._records_from_metadata(metadata)
         expected = self._record_lookup(records, client_id, role).score_array_sha256
         if scores.sha256 != expected:
-            raise ValueError(f"SCORE_CACHE_HASH_MISMATCH: {client_id}/{role.value}")
+            raise ValueError(f"SCORE_CACHE_HASH_MISMATCH: {client_id}/{role}")
         return scores
 
     def _read_verified_metadata(self, root: Path) -> ScoreCacheMetadata:
@@ -685,7 +685,7 @@ class ScoreCache:
         for record in records:
             if record.client_id == client_id and record.role is role:
                 return record
-        raise KeyError(f"{client_id}/{role.value}")
+        raise KeyError(f"{client_id}/{role}")
 
     @staticmethod
     def _role_scores_from_frame(
@@ -693,19 +693,19 @@ class ScoreCache:
         role: DataRole,
         frame: pd.DataFrame,
     ) -> RoleScores:
-        group_values = frame[ScoreCacheColumn.ATTACK_FAMILY_TEST_ONLY.value]
+        group_values = frame[ScoreCacheColumn.ATTACK_FAMILY_TEST_ONLY]
         groups = None
         if bool(group_values.notna().any()):
             groups = tuple(str(value) for value in group_values.dropna().astype(str))
             if len(groups) != len(frame):
                 raise ValueError(
-                    f"Attack-group metadata is incomplete for {client_id}/{role.value}"
+                    f"Attack-group metadata is incomplete for {client_id}/{role}"
                 )
         return RoleScores(
             role=role,
-            values=frame[ScoreCacheColumn.SCORE_FLOAT64.value].to_numpy(dtype=np.float64),
+            values=frame[ScoreCacheColumn.SCORE_FLOAT64].to_numpy(dtype=np.float64),
             client_id=client_id,
-            row_ids=tuple(str(value) for value in frame[PreparedColumn.ROW_ID.value].astype(str)),
+            row_ids=tuple(str(value) for value in frame[PreparedColumn.ROW_ID].astype(str)),
             attack_groups=groups,
         )
 
@@ -718,11 +718,11 @@ def validate_score_manifest(manifest: ScoreManifest) -> None:
         present = {item.role for item in client.scores}
         missing = _REQUIRED_BASE_ROLES - present
         if missing:
-            names = ", ".join(sorted(role.value for role in missing))
+            names = ", ".join(sorted(role for role in missing))
             raise ValueError(f"Score manifest {client_id} is missing base roles: {names}")
         duplicated = _FORBIDDEN_DERIVED_ROLES & present
         if duplicated:
-            names = ", ".join(sorted(role.value for role in duplicated))
+            names = ", ".join(sorted(role for role in duplicated))
             raise ValueError(
                 f"Score cache must not materialize calibration-assignment roles: {names}"
             )
@@ -735,7 +735,7 @@ def validate_score_manifest(manifest: ScoreManifest) -> None:
                 raise ValueError("NONFINITE_SCORE")
             overlap = row_ids.intersection(role_scores.row_ids)
             if overlap:
-                raise ValueError(f"ROLE_OVERLAP: {client_id}/{role.value}")
+                raise ValueError(f"ROLE_OVERLAP: {client_id}/{role}")
             row_ids.update(role_scores.row_ids)
             if len(role_scores.sha256) != 64:
                 raise ValueError("Invalid role-score hash")

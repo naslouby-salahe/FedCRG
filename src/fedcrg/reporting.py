@@ -144,9 +144,9 @@ def build_run_report(run_dir: Path) -> Path:
     lines = [
         f"# FedCRG Run {manifest.run_id}",
         "",
-        f"- Experiment: `{manifest.experiment_id.value}`",
-        f"- Policy: `{manifest.policy_id.value}`",
-        f"- Status: `{manifest.status.value}`",
+        f"- Experiment: `{manifest.experiment_id}`",
+        f"- Policy: `{manifest.policy_id}`",
+        f"- Status: `{manifest.status}`",
         f"- Config hash: `{manifest.config_hash}`",
         f"- Verified artifact hashes: `{verification.valid}`",
         f"- Evaluated clients: `{client_count}`",
@@ -446,14 +446,14 @@ class PublicationPackageBuilder:
             self._table(
                 "Table 1 - Protocol constants",
                 lambda: self.tables.protocol_constants(
-                    config, table_root / PublicationTableFilename.PROTOCOL_CONSTANTS.value
+                    config, table_root / PublicationTableFilename.PROTOCOL_CONSTANTS
                 ),
             ),
             self._optional_table(
                 "Table 2 - Dataset inventory",
                 prepared_manifest,
                 lambda path: self.tables.dataset_inventory(
-                    path, table_root / PublicationTableFilename.DATASET_INVENTORY.value
+                    path, table_root / PublicationTableFilename.DATASET_INVENTORY
                 ),
                 "prepared dataset manifest is unavailable",
             ),
@@ -461,7 +461,7 @@ class PublicationPackageBuilder:
                 "Table 3 - Primary policy results",
                 primary_runs,
                 lambda: self.tables.primary_policy_results(
-                    primary_runs, table_root / PublicationTableFilename.PRIMARY_POLICY_RESULTS.value
+                    primary_runs, table_root / PublicationTableFilename.PRIMARY_POLICY_RESULTS
                 ),
                 "primary policy runs are unavailable",
             ),
@@ -469,7 +469,7 @@ class PublicationPackageBuilder:
                 "Table 4 - Admission states",
                 fedcrg_primary,
                 lambda: self.tables.admission_states_from_runs(
-                    fedcrg_primary, table_root / PublicationTableFilename.ADMISSION_STATES.value
+                    fedcrg_primary, table_root / PublicationTableFilename.ADMISSION_STATES
                 ),
                 "FedCRG admission runs are unavailable",
             ),
@@ -477,7 +477,7 @@ class PublicationPackageBuilder:
                 "Table 5 - Ablations",
                 fedcrg_primary,
                 lambda: self.tables.ablations(
-                    primary_runs, table_root / PublicationTableFilename.ABLATIONS.value, config
+                    primary_runs, table_root / PublicationTableFilename.ABLATIONS, config
                 ),
                 "primary policy runs are unavailable",
             ),
@@ -536,7 +536,7 @@ class PublicationPackageBuilder:
         atomic_write_json(
             manifest_path,
             {
-                ExperimentStatus.COMPLETE.value: all(
+                ExperimentStatus.COMPLETE: all(
                     item.available for item in (*tables, *figures)
                 ),
                 "tables": [
@@ -809,7 +809,7 @@ def _band_guide_lines() -> tuple[Fpr, Fpr, Fpr]:
 
 def build_per_client_operating_points_figure(output: Path, results_root: Path) -> Path:
     frame = _require_bundle_table(
-        results_root, PublicationTableFilename.PRIMARY_POLICY_RESULTS.value
+        results_root, PublicationTableFilename.PRIMARY_POLICY_RESULTS
     )
     if "client_id" not in frame.columns or "fpr" not in frame.columns:
         raise ValueError("primary policy results table lacks client_id/fpr columns")
@@ -831,7 +831,7 @@ def build_per_client_operating_points_figure(output: Path, results_root: Path) -
 
 def build_reliability_utility_frontier_figure(output: Path, results_root: Path) -> Path:
     frame = _require_bundle_table(
-        results_root, PublicationTableFilename.PRIMARY_POLICY_RESULTS.value
+        results_root, PublicationTableFilename.PRIMARY_POLICY_RESULTS
     )
     required = {"policy_id", "mebe", "attack_balanced_macro_tpr"}
     if not required.issubset(frame.columns):
@@ -883,7 +883,7 @@ def build_assumption_stress_figure(output: Path, results_root: Path) -> Path:
 
 
 def build_external_replication_figure(output: Path, results_root: Path) -> Path:
-    frame = _require_bundle_table(results_root, PublicationTableFilename.EXTERNAL_REPLICATION.value)
+    frame = _require_bundle_table(results_root, PublicationTableFilename.EXTERNAL_REPLICATION)
     if "client_id" not in frame.columns or "fpr" not in frame.columns:
         raise ValueError("external replication table lacks client_id/fpr columns")
     figure, axis = plt.subplots(figsize=(9, 5))
@@ -961,18 +961,18 @@ def build_phase_transition_from_catalogue(output: Path) -> Path:
 
 
 def build_repository_report(outputs_root: Path, config: ExperimentConfig) -> Path:
-    reports_root = OutputsLayout(outputs_root).reports / LayoutDirectory.LATEST.value
+    reports_root = OutputsLayout(outputs_root).reports / LayoutDirectory.LATEST
     reports_root.mkdir(parents=True, exist_ok=True)
     run_dirs = _completed_runs(outputs_root)
     builder = PublicationTableBuilder()
     policy_table = builder.federation_results(
-        run_dirs, reports_root / RepositoryReportFilename.POLICY_FEDERATION_RESULTS.value
+        run_dirs, reports_root / RepositoryReportFilename.POLICY_FEDERATION_RESULTS
     )
     records = load_federation_results(run_dirs)
     primary_records = tuple(
         row for row in records if row.experiment_id is ExperimentId.PRIMARY_NBAIOT
     )
-    contrasts_path = reports_root / RepositoryReportFilename.PRIMARY_CONTRASTS.value
+    contrasts_path = reports_root / RepositoryReportFilename.PRIMARY_CONTRASTS
     if primary_records:
         contrasts = confirmatory_contrasts(
             primary_records,
@@ -984,7 +984,7 @@ def build_repository_report(outputs_root: Path, config: ExperimentConfig) -> Pat
         )
         contrasts_payload = [
             {
-                "comparator": item.comparator.value,
+                "comparator": item.comparator,
                 "metrics": [metric.model_dump(mode="json") for metric in item.metrics],
             }
             for item in contrasts
@@ -995,7 +995,7 @@ def build_repository_report(outputs_root: Path, config: ExperimentConfig) -> Pat
             "reason": "primary workload has not reconciled, confirmatory contrasts are withheld",
         }
     atomic_write_json(contrasts_path, contrasts_payload)
-    sensitivity_path = reports_root / RepositoryReportFilename.SPLIT_SENSITIVITY.value
+    sensitivity_path = reports_root / RepositoryReportFilename.SPLIT_SENSITIVITY
     pd.DataFrame.from_records(
         [
             row.model_dump(mode="json")
@@ -1017,7 +1017,7 @@ def build_repository_report(outputs_root: Path, config: ExperimentConfig) -> Pat
         "ledgers. Missing experiments remain explicitly incomplete; report generation "
         "never fills missing evidence with inferred values.",
     ]
-    output = reports_root / RepositoryReportFilename.README.value
+    output = reports_root / RepositoryReportFilename.README
     output.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return output
 

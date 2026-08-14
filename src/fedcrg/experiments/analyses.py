@@ -430,28 +430,28 @@ class RunSyntheticExperiments:
     def _int_values(spec: ExperimentSpec, axis: ExperimentAxisId) -> tuple[NonNegativeCount, ...]:
         values = spec.axis(axis).values
         if not all(isinstance(value, int) and not isinstance(value, bool) for value in values):
-            raise TypeError(f"{spec.id.value}/{axis.value} must contain integers")
+            raise TypeError(f"{spec.id}/{axis} must contain integers")
         return tuple(int(value) for value in values)
 
     @staticmethod
     def _float_values(spec: ExperimentSpec, axis: ExperimentAxisId) -> tuple[Metric, ...]:
         values = spec.axis(axis).values
         if not all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in values):
-            raise TypeError(f"{spec.id.value}/{axis.value} must contain numbers")
+            raise TypeError(f"{spec.id}/{axis} must contain numbers")
         return tuple(float(value) for value in values)
 
     @staticmethod
     def _distributions(spec: ExperimentSpec) -> tuple[SyntheticDistribution, ...]:
         values = spec.axis(ExperimentAxisId.DISTRIBUTION).values
         if not all(isinstance(value, SyntheticDistribution) for value in values):
-            raise TypeError(f"{spec.id.value} distribution axis is malformed")
+            raise TypeError(f"{spec.id} distribution axis is malformed")
         return tuple(value for value in values if isinstance(value, SyntheticDistribution))
 
     @staticmethod
     def _directions(spec: ExperimentSpec) -> tuple[ContaminationDirection, ...]:
         values = spec.axis(ExperimentAxisId.DIRECTION).values
         if not all(isinstance(value, ContaminationDirection) for value in values):
-            raise TypeError(f"{spec.id.value} direction axis is malformed")
+            raise TypeError(f"{spec.id} direction axis is malformed")
         return tuple(value for value in values if isinstance(value, ContaminationDirection))
 
     @staticmethod
@@ -471,12 +471,12 @@ class RunSyntheticExperiments:
         )
         if spec.workload.monte_carlo_trials and actual_trials != spec.workload.monte_carlo_trials:
             raise RuntimeError(
-                f"{spec.id.value} trial ledger mismatch: "
+                f"{spec.id} trial ledger mismatch: "
                 f"{actual_trials} != {spec.workload.monte_carlo_trials}"
             )
         if spec.workload.exact_cells and len(cells) != spec.workload.exact_cells:
             raise RuntimeError(
-                f"{spec.id.value} cell ledger mismatch: "
+                f"{spec.id} cell ledger mismatch: "
                 f"{len(cells)} != {spec.workload.exact_cells}"
             )
 
@@ -494,7 +494,7 @@ class RunSyntheticExperiments:
         try:
             runner = self._RUNNERS[experiment_id]
         except KeyError:
-            raise ValueError(f"Unsupported synthetic experiment: {experiment_id.value}") from None
+            raise ValueError(f"Unsupported synthetic experiment: {experiment_id}") from None
         return runner(self, spec, config, output)
 
     def _run_readiness_theorem(self, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path:
@@ -718,7 +718,7 @@ def confirmatory_contrasts(
     for comparator in comparators:
         comparator_by_seed = {row.model_seed: row for row in selected if row.policy is comparator}
         if set(comparator_by_seed) != expected_seeds:
-            raise ValueError(f"Confirmatory comparator {comparator.value} is missing paired model seeds")
+            raise ValueError(f"Confirmatory comparator {comparator} is missing paired model seeds")
 
         metrics: list[ContrastMetricResult] = []
         for metric in ("mebe", "high_excess", "attack_balanced_macro_tpr"):
@@ -833,7 +833,7 @@ def split_sensitivity(
     grouped: dict[tuple[ModelSeed, PolicyId, StabilityMetricId], list[Metric]] = collections.defaultdict(list)
     for row in records:
         for metric in StabilityMetricId:
-            if (value := getattr(row, metric.value)) is not None:
+            if (value := getattr(row, metric)) is not None:
                 grouped[(row.model_seed, row.policy, metric)].append(float(value))
 
     def _row(key: tuple[ModelSeed, PolicyId, StabilityMetricId], values: list[Metric]) -> SplitSensitivityRow:
@@ -854,7 +854,7 @@ def split_sensitivity(
         _row(key, values)
         for key, values in sorted(
             grouped.items(),
-            key=lambda item: (int(item[0][0]), item[0][1].value, item[0][2].value),
+            key=lambda item: (int(item[0][0]), item[0][1], item[0][2]),
         )
     )
 
@@ -1113,7 +1113,7 @@ class RunBenchmark:
             )
             cells.append(
                 BenchmarkCell(
-                    primitive=primitive.value,
+                    primitive=primitive,
                     sample_count=sample_count,
                     warmups=warmups,
                     repetitions=repetitions,

@@ -73,7 +73,7 @@ def test_diad_adapter_loads_benign_and_attack_roles(tmp_path: Path) -> None:
     assert "device_mac" not in data.benign.columns
     assert data.benign["row_id"].nunique() == len(data.benign)
     assert all(str(source).startswith("BenignTraffic/") for source in data.benign["source_file"])
-    assert data.chronology.value == "source_order_only"
+    assert data.chronology == "source_order_only"
 
 
 def test_diad_adapter_rejects_unknown_client(tmp_path: Path) -> None:

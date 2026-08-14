@@ -65,7 +65,7 @@ def test_evaluate_client_rejects_insufficient_calibration() -> None:
     assert result.readiness.plan.state is CalibrationReadinessState.NOT_READY
     assert result.readiness.threshold is None
     assert result.decision.state is DecisionState.CALIBRATION_DEFICIT
-    assert result.decision.source.value == "reference"
+    assert result.decision.source == "reference"
 
 
 def test_evaluate_client_retains_reference_without_mismatch() -> None:
@@ -82,7 +82,7 @@ def test_evaluate_client_retains_reference_without_mismatch() -> None:
     assert result.mismatch.outcome is MismatchOutcome.NO_MATERIAL_DIFFERENCE
     assert result.decision.state is DecisionState.REFERENCE_RETAINED
     assert result.decision.threshold == 0.75
-    assert result.decision.source.value == "reference"
+    assert result.decision.source == "reference"
 
 
 def test_evaluate_client_requires_precomputed_readiness() -> None:

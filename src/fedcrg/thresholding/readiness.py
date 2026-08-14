@@ -474,7 +474,7 @@ def _holm_rejected(
 ) -> set[tuple[ClientId, MismatchOutcome]]:
     ordered = sorted(
         hypotheses,
-        key=lambda item: (item.p_value, item.client_id, item.outcome.value),
+        key=lambda item: (item.p_value, item.client_id, item.outcome),
     )
     total = len(ordered)
     rejected = set()

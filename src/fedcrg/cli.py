@@ -244,7 +244,7 @@ def doctor() -> None:
 
 
 @cli.command(name="validate")
-@click.argument("experiment_id", type=click.Choice([item.value for item in ExperimentId]))
+@click.argument("experiment_id", type=click.Choice([item for item in ExperimentId]))
 @click.pass_context
 def validate(ctx: click.Context, experiment_id: str) -> None:
     study = _study(ctx)
@@ -254,7 +254,7 @@ def validate(ctx: click.Context, experiment_id: str) -> None:
     try:
         validate_experiment_config(config)
     except Exception as exc:
-        raise click.ClickException(f"Experiment {experiment.value} is invalid: {exc}") from exc
+        raise click.ClickException(f"Experiment {experiment} is invalid: {exc}") from exc
     _print(
         ValidationPayload(
             valid=True,
@@ -266,7 +266,7 @@ def validate(ctx: click.Context, experiment_id: str) -> None:
 
 
 @cli.command(name="plan")
-@click.argument("experiment_id", type=click.Choice([item.value for item in ExperimentId]))
+@click.argument("experiment_id", type=click.Choice([item for item in ExperimentId]))
 @click.pass_context
 def plan(ctx: click.Context, experiment_id: str) -> None:
     study = _study(ctx)
@@ -290,7 +290,7 @@ def plan(ctx: click.Context, experiment_id: str) -> None:
 @click.argument(
     "dataset_id",
     required=False,
-    type=click.Choice([item.value for item in DatasetId]),
+    type=click.Choice([item for item in DatasetId]),
 )
 @click.option("--overwrite", is_flag=True, help="Rebuild the prepared cache explicitly.")
 @click.pass_context
@@ -303,7 +303,7 @@ def preprocess(ctx: click.Context, dataset_id: str | None, overwrite: bool) -> N
         if dataset not in _DATASET_EXPERIMENTS:
             raise click.BadParameter(
                 f"Raw dataset {dataset_id!r} has no preprocessing pipeline, "
-                "expected one of " + ", ".join(sorted(item.value for item in _DATASET_EXPERIMENTS))
+                "expected one of " + ", ".join(sorted(item for item in _DATASET_EXPERIMENTS))
             )
         datasets = (dataset,)
     preparer = PrepareData()
@@ -327,7 +327,7 @@ def preprocess(ctx: click.Context, dataset_id: str | None, overwrite: bool) -> N
 
 
 @cli.command(name="run")
-@click.argument("experiment_id", type=click.Choice([item.value for item in ExperimentId]))
+@click.argument("experiment_id", type=click.Choice([item for item in ExperimentId]))
 @click.option("--overwrite", is_flag=True, help="Re-run and replace regenerable evidence.")
 @click.pass_context
 def run(ctx: click.Context, experiment_id: str, overwrite: bool) -> None:
@@ -398,9 +398,9 @@ def campaign(ctx: click.Context, overwrite: bool) -> None:
     _print(
         CampaignPayload(
             campaign_id=campaign_id,
-            status=status.current_stage.value
+            status=status.current_stage
             if status.current_stage
-            else CampaignStage.PENDING.value,
+            else CampaignStage.PENDING,
             completed=len(status.completed_experiments),
             total=max(1, len(work_items)),
             current_experiment=status.current_experiment,
@@ -414,7 +414,7 @@ def campaign(ctx: click.Context, overwrite: bool) -> None:
 @click.argument(
     "experiment_id",
     required=False,
-    type=click.Choice([item.value for item in ExperimentId]),
+    type=click.Choice([item for item in ExperimentId]),
 )
 @click.pass_context
 def status(ctx: click.Context, experiment_id: str | None) -> None:
@@ -450,8 +450,8 @@ def status(ctx: click.Context, experiment_id: str | None) -> None:
             failed=values.failed,
             running=values.running,
         )
-        for experiment, values in sorted(counts.items(), key=lambda item: item[0].value)
-        if experiment_id is None or experiment.value == experiment_id
+        for experiment, values in sorted(counts.items(), key=lambda item: item[0])
+        if experiment_id is None or experiment == experiment_id
     )
     campaign_stage: Identifier | None = None
     campaign_record: CampaignId | None = None
@@ -459,7 +459,7 @@ def status(ctx: click.Context, experiment_id: str | None) -> None:
         campaign_status = CampaignStatusStore(outputs_root=outputs_root).load(study.campaign_id)
         campaign_record = campaign_status.campaign_id
         campaign_stage = (
-            campaign_status.current_stage.value if campaign_status.current_stage else None
+            campaign_status.current_stage if campaign_status.current_stage else None
         )
     except FileNotFoundError:
         pass

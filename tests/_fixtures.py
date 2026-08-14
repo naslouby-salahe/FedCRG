@@ -113,7 +113,7 @@ def diad_pipeline_config(root: Path) -> ExperimentConfig:
 
 
 def _diad_row_id(client: str, role: DataRole, index: int) -> str:
-    return hashlib.sha256(f"{client}-{role.value}-{index}".encode()).hexdigest()
+    return hashlib.sha256(f"{client}-{role}-{index}".encode()).hexdigest()
 
 
 def diad_role_frame(client: str, role: DataRole, rows: int, offset: float) -> pd.DataFrame:
@@ -136,7 +136,7 @@ def write_prepared_diad(root: Path, config: ExperimentConfig) -> Path:
         role_manifests: list[RoleArtifactManifest] = []
         for role, rows in _DIAD_PIPELINE_ROLE_ROWS.items():
             frame = diad_role_frame(client_name, role, rows, float(client_index))
-            path = client_root / f"{role.value}.csv"
+            path = client_root / f"{role}.csv"
             frame.to_csv(path, index=False)
             role_manifests.append(
                 RoleArtifactManifest(

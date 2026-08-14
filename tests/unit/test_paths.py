@@ -55,8 +55,8 @@ def test_outputs_layout_returns_model_and_score_cache_layouts(tmp_path: Path) ->
     assert isinstance(model_cache, ModelCacheLayout)
     assert model_cache.root == (
         layout.cache_models
-        / config.dataset.id.value
-        / detector_id.value
+        / config.dataset.id
+        / detector_id
         / "m11"
         / config.training_spec_hash[:16]
     )
@@ -67,8 +67,8 @@ def test_outputs_layout_returns_model_and_score_cache_layouts(tmp_path: Path) ->
     assert isinstance(score_cache, ScoreCacheLayout)
     assert score_cache.root == (
         layout.cache_scores
-        / config.dataset.id.value
-        / detector_id.value
+        / config.dataset.id
+        / detector_id
         / "m11"
         / config.training_spec_hash[:16]
     )

@@ -387,7 +387,7 @@ class DatasetCatalogue(RootModel[dict[DatasetId, DatasetConfig]]):
         try:
             return self.root[dataset_id]
         except KeyError as exc:
-            raise ConfigurationError(f"Unknown dataset contract: {dataset_id.value}") from exc
+            raise ConfigurationError(f"Unknown dataset contract: {dataset_id}") from exc
 
 
 AxisValue: TypeAlias = (
@@ -424,9 +424,9 @@ class ParameterAxis(BaseModel):
     @model_validator(mode="after")
     def _validate(self) -> Self:
         if not self.values:
-            raise ValueError(f"Experiment axis {self.id.value} must contain values")
+            raise ValueError(f"Experiment axis {self.id} must contain values")
         if len(set(self.values)) != len(self.values):
-            raise ValueError(f"Experiment axis {self.id.value} contains duplicate values")
+            raise ValueError(f"Experiment axis {self.id} contains duplicate values")
         return self
 
 
@@ -467,7 +467,7 @@ class ParameterCell(BaseModel):
         for setting in self.settings:
             if setting.axis is axis:
                 return setting.value
-        raise KeyError(axis.value)
+        raise KeyError(axis)
 
 
 class WorkloadExpectation(BaseModel):
@@ -534,30 +534,30 @@ class ExperimentSpec(BaseModel):
     def _validate(self) -> Self:
         independent_axes = tuple(axis.id for axis in self.axes)
         if len(set(independent_axes)) != len(independent_axes):
-            raise ValueError(f"Duplicate axis in {self.id.value}")
+            raise ValueError(f"Duplicate axis in {self.id}")
         if len(set(self.dependencies)) != len(self.dependencies):
-            raise ValueError(f"Duplicate dependency in {self.id.value}")
+            raise ValueError(f"Duplicate dependency in {self.id}")
         if self.id in self.dependencies:
-            raise ValueError(f"Experiment {self.id.value} cannot depend on itself")
+            raise ValueError(f"Experiment {self.id} cannot depend on itself")
         if len(set(self.policies)) != len(self.policies):
-            raise ValueError(f"Duplicate policy in {self.id.value}")
+            raise ValueError(f"Duplicate policy in {self.id}")
         if len(set(self.calibration_seeds)) != len(self.calibration_seeds):
-            raise ValueError(f"Duplicate calibration seed in {self.id.value}")
+            raise ValueError(f"Duplicate calibration seed in {self.id}")
         datasets = self.datasets or ((self.dataset,) if self.dataset else ())
         synthetic_only = bool(datasets) and all(item is DatasetId.SYNTHETIC for item in datasets)
         if synthetic_only and self.detector is not None:
-            raise ValueError(f"Synthetic experiment {self.id.value} must not bind a detector")
+            raise ValueError(f"Synthetic experiment {self.id} must not bind a detector")
         if not synthetic_only and self.detector is None:
-            raise ValueError(f"Real-data experiment {self.id.value} requires a detector profile")
+            raise ValueError(f"Real-data experiment {self.id} requires a detector profile")
         if not datasets:
-            raise ValueError(f"Experiment {self.id.value} must declare a dataset")
+            raise ValueError(f"Experiment {self.id} must declare a dataset")
         return self
 
     def axis(self, axis_id: ExperimentAxisId) -> ParameterAxis:
         for item in self.axes:
             if item.id is axis_id:
                 return item
-        raise KeyError(f"Experiment {self.id.value} has no independent {axis_id.value} axis")
+        raise KeyError(f"Experiment {self.id} has no independent {axis_id} axis")
 
     @property
     def all_datasets(self) -> tuple[DatasetId, ...]:
@@ -588,7 +588,7 @@ class ExperimentCatalogue(RootModel[tuple[ExperimentSpec, ...]]):
         for row in self.root:
             if row.id is experiment_id:
                 return row
-        raise KeyError(experiment_id.value)
+        raise KeyError(experiment_id)
 
     def all(self) -> tuple[ExperimentSpec, ...]:
         return self.root
@@ -739,7 +739,7 @@ def resolve_experiment_config(
 ) -> ExperimentConfig:
     chosen = dataset_id or (spec.datasets[0] if spec.datasets else spec.dataset)
     if chosen is None:
-        raise ConfigurationError(f"Experiment {spec.id.value} declares no dataset")
+        raise ConfigurationError(f"Experiment {spec.id} declares no dataset")
     dataset = datasets.contract(chosen)
     if spec.calibration_seeds:
         dataset = dataset.model_copy(update={"calibration_seeds": spec.calibration_seeds})

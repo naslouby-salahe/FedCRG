@@ -56,7 +56,7 @@ class ClientSplits(BaseModel):
     def get(self, role: DataRole) -> pd.DataFrame:
         frame = self.try_get(role)
         if frame is None:
-            raise KeyError(role.value)
+            raise KeyError(role)
         return frame
 
     def try_get(self, role: DataRole) -> pd.DataFrame | None:
@@ -81,16 +81,16 @@ class CalibrationRoleAssignment(BaseModel):
 
     def positions_for(self, role: DataRole) -> tuple[Position, ...]:
         if role not in _CALIBRATION_ROLES:
-            raise ValueError(f"{role.value} is not a calibration-reservoir role")
+            raise ValueError(f"{role} is not a calibration-reservoir role")
         match = next((item.positions for item in self.roles if item.role is role), None)
         if match is None:
-            raise KeyError(role.value)
+            raise KeyError(role)
         return match
 
     def row_id_hash_for(self, role: DataRole) -> Sha256:
         match = next((item.row_id_hash for item in self.roles if item.role is role), None)
         if match is None:
-            raise KeyError(role.value)
+            raise KeyError(role)
         return match
 
 
@@ -104,12 +104,12 @@ def validate_split_disjointness(
         if frame is None:
             continue
         if row_id_column not in frame.columns:
-            raise DataIntegrityError(f"{role.value} is missing {row_id_column}")
+            raise DataIntegrityError(f"{role} is missing {row_id_column}")
         
         role_ids = set(frame[row_id_column].astype(str).unique())
         overlap = seen.intersection(role_ids)
         if overlap:
-            raise DataIntegrityError(f"Split overlap in {role.value}: {sorted(overlap)[:5]}")
+            raise DataIntegrityError(f"Split overlap in {role}: {sorted(overlap)[:5]}")
         seen.update(role_ids)
 
 
@@ -148,7 +148,7 @@ class CalibrationAssignmentBuilder:
             split.reference_benign + split.mismatch_benign + split.calibration_benign,
         )
         
-        row_id_series = frame[PreparedColumn.ROW_ID.value].astype(str)
+        row_id_series = frame[PreparedColumn.ROW_ID].astype(str)
         roles: list[RolePositions] = []
         
         role_slices = (
@@ -212,10 +212,10 @@ class BaseSplitBuilder:
         benign_test = benign.iloc[split.train_benign + split.reservoir_size : req_benign].copy()
 
         attack = data.attack.reset_index(drop=True)
-        if PreparedColumn.ATTACK_GROUP.value not in attack.columns:
+        if PreparedColumn.ATTACK_GROUP not in attack.columns:
             raise DataIntegrityError(f"Attack frame lacks attack_group for {data.client_id}")
             
-        group_values = attack[PreparedColumn.ATTACK_GROUP.value].astype(str)
+        group_values = attack[PreparedColumn.ATTACK_GROUP].astype(str)
         unique_groups = group_values.unique()
         groups = tuple(sorted(_ATTACK_GROUP_ADAPTER.validate_python(g) for g in unique_groups))
         
@@ -260,13 +260,13 @@ class BaseSplitBuilder:
 
         processed_roles = []
         for frame, role in role_frames:
-            frame[PreparedColumn.ROLE.value] = role.value
-            frame[PreparedColumn.LABEL.value] = (
+            frame[PreparedColumn.ROLE] = role
+            frame[PreparedColumn.LABEL] = (
                 0 if role in {DataRole.TRAIN, DataRole.RESERVOIR, DataRole.BENIGN_TEST} else 1
             )
-            if PreparedColumn.ROW_ID.value not in frame.columns:
-                frame[PreparedColumn.ROW_ID.value] = [
-                    stable_row_id(data.dataset, data.client_id, role.value, int(i))
+            if PreparedColumn.ROW_ID not in frame.columns:
+                frame[PreparedColumn.ROW_ID] = [
+                    stable_row_id(data.dataset, data.client_id, role, int(i))
                     for i in range(len(frame))
                 ]
             processed_roles.append(RoleFrame(role=role, frame=frame))
@@ -320,7 +320,7 @@ class BaseSplitBuilder:
             capacity = total - min(reserve_per_group, total)
             if allocation[group] > capacity:
                 raise DataIntegrityError(
-                    f"{FailureCode.NBAIOT_ATTACK_BUDGET_FAIL.value}: attack group {group} "
+                    f"{FailureCode.NBAIOT_ATTACK_BUDGET_FAIL}: attack group {group} "
                     f"cannot retain {reserve_per_group} final-test rows"
                 )
                 
@@ -347,7 +347,7 @@ class BaseSplitBuilder:
             eligible = [g for g in groups if development[g] < capacities.for_group(g)]
             if not eligible:
                 raise DataIntegrityError(
-                    f"{FailureCode.ATTACK_DEV_CAPACITY_LT_500.value}: "
+                    f"{FailureCode.ATTACK_DEV_CAPACITY_LT_500}: "
                     "attack development capacity is exhausted before the budget is met"
                 )
             

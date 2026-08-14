@@ -57,14 +57,14 @@ def test_decide_personalizes_when_evidence_holds() -> None:
     decision = _evaluate(_HIGH_CALIBRATION, _HIGH_MISMATCH, _PLAN)
     assert decision.state is DecisionState.PERSONALIZED
     assert decision.threshold > _REFERENCE.value
-    assert decision.source.value == "local_calibration"
+    assert decision.source == "local_calibration"
 
 
 def test_decide_retains_reference_when_no_material_mismatch() -> None:
     decision = _evaluate(_HIGH_CALIBRATION, _NO_MATERIAL_MISMATCH, _PLAN)
     assert decision.state is DecisionState.REFERENCE_RETAINED
     assert decision.threshold == _REFERENCE.value
-    assert decision.source.value == "reference"
+    assert decision.source == "reference"
 
 
 def test_decide_refuses_without_calibration_readiness() -> None:

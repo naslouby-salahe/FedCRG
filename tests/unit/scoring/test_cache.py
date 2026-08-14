@@ -25,7 +25,7 @@ _ROLES = (
 
 def _row_ids(role: DataRole, count: int) -> tuple[str, ...]:
     return tuple(
-        hashlib.sha256(f"{role.value}-{index}".encode()).hexdigest() for index in range(count)
+        hashlib.sha256(f"{role}-{index}".encode()).hexdigest() for index in range(count)
     )
 
 

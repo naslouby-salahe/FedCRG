@@ -60,7 +60,7 @@ class DiadAdapter(DatasetAdapter):
 
     @property
     def _model_columns(self) -> tuple[FeatureName, ...]:
-        return (*self.dataset.feature_names, DiadSourceColumn.DEVICE_MAC.value)
+        return (*self.dataset.feature_names, DiadSourceColumn.DEVICE_MAC)
 
     @staticmethod
     def _normalized_mac(value: str) -> MacAddress:
@@ -78,13 +78,13 @@ class DiadAdapter(DatasetAdapter):
         macs: dict[ClientId, set[MacAddress]] = {}
         for path in DatasetDiscovery.csv_files(self.root, recursive=True):
             try:
-                column = pd.read_csv(str(path), usecols=[DiadSourceColumn.DEVICE_MAC.value])
+                column = pd.read_csv(str(path), usecols=[DiadSourceColumn.DEVICE_MAC])
             except Exception as exc:
                 raise DataIntegrityError(
-                    f"{FailureCode.FEATURE_MISSING.value}: no device_mac column in "
+                    f"{FailureCode.FEATURE_MISSING}: no device_mac column in "
                     f"{path.relative_to(self.root)}"
                 ) from exc
-            for raw in column[DiadSourceColumn.DEVICE_MAC.value].dropna().astype(str):
+            for raw in column[DiadSourceColumn.DEVICE_MAC].dropna().astype(str):
                 normalized = self._normalized_mac(raw)
                 if normalized:
                     macs.setdefault(self._client_id(normalized), set()).add(normalized)
@@ -111,12 +111,12 @@ class DiadAdapter(DatasetAdapter):
                 frame = pd.read_csv(str(path), usecols=self._model_columns)
             except Exception as exc:
                 raise DataIntegrityError(
-                    f"{FailureCode.FEATURE_MISSING.value}: locked DIAD feature absent in "
+                    f"{FailureCode.FEATURE_MISSING}: locked DIAD feature absent in "
                     f"{path.relative_to(self.root)}"
                 ) from exc
             frame.columns = [str(column).strip() for column in frame.columns]
             normalized = (
-                frame[DiadSourceColumn.DEVICE_MAC.value].astype(str).str.strip().str.lower()
+                frame[DiadSourceColumn.DEVICE_MAC].astype(str).str.strip().str.lower()
             )
             selected = frame.loc[normalized.isin(macs)].copy()
             if selected.empty:
@@ -126,20 +126,20 @@ class DiadAdapter(DatasetAdapter):
             )
             numeric = numeric.replace([np.inf, -np.inf], np.nan)
             source = str(path.relative_to(self.root))
-            numeric[PreparedColumn.ROW_ID.value] = np.array(
+            numeric[PreparedColumn.ROW_ID] = np.array(
                 [
                     stable_row_id(self.dataset_id, client_id, source, index)
                     for index in range(len(numeric))
                 ],
                 dtype=object,
             )
-            if category.lower() == DiadTopLevelCategory.BENIGN_TRAFFIC.value:
+            if category.lower() == DiadTopLevelCategory.BENIGN_TRAFFIC:
                 benign_frames.append(numeric)
             else:
-                numeric[PreparedColumn.ATTACK_GROUP.value] = category.lower()
+                numeric[PreparedColumn.ATTACK_GROUP] = category.lower()
                 attack_frames.append(numeric)
-            numeric[PreparedColumn.SOURCE_FILE.value] = source
-            numeric[PreparedColumn.SOURCE_ROW_INDEX.value] = np.arange(len(numeric), dtype=np.int64)
+            numeric[PreparedColumn.SOURCE_FILE] = source
+            numeric[PreparedColumn.SOURCE_ROW_INDEX] = np.arange(len(numeric), dtype=np.int64)
         if not benign_frames and not attack_frames:
             raise DataIntegrityError(f"DIAD client {client_id} has no rows in any source file")
         benign = (
@@ -148,9 +148,9 @@ class DiadAdapter(DatasetAdapter):
             else pd.DataFrame(
                 columns=[
                     *self.dataset.feature_names,
-                    PreparedColumn.ROW_ID.value,
-                    PreparedColumn.SOURCE_FILE.value,
-                    PreparedColumn.SOURCE_ROW_INDEX.value,
+                    PreparedColumn.ROW_ID,
+                    PreparedColumn.SOURCE_FILE,
+                    PreparedColumn.SOURCE_ROW_INDEX,
                 ]
             )
         )
@@ -160,9 +160,9 @@ class DiadAdapter(DatasetAdapter):
             else pd.DataFrame(
                 columns=[
                     *self.dataset.feature_names,
-                    PreparedColumn.ATTACK_GROUP.value,
-                    PreparedColumn.SOURCE_FILE.value,
-                    PreparedColumn.SOURCE_ROW_INDEX.value,
+                    PreparedColumn.ATTACK_GROUP,
+                    PreparedColumn.SOURCE_FILE,
+                    PreparedColumn.SOURCE_ROW_INDEX,
                 ]
             )
         )
@@ -204,7 +204,7 @@ class NumericSafeFeatureContract(BaseModel):
 
 def _is_forbidden_name(column: FeatureName, derivation: DiadFeatureDerivation) -> bool:
     excluded = frozenset(derivation.excluded_feature_exact) | {
-        item.value for item in PreparedColumn
+        item for item in PreparedColumn
     }
     lowered = column.lower()
     if column in excluded or lowered in {value.lower() for value in excluded}:
@@ -238,8 +238,8 @@ def derive_numeric_safe_features(
         ClientTrainingRowHash(
             client_id=item.client_id,
             sha256=hash_row_ids(
-                item.frame[PreparedColumn.ROW_ID.value].astype(str).tolist()
-                if PreparedColumn.ROW_ID.value in item.frame.columns
+                item.frame[PreparedColumn.ROW_ID].astype(str).tolist()
+                if PreparedColumn.ROW_ID in item.frame.columns
                 else tuple()
             ),
         )

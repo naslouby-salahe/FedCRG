@@ -39,6 +39,8 @@ class LayoutDirectory(StrEnum):
     RESOLVED_CONFIGS = "resolved_configs"
     SPLITS = "splits"
     SEEDED = "seeded"
+    CONFIG = "config"
+    RAW_STAGING = "_raw"
 
 
 class LayoutArtifact(StrEnum):
@@ -73,6 +75,12 @@ class LayoutArtifact(StrEnum):
     SCORE_CACHE = "score_cache.parquet"
 
 
+class ConfigArtifact(StrEnum):
+    STUDY = "study.yaml"
+    DATASETS = "datasets.yaml"
+    EXPERIMENTS = "experiments.yaml"
+
+
 class StudyPaths(BaseModel):
     model_config = FrozenModel
 
@@ -83,20 +91,20 @@ class StudyPaths(BaseModel):
 
 
 class ConfigLayout:
-    def __init__(self, config_root: Path = Path("config")) -> None:
+    def __init__(self, config_root: Path = Path(LayoutDirectory.CONFIG)) -> None:
         self.config_root = config_root
 
     @property
     def study(self) -> Path:
-        return self.config_root / "study.yaml"
+        return self.config_root / ConfigArtifact.STUDY
 
     @property
     def datasets(self) -> Path:
-        return self.config_root / "datasets.yaml"
+        return self.config_root / ConfigArtifact.DATASETS
 
     @property
     def experiments(self) -> Path:
-        return self.config_root / "experiments.yaml"
+        return self.config_root / ConfigArtifact.EXPERIMENTS
 
 
 class PreparedDatasetLayout:
@@ -105,39 +113,39 @@ class PreparedDatasetLayout:
 
     @property
     def manifest(self) -> Path:
-        return self.root / LayoutArtifact.MANIFEST.value
+        return self.root / LayoutArtifact.MANIFEST
 
     @property
     def preprocessing(self) -> Path:
-        return self.root / LayoutArtifact.PREPROCESSING.value
+        return self.root / LayoutArtifact.PREPROCESSING
 
     @property
     def eligibility(self) -> Path:
-        return self.root / LayoutArtifact.ELIGIBILITY.value
+        return self.root / LayoutArtifact.ELIGIBILITY
 
     @property
     def diad_eligibility(self) -> Path:
-        return self.root / LayoutArtifact.DIAD_ELIGIBILITY.value
+        return self.root / LayoutArtifact.DIAD_ELIGIBILITY
 
     @property
     def raw_staging(self) -> Path:
-        return self.root / "_raw"
+        return self.root / LayoutDirectory.RAW_STAGING
 
     @property
     def splits(self) -> Path:
-        return self.root / LayoutDirectory.SPLITS.value
+        return self.root / LayoutDirectory.SPLITS
 
     @property
     def seeded_splits(self) -> Path:
-        return self.splits / LayoutDirectory.SEEDED.value
+        return self.splits / LayoutDirectory.SEEDED
 
     @property
     def source_order_split(self) -> Path:
-        return self.splits / LayoutArtifact.SOURCE_ORDER_ASSIGNMENT.value
+        return self.splits / LayoutArtifact.SOURCE_ORDER_ASSIGNMENT
 
 
 def prepared_dataset_family_root(preprocessed_root: Path, dataset_id: DatasetId) -> Path:
-    return preprocessed_root / dataset_id.value
+    return preprocessed_root / dataset_id
 
 
 def prepared_dataset_root(
@@ -158,11 +166,11 @@ class ModelCacheLayout:
 
     @property
     def model(self) -> Path:
-        return self.root / LayoutArtifact.MODEL.value
+        return self.root / LayoutArtifact.MODEL
 
     @property
     def training_manifest(self) -> Path:
-        return self.root / LayoutArtifact.TRAINING.value
+        return self.root / LayoutArtifact.TRAINING
 
 
 class ScoreCacheLayout:
@@ -171,11 +179,11 @@ class ScoreCacheLayout:
 
     @property
     def manifest(self) -> Path:
-        return self.root / LayoutArtifact.MANIFEST.value
+        return self.root / LayoutArtifact.MANIFEST
 
     @property
     def score(self) -> Path:
-        return self.root / LayoutArtifact.SCORE_CACHE.value
+        return self.root / LayoutArtifact.SCORE_CACHE
 
 
 class RunLayout:
@@ -184,115 +192,115 @@ class RunLayout:
 
     @property
     def manifest(self) -> Path:
-        return self.root / LayoutArtifact.MANIFEST.value
+        return self.root / LayoutArtifact.MANIFEST
 
     @property
     def run_config(self) -> Path:
-        return self.root / LayoutArtifact.RUN_CONFIG.value
+        return self.root / LayoutArtifact.RUN_CONFIG
 
     @property
     def resolved_config(self) -> Path:
-        return self.root / LayoutArtifact.RESOLVED_CONFIG.value
+        return self.root / LayoutArtifact.RESOLVED_CONFIG
 
     @property
     def environment(self) -> Path:
-        return self.root / LayoutArtifact.ENVIRONMENT.value
+        return self.root / LayoutArtifact.ENVIRONMENT
 
     @property
     def data(self) -> Path:
-        return self.root / LayoutDirectory.DATA.value
+        return self.root / LayoutDirectory.DATA
 
     @property
     def training(self) -> Path:
-        return self.root / LayoutDirectory.TRAINING.value
+        return self.root / LayoutDirectory.TRAINING
 
     @property
     def model_reference(self) -> Path:
-        return self.training / LayoutArtifact.MODEL_REFERENCE.value
+        return self.training / LayoutArtifact.MODEL_REFERENCE
 
     @property
     def scores(self) -> Path:
-        return self.root / LayoutDirectory.SCORES.value
+        return self.root / LayoutDirectory.SCORES
 
     @property
     def score_reference(self) -> Path:
-        return self.scores / LayoutArtifact.SCORE_REFERENCE.value
+        return self.scores / LayoutArtifact.SCORE_REFERENCE
 
     @property
     def decisions(self) -> Path:
-        return self.root / LayoutDirectory.DECISIONS.value
+        return self.root / LayoutDirectory.DECISIONS
 
     @property
     def threshold_records(self) -> Path:
-        return self.decisions / LayoutArtifact.THRESHOLD_RECORDS.value
+        return self.decisions / LayoutArtifact.THRESHOLD_RECORDS
 
     @property
     def metrics(self) -> Path:
-        return self.root / LayoutDirectory.METRICS.value
+        return self.root / LayoutDirectory.METRICS
 
     @property
     def metric_records(self) -> Path:
-        return self.metrics / LayoutArtifact.METRIC_RECORDS.value
+        return self.metrics / LayoutArtifact.METRIC_RECORDS
 
     @property
     def federation_metrics(self) -> Path:
-        return self.metrics / LayoutArtifact.FEDERATION.value
+        return self.metrics / LayoutArtifact.FEDERATION
 
     @property
     def tables(self) -> Path:
-        return self.root / LayoutDirectory.TABLES.value
+        return self.root / LayoutDirectory.TABLES
 
     @property
     def figures(self) -> Path:
-        return self.root / LayoutDirectory.FIGURES.value
+        return self.root / LayoutDirectory.FIGURES
 
     @property
     def reports(self) -> Path:
-        return self.root / LayoutDirectory.REPORTS.value
+        return self.root / LayoutDirectory.REPORTS
 
     @property
     def admission(self) -> Path:
-        return self.metrics / LayoutArtifact.ADMISSION.value
+        return self.metrics / LayoutArtifact.ADMISSION
 
     @property
     def evaluation_summary(self) -> Path:
-        return self.reports / LayoutArtifact.EVALUATION_SUMMARY.value
+        return self.reports / LayoutArtifact.EVALUATION_SUMMARY
 
     @property
     def dataset_manifest(self) -> Path:
-        return self.data / LayoutArtifact.DATASET_MANIFEST.value
+        return self.data / LayoutArtifact.DATASET_MANIFEST
 
     @property
     def preprocessing_evidence(self) -> Path:
-        return self.data / LayoutArtifact.PREPROCESSING.value
+        return self.data / LayoutArtifact.PREPROCESSING
 
     @property
     def eligibility_manifest(self) -> Path:
-        return self.data / LayoutArtifact.ELIGIBILITY.value
+        return self.data / LayoutArtifact.ELIGIBILITY
 
     @property
     def split_manifest(self) -> Path:
-        return self.data / LayoutArtifact.CALIBRATION_ASSIGNMENT.value
+        return self.data / LayoutArtifact.CALIBRATION_ASSIGNMENT
 
     @property
     def training_manifest(self) -> Path:
-        return self.training / LayoutArtifact.TRAINING.value
+        return self.training / LayoutArtifact.TRAINING
 
     @property
     def score_manifest(self) -> Path:
-        return self.scores / LayoutArtifact.MANIFEST.value
+        return self.scores / LayoutArtifact.MANIFEST
 
     @property
     def logs(self) -> Path:
-        return self.root / LayoutDirectory.LOGS.value
+        return self.root / LayoutDirectory.LOGS
 
     @property
     def verification(self) -> Path:
-        return self.root / LayoutDirectory.VERIFICATION.value
+        return self.root / LayoutDirectory.VERIFICATION
 
     @property
     def hashes(self) -> Path:
-        return self.verification / LayoutArtifact.HASHES.value
+        return self.verification / LayoutArtifact.HASHES
 
     def create(self) -> None:
         self.root.mkdir(parents=True, exist_ok=False)
@@ -317,15 +325,15 @@ class PublicationLayout:
 
     @property
     def tables(self) -> Path:
-        return self.root / LayoutDirectory.TABLES.value
+        return self.root / LayoutDirectory.TABLES
 
     @property
     def figures(self) -> Path:
-        return self.root / LayoutDirectory.FIGURES.value
+        return self.root / LayoutDirectory.FIGURES
 
     @property
     def manifest(self) -> Path:
-        return self.root / LayoutArtifact.MANIFEST.value
+        return self.root / LayoutArtifact.MANIFEST
 
 
 class ResultsBundleLayout:
@@ -334,59 +342,59 @@ class ResultsBundleLayout:
 
     @property
     def manifest(self) -> Path:
-        return self.root / LayoutArtifact.MANIFEST.value
+        return self.root / LayoutArtifact.MANIFEST
 
     @property
     def checksums(self) -> Path:
-        return self.root / LayoutArtifact.CHECKSUMS.value
+        return self.root / LayoutArtifact.CHECKSUMS
 
     @property
     def resolved_configs(self) -> Path:
-        return self.root / LayoutDirectory.RESOLVED_CONFIGS.value
+        return self.root / LayoutDirectory.RESOLVED_CONFIGS
 
     @property
     def metrics(self) -> Path:
-        return self.root / LayoutDirectory.METRICS.value
+        return self.root / LayoutDirectory.METRICS
 
     @property
     def statistics(self) -> Path:
-        return self.root / LayoutDirectory.STATISTICS.value
+        return self.root / LayoutDirectory.STATISTICS
 
     @property
     def tables(self) -> Path:
-        return self.root / LayoutDirectory.TABLES.value
+        return self.root / LayoutDirectory.TABLES
 
     @property
     def figures(self) -> Path:
-        return self.root / LayoutDirectory.FIGURES.value
+        return self.root / LayoutDirectory.FIGURES
 
     @property
     def reports(self) -> Path:
-        return self.root / LayoutDirectory.REPORTS.value
+        return self.root / LayoutDirectory.REPORTS
 
     @property
     def provenance(self) -> Path:
-        return self.root / LayoutDirectory.PROVENANCE.value
+        return self.root / LayoutDirectory.PROVENANCE
 
     @property
     def primary_nbaiot_config(self) -> Path:
-        return self.resolved_configs / LayoutArtifact.PRIMARY_NBAIOT_CONFIG.value
+        return self.resolved_configs / LayoutArtifact.PRIMARY_NBAIOT_CONFIG
 
     @property
     def metric_records(self) -> Path:
-        return self.metrics / LayoutArtifact.METRIC_RECORDS_BUNDLE.value
+        return self.metrics / LayoutArtifact.METRIC_RECORDS_BUNDLE
 
     @property
     def readiness_plans(self) -> Path:
-        return self.statistics / LayoutArtifact.READINESS_PLANS.value
+        return self.statistics / LayoutArtifact.READINESS_PLANS
 
     @property
     def mismatch_cutoffs(self) -> Path:
-        return self.statistics / LayoutArtifact.MISMATCH_CUTOFFS.value
+        return self.statistics / LayoutArtifact.MISMATCH_CUTOFFS
 
     @property
     def provenance_json(self) -> Path:
-        return self.provenance / LayoutArtifact.PROVENANCE.value
+        return self.provenance / LayoutArtifact.PROVENANCE
 
     @property
     def required_directories(self) -> tuple[Path, ...]:
@@ -413,74 +421,74 @@ def campaign_status_path(campaigns_root: Path, campaign_id: CampaignId) -> Path:
 
 
 class OutputsLayout:
-    def __init__(self, outputs_root: Path = Path(LayoutDirectory.OUTPUTS.value)) -> None:
+    def __init__(self, outputs_root: Path = Path(LayoutDirectory.OUTPUTS)) -> None:
         self.outputs_root = outputs_root
 
     @property
     def runs(self) -> Path:
-        return self.outputs_root / LayoutDirectory.RUNS.value
+        return self.outputs_root / LayoutDirectory.RUNS
 
     @property
     def cache(self) -> Path:
-        return self.outputs_root / LayoutDirectory.CACHE.value
+        return self.outputs_root / LayoutDirectory.CACHE
 
     @property
     def cache_models(self) -> Path:
-        return self.cache / LayoutDirectory.MODELS.value
+        return self.cache / LayoutDirectory.MODELS
 
     @property
     def cache_scores(self) -> Path:
-        return self.cache / LayoutDirectory.SCORES.value
+        return self.cache / LayoutDirectory.SCORES
 
     @property
     def cache_analysis(self) -> Path:
-        return self.cache / LayoutDirectory.ANALYSIS.value
+        return self.cache / LayoutDirectory.ANALYSIS
 
     @property
     def campaigns(self) -> Path:
-        return self.outputs_root / LayoutDirectory.CAMPAIGNS.value
+        return self.outputs_root / LayoutDirectory.CAMPAIGNS
 
     @property
     def logs(self) -> Path:
-        return self.outputs_root / LayoutDirectory.LOGS.value
+        return self.outputs_root / LayoutDirectory.LOGS
 
     @property
     def monitoring(self) -> Path:
-        return self.outputs_root / LayoutDirectory.MONITORING.value
+        return self.outputs_root / LayoutDirectory.MONITORING
 
     @property
     def reports(self) -> Path:
-        return self.outputs_root / LayoutDirectory.REPORTS.value
+        return self.outputs_root / LayoutDirectory.REPORTS
 
     @property
     def publication(self) -> PublicationLayout:
-        return PublicationLayout(self.reports / LayoutDirectory.PUBLICATION.value)
+        return PublicationLayout(self.reports / LayoutDirectory.PUBLICATION)
 
     @property
     def environment_file(self) -> Path:
-        return self.outputs_root / LayoutArtifact.ENVIRONMENT.value
+        return self.outputs_root / LayoutArtifact.ENVIRONMENT
 
     @property
     def telemetry_file(self) -> Path:
-        return self.monitoring / LayoutArtifact.TELEMETRY.value
+        return self.monitoring / LayoutArtifact.TELEMETRY
 
     @property
     def benchmark_report(self) -> Path:
-        return self.reports / LayoutArtifact.BENCHMARK.value
+        return self.reports / LayoutArtifact.BENCHMARK
 
     @property
     def readiness_plans_file(self) -> Path:
-        return self.cache_analysis / LayoutArtifact.READINESS_PLANS.value
+        return self.cache_analysis / LayoutArtifact.READINESS_PLANS
 
     @property
     def mismatch_cutoffs_file(self) -> Path:
-        return self.cache_analysis / LayoutArtifact.MISMATCH_CUTOFFS.value
+        return self.cache_analysis / LayoutArtifact.MISMATCH_CUTOFFS
 
     def run(self, run_id: RunId) -> RunLayout:
         return RunLayout(self.runs / str(run_id))
 
     def analysis_result(self, experiment_id: ExperimentId) -> Path:
-        return self.cache_analysis / f"{experiment_id.value}.json"
+        return self.cache_analysis / f"{experiment_id}.json"
 
     def campaign_status(self, campaign_id: CampaignId) -> Path:
         return campaign_status_path(self.campaigns, campaign_id)
@@ -490,8 +498,8 @@ class OutputsLayout:
             raise ValueError("Model cache requires a detector profile")
         return ModelCacheLayout(
             self.cache_models
-            / config.dataset.id.value
-            / config.detector.id.value
+            / config.dataset.id
+            / config.detector.id
             / f"m{int(model_seed)}"
             / config.training_spec_hash[:16]
         )
@@ -501,8 +509,8 @@ class OutputsLayout:
             raise ValueError("Score cache requires a detector profile")
         return ScoreCacheLayout(
             self.cache_scores
-            / config.dataset.id.value
-            / config.detector.id.value
+            / config.dataset.id
+            / config.detector.id
             / f"m{int(model_seed)}"
             / config.training_spec_hash[:16]
         )

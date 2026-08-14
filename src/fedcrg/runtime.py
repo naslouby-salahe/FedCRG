@@ -107,7 +107,7 @@ def resolve_compute_device(device: ComputeDeviceId) -> torch.device:
             "The frozen experiment configuration requires CUDA, but no CUDA device is "
             "available. Refusing to silently fall back to CPU."
         )
-    return torch.device(device.value)
+    return torch.device(device)
 
 
 def log_device_capabilities(logger: logging.Logger) -> None:
@@ -236,11 +236,11 @@ def render_campaign_status(
 ) -> None:
     console = Console()
     table = Table(title=f"campaign {campaign_id}")
-    table.add_column(CampaignStatusColumn.STATUS.value)
-    table.add_column(CampaignStatusColumn.COMPLETED.value)
-    table.add_column(CampaignStatusColumn.TOTAL.value)
-    table.add_column(CampaignStatusColumn.CURRENT.value)
-    table.add_column(CampaignStatusColumn.ELAPSED_SECONDS.value)
+    table.add_column(CampaignStatusColumn.STATUS)
+    table.add_column(CampaignStatusColumn.COMPLETED)
+    table.add_column(CampaignStatusColumn.TOTAL)
+    table.add_column(CampaignStatusColumn.CURRENT)
+    table.add_column(CampaignStatusColumn.ELAPSED_SECONDS)
     table.add_row(
         status,
         str(completed),
@@ -260,4 +260,4 @@ def render_cache_status(
     console = Console()
     outcome = CacheOutcome.HIT if hit else CacheOutcome.MISS
     suffix = f" ({detail})" if detail else ""
-    console.print(f"[{outcome.value}] {cache_kind} {target}{suffix}")
+    console.print(f"[{outcome}] {cache_kind} {target}{suffix}")

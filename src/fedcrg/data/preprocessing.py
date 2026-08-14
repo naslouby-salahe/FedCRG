@@ -21,7 +21,7 @@ from fedcrg.types import (
 
 Frozen = ConfigDict(frozen=True)
 
-_METADATA = frozenset(column.value for column in PreparedColumn)
+_METADATA = frozenset(column for column in PreparedColumn)
 
 
 def model_feature_columns(frame: pd.DataFrame, expected: PositiveCount) -> tuple[FeatureName, ...]:
@@ -145,7 +145,7 @@ class TrainOnlyPreprocessing:
         
         train_frame = splits.get(DataRole.TRAIN)
         training_row_hash = hash_row_ids(
-            train_frame[PreparedColumn.ROW_ID.value].astype(str).tolist()
+            train_frame[PreparedColumn.ROW_ID].astype(str).tolist()
         )
         train_values = train_frame.loc[:, list(columns)].to_numpy(dtype=np.float64, copy=True)
         

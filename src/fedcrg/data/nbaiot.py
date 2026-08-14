@@ -74,17 +74,17 @@ class NBaiotAdapter(DatasetAdapter):
             ]
             if len(matches) != 1:
                 raise DataIntegrityError(
-                    f"{FailureCode.DATASET_COUNT_MISMATCH.value}: {device.client_id} matched "
+                    f"{FailureCode.DATASET_COUNT_MISMATCH}: {device.client_id} matched "
                     f"{len(matches)} fixed device directories"
                 )
             mapping[device.client_id] = matches[0]
         if len({str(path) for path in mapping.values()}) != len(self.dataset.device_directories):
             raise DataIntegrityError(
-                f"{FailureCode.DATASET_COUNT_MISMATCH.value}: fixed device mapping is not one-to-one"
+                f"{FailureCode.DATASET_COUNT_MISMATCH}: fixed device mapping is not one-to-one"
             )
         if len(directories) != len(self.dataset.device_directories):
             raise DataIntegrityError(
-                f"{FailureCode.DATASET_COUNT_MISMATCH.value}: expected "
+                f"{FailureCode.DATASET_COUNT_MISMATCH}: expected "
                 f"{len(self.dataset.device_directories)} device directories, found {len(directories)}"
             )
         self._directories = mapping
@@ -100,12 +100,12 @@ class NBaiotAdapter(DatasetAdapter):
             raise DataIntegrityError(f"Unknown N-BaIoT client id: {client_id}") from exc
         files = DatasetDiscovery.csv_files(directory)
         benign_files = tuple(
-            path for path in files if NbaiotFileMarker.BENIGN.value in str(path).lower()
+            path for path in files if NbaiotFileMarker.BENIGN in str(path).lower()
         )
         attack_files = tuple(path for path in files if path not in benign_files)
         if not benign_files or not attack_files:
             raise DataIntegrityError(
-                f"{FailureCode.DATASET_COUNT_MISMATCH.value}: {client_id} must contain "
+                f"{FailureCode.DATASET_COUNT_MISMATCH}: {client_id} must contain "
                 "benign and attack CSVs"
             )
         benign = self._load_files(benign_files, client_id, attack_group=None)
@@ -135,13 +135,13 @@ class NBaiotAdapter(DatasetAdapter):
             frame = pd.read_csv(str(path))
             if frame.shape[1] != self.dataset.feature_count:
                 raise DataIntegrityError(
-                    f"{FailureCode.FEATURE_SCHEMA_MISMATCH.value}: {path} has "
+                    f"{FailureCode.FEATURE_SCHEMA_MISMATCH}: {path} has "
                     f"{frame.shape[1]} columns, expected {self.dataset.feature_count}"
                 )
             raw_columns = list(frame.columns)
             if raw_columns != list(self.dataset.source_headers):
                 raise DataIntegrityError(
-                    f"{FailureCode.FEATURE_SCHEMA_MISMATCH.value}: {path} headers do not "
+                    f"{FailureCode.FEATURE_SCHEMA_MISMATCH}: {path} headers do not "
                     "match the locked UCI N-BaIoT feature contract"
                 )
             frame = frame.rename(
@@ -157,15 +157,15 @@ class NBaiotAdapter(DatasetAdapter):
                 assert isinstance(numeric, pd.DataFrame)
             except Exception as exc:
                 raise DataIntegrityError(
-                    f"{FailureCode.FEATURE_SCHEMA_MISMATCH.value}: non-numeric value in {path}"
+                    f"{FailureCode.FEATURE_SCHEMA_MISMATCH}: non-numeric value in {path}"
                 ) from exc
             values = numeric.to_numpy(dtype=np.float64, copy=False)
             if not np.isfinite(values).all():
                 raise DataIntegrityError(
-                    f"{FailureCode.NONFINITE_SCORE.value}: non-finite N-BaIoT source feature in {path}"
+                    f"{FailureCode.NONFINITE_SCORE}: non-finite N-BaIoT source feature in {path}"
                 )
             source = str(path.relative_to(self.root))
-            numeric[PreparedColumn.ROW_ID.value] = np.array(
+            numeric[PreparedColumn.ROW_ID] = np.array(
                 [
                     stable_row_id(self.dataset_id, client_id, source, index)
                     for index in range(len(numeric))
@@ -173,9 +173,9 @@ class NBaiotAdapter(DatasetAdapter):
                 dtype=object,
             )
             if attack_group is not None:
-                numeric[PreparedColumn.ATTACK_GROUP.value] = attack_group
-            numeric[PreparedColumn.SOURCE_FILE.value] = source
-            numeric[PreparedColumn.SOURCE_ROW_INDEX.value] = np.arange(len(numeric), dtype=np.int64)
+                numeric[PreparedColumn.ATTACK_GROUP] = attack_group
+            numeric[PreparedColumn.SOURCE_FILE] = source
+            numeric[PreparedColumn.SOURCE_ROW_INDEX] = np.arange(len(numeric), dtype=np.int64)
             frames.append(numeric)
         return pd.concat(frames, ignore_index=True)
 
@@ -186,18 +186,18 @@ class NBaiotAdapter(DatasetAdapter):
             (
                 candidate
                 for candidate, markers in _FAMILY_MARKERS.items()
-                if any(marker.value in lowered for marker in markers)
+                if any(marker in lowered for marker in markers)
             ),
             None,
         )
         if family is None:
             raise DataIntegrityError(
-                f"{FailureCode.DATASET_COUNT_MISMATCH.value}: cannot derive attack subtype from {path}"
+                f"{FailureCode.DATASET_COUNT_MISMATCH}: cannot derive attack subtype from {path}"
             )
         subtype = (
             path.stem.lower()
-            .replace(NbaiotFileMarker.BENIGN.value, "")
-            .replace(family.value, "")
+            .replace(NbaiotFileMarker.BENIGN, "")
+            .replace(family, "")
             .strip("_")
         )
-        return f"{family.value}_{subtype}"
+        return f"{family}_{subtype}"

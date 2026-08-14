@@ -106,7 +106,7 @@ def hash_seed(text: str) -> RngSeed:
 def stable_row_id(
     dataset: DatasetId, client_id: ClientId, source: str, source_index: Position
 ) -> RowId:
-    payload = f"{dataset.value}{client_id}{source}{source_index}"
+    payload = f"{dataset}{client_id}{source}{source_index}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -115,7 +115,7 @@ def calibration_rng(
     client_id: ClientId,
     seed: CalibrationSeed,
 ) -> np.random.Generator:
-    text = f"fedcrg|{dataset.value}|calibration|{int(seed)}|{client_id}"
+    text = f"fedcrg|{dataset}|calibration|{int(seed)}|{client_id}"
     return np.random.Generator(np.random.PCG64(hash_seed(text)))
 
 
@@ -125,7 +125,7 @@ def attack_rng(
     group: AttackGroupId,
     seed: ModelSeed,
 ) -> np.random.Generator:
-    namespace = "diad" if dataset is DatasetId.DIAD else dataset.value
+    namespace = "diad" if dataset is DatasetId.DIAD else dataset
     text = f"fedcrg|{namespace}|attackdev|{int(seed)}|{client_id}|{group}"
     return np.random.Generator(np.random.PCG64(hash_seed(text)))
 
@@ -174,7 +174,7 @@ class ClientEligibilityEvaluator:
             if not config.feature_names:
                 raise ValueError("The DIAD feature contract is not frozen")
             return config.feature_names
-        raise ValueError(f"Unsupported DIAD feature contract: {config.feature_contract.value}")
+        raise ValueError(f"Unsupported DIAD feature contract: {config.feature_contract}")
 
     def evaluate(self, data: ClientData, config: DatasetConfig) -> EligibilityRecord:
         benign_count = len(data.benign)
@@ -235,7 +235,7 @@ class ClientEligibilityEvaluator:
     def attack_development_capacity(
         data: ClientData, reserve_per_group: PositiveCount
     ) -> SampleCount:
-        if data.attack.empty or PreparedColumn.ATTACK_GROUP.value not in data.attack.columns:
+        if data.attack.empty or PreparedColumn.ATTACK_GROUP not in data.attack.columns:
             return 0
-        counts = data.attack[PreparedColumn.ATTACK_GROUP.value].astype(str).value_counts()
+        counts = data.attack[PreparedColumn.ATTACK_GROUP].astype(str).value_counts()
         return int(sum(max(0, int(count) - min(reserve_per_group, int(count))) for count in counts))

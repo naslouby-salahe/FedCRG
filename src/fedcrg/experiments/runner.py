@@ -140,7 +140,7 @@ Frozen = ConfigDict(frozen=True)
 _LOGGER = get_logger(__name__)
 
 _ANALYSIS_CATEGORIES = frozenset({ExperimentType.SYNTHETIC, ExperimentType.BENCHMARK})
-_METADATA_COLUMNS = frozenset(column.value for column in PreparedColumn)
+_METADATA_COLUMNS = frozenset(column for column in PreparedColumn)
 _BASE_SCORE_ROLES = (
     DataRole.TRAIN,
     DataRole.RESERVOIR,
@@ -191,7 +191,7 @@ _ALLOWED_TRANSITIONS: dict[ExperimentStatus, tuple[ExperimentStatus, ...]] = {
 
 def assert_transition(current: ExperimentStatus, target: ExperimentStatus) -> None:
     if target not in _ALLOWED_TRANSITIONS[current]:
-        raise ValueError(f"Invalid experiment transition: {current.value} -> {target.value}")
+        raise ValueError(f"Invalid experiment transition: {current} -> {target}")
 
 
 class DependencyResolver:
@@ -235,7 +235,7 @@ class ExperimentPlanner:
         calibration_seed: CalibrationSeed,
     ) -> ExperimentPlan:
         if config.id is not experiment_id:
-            raise ValueError(f"Experiment identity mismatch: plan={experiment_id.value}, config={config.id.value}")
+            raise ValueError(f"Experiment identity mismatch: plan={experiment_id}, config={config.id}")
         if int(model_seed) not in config.randomness.model_seeds:
             raise ValueError(f"Model seed {int(model_seed)} is not configured")
         if int(calibration_seed) not in config.dataset.calibration_seeds:
@@ -244,7 +244,7 @@ class ExperimentPlanner:
         definition = self.study.catalogue.spec(experiment_id)
         if definition.policies and not set(config.policies).issubset(definition.policies):
             extra = set(config.policies) - set(definition.policies)
-            raise ValueError("Config contains policies outside the experiment catalogue: " + ", ".join(sorted(item.value for item in extra)))
+            raise ValueError("Config contains policies outside the experiment catalogue: " + ", ".join(sorted(item for item in extra)))
             
         return ExperimentPlan(
             definition=definition,
@@ -303,7 +303,7 @@ class RunExperiment:
         repository_root: Path,
     ) -> tuple[ExperimentPlan, RunLayout]:
         if policy not in config.policies:
-            raise ValueError(f"Policy {policy.value} is not configured for this experiment")
+            raise ValueError(f"Policy {policy} is not configured for this experiment")
             
         plan = self.planner.create(experiment_id, config, model_seed, calibration_seed)
         run_id = build_run_id(config, model_seed, calibration_seed, policy)
@@ -373,7 +373,7 @@ def feature_columns(frame: pd.DataFrame, expected_count: PositiveCount) -> tuple
         if col not in _METADATA_COLUMNS and not col.startswith("_") and pd.api.types.is_numeric_dtype(frame[col])
     )
     if len(columns) != expected_count:
-        raise ValueError(f"{FailureCode.FEATURE_SCHEMA_MISMATCH.value}: expected {expected_count} numeric features, found {len(columns)}")
+        raise ValueError(f"{FailureCode.FEATURE_SCHEMA_MISMATCH}: expected {expected_count} numeric features, found {len(columns)}")
     return columns
 
 
@@ -445,7 +445,7 @@ class TrainDetector:
                 
             tensor = torch.as_tensor(frame[list(columns)].to_numpy(dtype=np.float32), dtype=torch.float32)
             if not torch.isfinite(tensor).all():
-                raise FloatingPointError(FailureCode.TRAINING_NUMERICAL_FAILURE.value)
+                raise FloatingPointError(FailureCode.TRAINING_NUMERICAL_FAILURE)
                 
             datasets[client_id] = tensor
             training_rows.append(ClientTrainingCount(client_id=client_id, rows=len(frame)))
@@ -622,17 +622,17 @@ class ComputeScores:
                 role_manifest = client_manifest.role(role)
                 path = prepared_root / role_manifest.relative_path
                 if sha256_file(path) != role_manifest.file_sha256:
-                    raise ValueError(f"Prepared role hash mismatch for {client_id}/{role.value}")
+                    raise ValueError(f"Prepared role hash mismatch for {client_id}/{role}")
                     
                 frame = pd.read_csv(path)
                 val_cols = [c for c in frame.columns if c not in _METADATA_COLUMNS]
                 values = frame[val_cols].to_numpy(dtype=np.float64)
-                row_ids = tuple(frame[PreparedColumn.ROW_ID.value].astype(str))
+                row_ids = tuple(frame[PreparedColumn.ROW_ID].astype(str))
                 
                 if len(row_ids) != len(values):
-                    raise ValueError(f"Prepared role row ids do not align for {client_id}/{role.value}")
+                    raise ValueError(f"Prepared role row ids do not align for {client_id}/{role}")
                     
-                groups = tuple(frame[PreparedColumn.ATTACK_GROUP.value].astype(str)) if role is DataRole.ATTACK_TEST and PreparedColumn.ATTACK_GROUP.value in frame.columns else ()
+                groups = tuple(frame[PreparedColumn.ATTACK_GROUP].astype(str)) if role is DataRole.ATTACK_TEST and PreparedColumn.ATTACK_GROUP in frame.columns else ()
                 groups = groups or None
                 computed = self.computer.compute(model, values, config.training.device, config.training.batch_size)
                 
@@ -1053,7 +1053,7 @@ class FederationCellResult(BaseModel):
         for entry in self.run_directories:
             if entry.policy is policy:
                 return entry.path
-        raise KeyError(policy.value)
+        raise KeyError(policy)
 
 
 class FederationCellMaterializer:
@@ -1079,7 +1079,7 @@ class FederationCellMaterializer:
         if not selected:
             raise ValueError("At least one policy must be materialized")
         if unknown := set(selected) - set(config.policies):
-            raise ValueError("Requested policy is not configured: " + ", ".join(sorted(item.value for item in unknown)))
+            raise ValueError("Requested policy is not configured: " + ", ".join(sorted(item for item in unknown)))
 
         bundle = self.policy_cells.evaluate_federation(config, caches, calibration_seed, assignment_mode)
         run_dirs: list[PolicyRunDirectory] = []

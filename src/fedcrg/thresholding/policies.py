@@ -75,7 +75,7 @@ def threshold_policy_communication(
             return moment_payload + candidate_payload
         if kind is PolicyUploadKind.SUPERVISED_CANDIDATES:
             return candidate_payload
-        raise RuntimeError(f"Unhandled policy upload payload kind: {kind.value}")
+        raise RuntimeError(f"Unhandled policy upload payload kind: {kind}")
 
     rows = tuple(
         PolicyTrafficLedgerRow(
@@ -200,7 +200,7 @@ class PolicyThresholdSet:
         for entry in self.entries:
             if entry.policy is policy and entry.client_id == client_id:
                 return entry.threshold
-        raise KeyError(f"No threshold for {policy.value}/{client_id}")
+        raise KeyError(f"No threshold for {policy}/{client_id}")
 
 
 def _finite_vector(values: np.ndarray, name: Identifier) -> np.ndarray:
@@ -705,7 +705,7 @@ def _evaluate(
         case PolicyStrategy.FEDCRG:
             return benign.evaluation.decision.threshold
         case _:
-            raise RuntimeError(f"Unhandled threshold strategy: {strategy.value}")
+            raise RuntimeError(f"Unhandled threshold strategy: {strategy}")
 
 
 class PolicyThresholdSelector:

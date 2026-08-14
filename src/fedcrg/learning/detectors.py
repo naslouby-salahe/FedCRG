@@ -36,7 +36,7 @@ class DetectorModel(torch.nn.Module, ABC):
 def activation_module(activation: ActivationId) -> type[torch.nn.Module]:
     if activation is ActivationId.TANH:
         return torch.nn.Tanh
-    raise ValueError(f"Unsupported activation: {activation.value}")
+    raise ValueError(f"Unsupported activation: {activation}")
 
 
 def build_mlp(

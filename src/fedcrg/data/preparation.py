@@ -106,7 +106,7 @@ class PrepareData:
             return NBaiotAdapter(root, dataset)
         if dataset.id is DatasetId.DIAD:
             return DiadAdapter(root, dataset)
-        raise ValueError(f"No filesystem adapter for {dataset.id.value}")
+        raise ValueError(f"No filesystem adapter for {dataset.id}")
 
     @staticmethod
     def _source_identity_hash(sources: tuple[SourceFileManifest, ...]) -> Sha256:
@@ -296,12 +296,12 @@ class PrepareData:
         if config.dataset.id is DatasetId.NBAIOT:
             expected_devices = tuple(device.client_id for device in config.dataset.device_directories)
             if sorted(discovered) != sorted(expected_devices):
-                raise DataIntegrityError(f"{FailureCode.DATASET_COUNT_MISMATCH.value}: expected nine N-BaIoT devices")
+                raise DataIntegrityError(f"{FailureCode.DATASET_COUNT_MISMATCH}: expected nine N-BaIoT devices")
         elif config.dataset.id is DatasetId.DIAD:
             expected_count = config.dataset.expected_source_clients
             if expected_count is not None and len(discovered) != expected_count:
                 raise DataIntegrityError(
-                    f"{FailureCode.DIAD_DEVICE_COUNT_SOURCE_MISMATCH.value}: "
+                    f"{FailureCode.DIAD_DEVICE_COUNT_SOURCE_MISMATCH}: "
                     f"expected {expected_count} DIAD devices, found {len(discovered)}"
                 )
 
@@ -323,7 +323,7 @@ class PrepareData:
             data = adapter.load_client(client_id)
             if data.client_id != client_id:
                 raise DataIntegrityError(
-                    f"{FailureCode.NONDETERMINISTIC_PARITY_FAIL.value}: "
+                    f"{FailureCode.NONDETERMINISTIC_PARITY_FAIL}: "
                     "adapter returned a client identity that does not match the request"
                 )
                 
@@ -334,7 +334,7 @@ class PrepareData:
             records.append(record)
             
             if record.status is not EligibilityStatus.ELIGIBLE:
-                _LOGGER.info("client %s excluded (%s) in %.1fs", client_id, record.status.value, time.monotonic() - started)
+                _LOGGER.info("client %s excluded (%s) in %.1fs", client_id, record.status, time.monotonic() - started)
                 continue
                 
             splits = self.base_split_builder.build(data, config.dataset, config.randomness.attack_split_seed)
@@ -357,20 +357,20 @@ class PrepareData:
             + config.dataset.split.min_benign_test
         )
         if len(data.benign) < required_size:
-            raise DataIntegrityError(f"{FailureCode.NBAIOT_ATTACK_BUDGET_FAIL.value}: benign evidence is insufficient")
+            raise DataIntegrityError(f"{FailureCode.NBAIOT_ATTACK_BUDGET_FAIL}: benign evidence is insufficient")
 
     @staticmethod
     def _write_raw_splits(root: Path, splits: ClientSplits) -> None:
         client_root = PreparedDatasetLayout(root).raw_staging / splits.client_id
         client_root.mkdir(parents=True, exist_ok=True)
         for item in splits.roles:
-            item.frame.to_parquet(client_root / f"{item.role.value}.parquet", index=False)
+            item.frame.to_parquet(client_root / f"{item.role}.parquet", index=False)
 
     @staticmethod
     def _load_raw_splits(root: Path, client_id: ClientId) -> ClientSplits:
         client_root = PreparedDatasetLayout(root).raw_staging / client_id
         roles = tuple(
-            RoleFrame(role=role, frame=pd.read_parquet(client_root / f"{role.value}.parquet"))
+            RoleFrame(role=role, frame=pd.read_parquet(client_root / f"{role}.parquet"))
             for role in _BASE_ROLES
         )
         return ClientSplits(client_id=client_id, roles=roles)
@@ -437,7 +437,7 @@ class PrepareData:
             if item.role is DataRole.TRAIN:
                 frame = preprocessing.transform(frame, splits.client_id)
                 
-            relative = f"{splits.client_id}/{item.role.value}.csv"
+            relative = f"{splits.client_id}/{item.role}.csv"
             path = root / relative
             frame.to_csv(path, index=False)
             
@@ -446,7 +446,7 @@ class PrepareData:
                     role=item.role,
                     rows=len(frame),
                     row_id_sha256=hash_row_ids(
-                        frame[PreparedColumn.ROW_ID.value].astype(str).tolist()
+                        frame[PreparedColumn.ROW_ID].astype(str).tolist()
                     ),
                     relative_path=PurePosixPath(relative),
                     file_sha256=sha256_file(path),

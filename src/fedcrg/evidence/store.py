@@ -123,20 +123,20 @@ class TrainingManifestStore(ModelStore[TrainingManifest]):
 
 class RunManifestStore(ModelStore[RunManifest]):
     model = RunManifest
-    _TERMINAL_STATUSES = frozenset({ExperimentStatus.COMPLETE.value, ExperimentStatus.FAILED.value})
+    _TERMINAL_STATUSES = frozenset({ExperimentStatus.COMPLETE, ExperimentStatus.FAILED})
 
     def save(self, path: Path, manifest: RunManifest) -> None:
         if path.is_file():
             try:
                 existing = self.load(path)
                 if (
-                    existing.status.value in self._TERMINAL_STATUSES
+                    existing.status in self._TERMINAL_STATUSES
                     and existing.status is not manifest.status
                 ):
                     from fedcrg.types import ImmutableRunError
                     raise ImmutableRunError(
                         f"Cannot overwrite a finalized run manifest: {path} "
-                        f"({existing.status.value} -> {manifest.status.value})"
+                        f"({existing.status} -> {manifest.status})"
                     )
             except (FileNotFoundError, ValueError):
                 pass
@@ -183,12 +183,12 @@ def build_run_id(
     rho_bp = round(protocol.rho * 10_000)
     assurance_bp = round(protocol.readiness_assurance * 10_000)
     confidence_bp = round(protocol.mismatch_confidence * 10_000)
-    detector_label = "ae" if config.detector.id is DetectorId.AUTOENCODER else config.detector.id.value
+    detector_label = "ae" if config.detector.id is DetectorId.AUTOENCODER else config.detector.id
 
     return (
-        f"{config.dataset.id.value}__{detector_label}__ms{int(model_seed)}__"
+        f"{config.dataset.id}__{detector_label}__ms{int(model_seed)}__"
         f"cs{int(calibration_seed)}__a{alpha_ppm}__r{rho_bp}__"
-        f"ga{assurance_bp}__gb{confidence_bp}__{policy.value.lower()}__"
+        f"ga{assurance_bp}__gb{confidence_bp}__{policy.lower()}__"
         f"cfg{config.config_hash[:12]}"
     )
 

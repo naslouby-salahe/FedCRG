@@ -300,7 +300,7 @@ def aggregate_policy(
         and row.metrics is not None
     ]
     if not rows:
-        raise ValueError(f"No evaluated client metrics for {policy.value}")
+        raise ValueError(f"No evaluated client metrics for {policy}")
         
     fprs = np.fromiter((row.fpr for row in rows), dtype=np.float64, count=len(rows))
     
