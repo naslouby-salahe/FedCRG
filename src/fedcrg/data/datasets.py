@@ -539,7 +539,7 @@ class NBaiotAdapter(DatasetAdapter):
                 raise DataIntegrityError(
                     f"{FailureCode.NONFINITE_SCORE.value}: non-finite N-BaIoT source feature in {path}"
                 )
-            source = str(path)
+            source = str(path.relative_to(self.root))
             numeric[PreparedColumn.ROW_ID.value] = np.array(
                 [
                     stable_row_id(self.dataset_id, client_id, source, index)
@@ -570,24 +570,139 @@ class NBaiotAdapter(DatasetAdapter):
 
 
 class DiadAdapter(DatasetAdapter):
-    """Load the DIAD NetFlow-style dataset with attack-family groups."""
+    """Load the CIC IoT-DIAD 2024 packet-based release into per-device clients.
+
+    Client identity comes from the normalized ``device_mac`` column;
+    ``device_mac`` itself never enters the model tensor. Rows are ordered by
+    (source file, source row index) because the packet schema carries no
+    parseable capture-time field; chronology is therefore source-order only.
+    Attack family is the official top-level category.
+    """
+
+    _MODEL_COLUMNS = (*DIAD_FEATURES, "device_mac")
+
+    def __init__(self, root: Path, expected_feature_count: FeatureCount) -> None:
+        super().__init__(root)
+        if expected_feature_count != len(DIAD_FEATURES):
+            raise DataIntegrityError(
+                f"{FailureCode.FEATURE_SCHEMA_MISMATCH.value}: DIAD expects "
+                f"{len(DIAD_FEATURES)} features, received {expected_feature_count}"
+            )
+        self.expected_feature_count = expected_feature_count
+        self._devices: dict[ClientId, tuple[str, ...]] | None = None
 
     @property
     def dataset_id(self) -> DatasetId:
         return DatasetId.DIAD
 
-    def discover_clients(self) -> tuple[ClientId, ...]:
-        directories = DatasetDiscovery.directories(self.root)
-        clients = tuple(str(path.name) for path in directories if re.match(r"^c\d+$", path.name))
-        if not clients:
-            raise DataIntegrityError("DIAD root contains no client directories")
-        return clients
+    @staticmethod
+    def _normalized_mac(value: str) -> str:
+        return value.strip().lower()
 
-    def load_client(self, client_id: ClientId) -> ClientData:
-        raise NotImplementedError("DIAD client loading is implemented in the acquisition pipeline")
+    @classmethod
+    def _client_id(cls, normalized_mac: str) -> ClientId:
+        digest = hashlib.sha256(normalized_mac.encode("ascii")).hexdigest()[:12]
+        return f"diad_{digest}"
+
+    def _map_devices(self) -> dict[ClientId, tuple[str, ...]]:
+        """Scan every source CSV for distinct normalized device MACs."""
+        if self._devices is not None:
+            return self._devices
+        macs: dict[ClientId, set[str]] = {}
+        for path in DatasetDiscovery.csv_files(self.root, recursive=True):
+            try:
+                column = pd.read_csv(str(path), usecols=["device_mac"])
+            except Exception as exc:
+                raise DataIntegrityError(
+                    f"{FailureCode.FEATURE_MISSING.value}: no device_mac column in "
+                    f"{path.relative_to(self.root)}"
+                ) from exc
+            for raw in column["device_mac"].dropna().astype(str):
+                normalized = self._normalized_mac(raw)
+                if normalized:
+                    macs.setdefault(self._client_id(normalized), set()).add(normalized)
+        if not macs:
+            raise DataIntegrityError("DIAD root contains no device identities")
+        self._devices = {client_id: tuple(sorted(values)) for client_id, values in macs.items()}
+        return self._devices
+
+    def discover_clients(self) -> tuple[ClientId, ...]:
+        return tuple(self._map_devices())
 
     def source_files(self) -> tuple[Path, ...]:
         return DatasetDiscovery.csv_files(self.root, recursive=True)
+
+    def load_client(self, client_id: ClientId) -> ClientData:
+        macs = self._map_devices().get(client_id)
+        if macs is None:
+            raise DataIntegrityError(f"Unknown DIAD client id: {client_id}")
+        benign_frames: list[pd.DataFrame] = []
+        attack_frames: list[pd.DataFrame] = []
+        for path in DatasetDiscovery.csv_files(self.root, recursive=True):
+            category = path.relative_to(self.root).parts[0]
+            try:
+                frame = pd.read_csv(str(path), usecols=self._MODEL_COLUMNS)
+            except Exception as exc:
+                raise DataIntegrityError(
+                    f"{FailureCode.FEATURE_MISSING.value}: locked DIAD feature absent in "
+                    f"{path.relative_to(self.root)}"
+                ) from exc
+            frame.columns = [str(column).strip() for column in frame.columns]
+            normalized = frame["device_mac"].astype(str).str.strip().str.lower()
+            selected = frame.loc[normalized.isin(macs)].copy()
+            if selected.empty:
+                continue
+            numeric = selected[list(DIAD_FEATURES)].apply(pd.to_numeric, errors="coerce")
+            numeric = numeric.replace([np.inf, -np.inf], np.nan)
+            source = str(path.relative_to(self.root))
+            numeric[PreparedColumn.ROW_ID.value] = np.array(
+                [
+                    stable_row_id(self.dataset_id, client_id, source, index)
+                    for index in range(len(numeric))
+                ],
+                dtype=object,
+            )
+            if category.lower() == "benigntraffic":
+                benign_frames.append(numeric)
+            else:
+                numeric[PreparedColumn.ATTACK_GROUP.value] = category.lower()
+                attack_frames.append(numeric)
+            numeric[PreparedColumn.SOURCE_FILE.value] = source
+            numeric[PreparedColumn.SOURCE_ROW_INDEX.value] = np.arange(len(numeric), dtype=np.int64)
+        if not benign_frames and not attack_frames:
+            raise DataIntegrityError(f"DIAD client {client_id} has no rows in any source file")
+        benign = (
+            pd.concat(benign_frames, ignore_index=True)
+            if benign_frames
+            else pd.DataFrame(
+                columns=[
+                    *DIAD_FEATURES,
+                    PreparedColumn.ROW_ID.value,
+                    PreparedColumn.SOURCE_FILE.value,
+                    PreparedColumn.SOURCE_ROW_INDEX.value,
+                ]
+            )
+        )
+        attack = (
+            pd.concat(attack_frames, ignore_index=True)
+            if attack_frames
+            else pd.DataFrame(
+                columns=[
+                    *DIAD_FEATURES,
+                    PreparedColumn.ROW_ID.value,
+                    PreparedColumn.ATTACK_GROUP.value,
+                    PreparedColumn.SOURCE_FILE.value,
+                    PreparedColumn.SOURCE_ROW_INDEX.value,
+                ]
+            )
+        )
+        return ClientData(
+            dataset=self.dataset_id,
+            client_id=client_id,
+            benign=benign,
+            attack=attack,
+            chronology=ChronologyStatus.SOURCE_ORDER_ONLY,
+        )
 
 
 class EligibilityRecord(BaseModel):

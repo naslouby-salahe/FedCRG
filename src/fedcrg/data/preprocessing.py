@@ -29,6 +29,7 @@ from fedcrg.data.datasets import (
     ClientEligibilityEvaluator,
     ClientSplits,
     DatasetAdapter,
+    DiadAdapter,
     EligibilityManifest,
     EligibilityRecord,
     NBaiotAdapter,
@@ -282,6 +283,8 @@ class PrepareData:
     ) -> DatasetAdapter:
         if dataset is DatasetId.NBAIOT:
             return NBaiotAdapter(root, expected_feature_count)
+        if dataset is DatasetId.DIAD:
+            return DiadAdapter(root, expected_feature_count)
         raise ValueError(f"No filesystem adapter for {dataset.value}")
 
     @staticmethod

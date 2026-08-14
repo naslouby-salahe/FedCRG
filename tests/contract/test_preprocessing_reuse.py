@@ -15,7 +15,7 @@ import pytest
 from pydantic import TypeAdapter
 
 from fedcrg.config import ExperimentConfig
-from fedcrg.data.datasets import ClientData, DatasetAdapter
+from fedcrg.data.datasets import ClientData, DatasetAdapter, hash_row_ids
 from fedcrg.data.preprocessing import PrepareData
 from fedcrg.evidence.models import PreparedDatasetManifest
 from fedcrg.evidence.store import PreparedLayout
@@ -180,6 +180,26 @@ def test_missing_source_file_is_never_silently_reused(prepared: PreparedState) -
     # silently reusing the stale cache.
     with pytest.raises((DataIntegrityError, FileNotFoundError)):
         preparer.ensure_prepared(config, raw, adapter_override=adapter)
+
+
+def test_preprocessing_parameters_are_fitted_on_training_rows_only(
+    prepared: PreparedState,
+) -> None:
+    """Fit-row hashes must equal the hash of each client's TRAIN role rows only."""
+    import json
+
+    _config, _raw, _preparer, _adapter, cache, _first = prepared
+    payload = json.loads(
+        (cache / PreparedLayout.preprocessing_filename).read_text(encoding="utf-8")
+    )
+    for client in payload["clients"]:
+        train_path = cache / client["client_id"] / "train.csv"
+        train = pd.read_csv(train_path)
+        expected = hash_row_ids(train["row_id"].astype(str).tolist())
+        assert client["training_row_sha256"] == expected
+        # A role that is NOT the training role must not be the fit source.
+        reservoir = pd.read_csv(cache / client["client_id"] / "reservoir.csv")
+        assert hash_row_ids(reservoir["row_id"].astype(str).tolist()) != expected
 
 
 def test_adapter_dataset_mismatch_is_rejected(tmp_path: Path) -> None:

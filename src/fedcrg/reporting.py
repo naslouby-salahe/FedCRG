@@ -14,6 +14,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
 from fedcrg.config import ExperimentConfig, Study
@@ -45,22 +46,27 @@ from fedcrg.types import (
     CalibrationSeed,
     CampaignId,
     ClientId,
+    ConfidenceLevel,
     DataRole,
     DecisionSource,
     DecisionState,
     Description,
     DetectorId,
     DatasetId,
+    ExperimentAxisId,
     ExperimentId,
     ExperimentType,
     FailureCode,
+    Fpr,
     Fraction,
     Identifier,
     Metric,
     ModelSeed,
     NonNegativeCount,
+    OperatingBand,
     PathString,
     PolicyId,
+    SampleCount,
     PositiveCount,
     Probability,
     ProtocolConstantValue,
@@ -501,6 +507,48 @@ class PublicationPackageBuilder:
                     figure_root / "figure_1_decision_architecture.png"
                 ),
             ),
+            self._figure(
+                "Figure 2 - Finite-sample readiness frontier",
+                lambda: build_readiness_frontier_from_catalogue(
+                    figure_root / "figure_2_readiness_frontier.png"
+                ),
+            ),
+            self._figure(
+                "Figure 3 - Reference-mismatch evidence/power map",
+                lambda: build_mismatch_power_map_from_catalogue(
+                    figure_root / "figure_3_mismatch_power_map.png"
+                ),
+            ),
+            self._figure(
+                "Figure 4 - Per-client operating points",
+                lambda: build_per_client_operating_points_figure(
+                    figure_root / "figure_4_per_client_operating_points.png", destination
+                ),
+            ),
+            self._figure(
+                "Figure 5 - Reliability-utility frontier",
+                lambda: build_reliability_utility_frontier_figure(
+                    figure_root / "figure_5_reliability_utility_frontier.png", destination
+                ),
+            ),
+            self._figure(
+                "Figure 6 - Calibration-size phase transition",
+                lambda: build_phase_transition_from_catalogue(
+                    figure_root / "figure_6_phase_transition.png"
+                ),
+            ),
+            self._figure(
+                "Figure 7 - Assumption stress",
+                lambda: build_assumption_stress_figure(
+                    figure_root / "figure_7_assumption_stress.png", destination
+                ),
+            ),
+            self._figure(
+                "Figure 8 - External replication",
+                lambda: build_external_replication_figure(
+                    figure_root / "figure_8_external_replication.png", destination
+                ),
+            ),
         )
         manifest_path = destination / OutputsLayout(outputs_root).publication_manifest.name
         atomic_write_json(
@@ -634,6 +682,297 @@ def build_decision_architecture_figure(output: Path) -> Path:
     figure.savefig(output, dpi=300, bbox_inches="tight")
     plt.close(figure)
     return output
+
+
+def build_readiness_frontier_figure(
+    output: Path,
+    sample_counts: tuple[SampleCount, ...],
+    band: OperatingBand,
+    assurance: Assurance,
+) -> Path:
+    """Render the finite-sample readiness frontier (n_C vs exact in-band probability)."""
+    from fedcrg.thresholding.readiness import ReadinessPlanBuilder
+
+    probabilities = [
+        ReadinessPlanBuilder().build(sample_count, band, assurance).coverage_probability
+        for sample_count in sample_counts
+    ]
+    figure, axis = plt.subplots(figsize=(8, 5))
+    axis.plot(sample_counts, probabilities, marker="o", linewidth=1.4)
+    axis.axhline(assurance, color="crimson", linestyle="--", linewidth=1.0)
+    minimum = next(
+        (
+            sample_count
+            for sample_count, p in zip(sample_counts, probabilities, strict=True)
+            if p >= assurance
+        ),
+        None,
+    )
+    if minimum is not None:
+        axis.axvline(minimum, color="slategray", linestyle=":", linewidth=1.0)
+        axis.annotate(
+            f"minimum ready n_C={minimum}",
+            xy=(minimum, assurance),
+            xytext=(minimum * 0.8, assurance + 0.02),
+            fontsize=8,
+        )
+    axis.set_xlabel("local calibration sample count n_C")
+    axis.set_ylabel("maximum exact in-band probability")
+    axis.set_title("Finite-sample readiness frontier")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    figure.tight_layout()
+    figure.savefig(output, dpi=300, bbox_inches="tight")
+    plt.close(figure)
+    return output
+
+
+def build_mismatch_power_map_figure(
+    output: Path,
+    sample_counts: tuple[SampleCount, ...],
+    true_fprs: tuple[Fpr, ...],
+    band: OperatingBand,
+    confidence: ConfidenceLevel,
+) -> Path:
+    """Render the reference-mismatch evidence/power map (n_G x true reference FPR)."""
+    from scipy.stats import binom
+
+    from fedcrg.thresholding.readiness import clopper_pearson_interval
+    from fedcrg.types import BinomialCounts
+
+    rows: list[list[Fraction]] = []
+    for sample_count in sample_counts:
+        powers: list[Fraction] = []
+        for true_fpr in true_fprs:
+            power = 0.0
+            for exceedances in range(sample_count + 1):
+                interval = clopper_pearson_interval(
+                    BinomialCounts(exceedances, sample_count), confidence
+                )
+                if interval.upper < band.lower or interval.lower > band.upper:
+                    power += float(binom.pmf(exceedances, sample_count, true_fpr))
+            powers.append(power)
+        rows.append(powers)
+    grid = np.asarray(rows, dtype=np.float64)
+    figure, axis = plt.subplots(figsize=(8, 5))
+    image = axis.imshow(
+        grid,
+        aspect="auto",
+        origin="lower",
+        extent=(
+            float(min(true_fprs)),
+            float(max(true_fprs)),
+            float(min(sample_counts)),
+            float(max(sample_counts)),
+        ),
+    )
+    figure.colorbar(image, ax=axis, label="mismatch-declaration probability")
+    axis.set_xlabel("true reference FPR")
+    axis.set_ylabel("gate sample count n_G")
+    axis.set_title("Reference-mismatch evidence/power map")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    figure.tight_layout()
+    figure.savefig(output, dpi=300, bbox_inches="tight")
+    plt.close(figure)
+    return output
+
+
+def build_phase_transition_figure(
+    output: Path,
+    calibration_counts: tuple[SampleCount, ...],
+    gate_counts: tuple[SampleCount, ...],
+    band: OperatingBand,
+    assurance: Assurance,
+) -> Path:
+    """Render the calibration-size phase transition (readiness and mismatch evidence)."""
+    from fedcrg.thresholding.readiness import (
+        ReadinessPlanBuilder,
+        minimum_bidirectional_sample_count,
+    )
+
+    figure, axes = plt.subplots(1, 2, figsize=(11, 4.2))
+    probabilities = [
+        ReadinessPlanBuilder().build(sample_count, band, assurance).coverage_probability
+        for sample_count in calibration_counts
+    ]
+    axes[0].plot(calibration_counts, probabilities, marker="o", linewidth=1.4)
+    axes[0].axhline(assurance, color="crimson", linestyle="--", linewidth=1.0)
+    axes[0].set_xlabel("n_C")
+    axes[0].set_ylabel("in-band probability")
+    axes[0].set_title("Local readiness evidence")
+    minimum = minimum_bidirectional_sample_count(band.lower, confidence=0.95)
+    axes[1].axvline(minimum, color="crimson", linestyle="--", linewidth=1.0)
+    axes[1].set_xlabel("n_G")
+    axes[1].set_ylabel("bidirectional minimum")
+    axes[1].set_title("Mismatch evidence minimum")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    figure.tight_layout()
+    figure.savefig(output, dpi=300, bbox_inches="tight")
+    plt.close(figure)
+    return output
+
+
+def _require_bundle_table(results_root: Path, filename: Identifier) -> pd.DataFrame:
+    """Load one publication table; results-driven figures never fabricate data."""
+    path = results_root / "tables" / filename
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"Results-driven figure requires the {filename} table, run the campaign first ({path})"
+        )
+    return pd.read_csv(path)
+
+
+def build_per_client_operating_points_figure(output: Path, results_root: Path) -> Path:
+    """Render per-client FPR operating points against the locked band lines."""
+    frame = _require_bundle_table(results_root, "table_3_primary_policy_results.csv")
+    if "client_id" not in frame.columns or "fpr" not in frame.columns:
+        raise ValueError("primary policy results table lacks client_id/fpr columns")
+    figure, axis = plt.subplots(figsize=(9, 5))
+    for policy, group in frame.groupby("policy_id", sort=True):
+        axis.scatter(group["client_id"], group["fpr"], label=policy, s=18)
+    for level in (0.005, 0.01, 0.015):
+        axis.axhline(level, color="gray", linestyle=":", linewidth=0.8)
+    axis.set_xlabel("client id")
+    axis.set_ylabel("final-test FPR")
+    axis.set_title("Per-client operating points")
+    axis.legend(fontsize=8, ncol=3)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    figure.tight_layout()
+    figure.savefig(output, dpi=300, bbox_inches="tight")
+    plt.close(figure)
+    return output
+
+
+def build_reliability_utility_frontier_figure(output: Path, results_root: Path) -> Path:
+    """Render the reliability-utility frontier (MEBE vs ABMacroTPR per policy)."""
+    frame = _require_bundle_table(results_root, "table_3_primary_policy_results.csv")
+    required = {"policy_id", "mebe", "attack_balanced_macro_tpr"}
+    if not required.issubset(frame.columns):
+        raise ValueError("primary policy results table lacks MEBE/ABMacroTPR columns")
+    summary = (
+        frame.groupby("policy_id", sort=True)[["mebe", "attack_balanced_macro_tpr"]]
+        .mean()
+        .reset_index()
+    )
+    figure, axis = plt.subplots(figsize=(8, 5))
+    axis.scatter(summary["mebe"], summary["attack_balanced_macro_tpr"], s=42)
+    for _, row in summary.iterrows():
+        axis.annotate(row["policy_id"], (row["mebe"], row["attack_balanced_macro_tpr"]), fontsize=8)
+    axis.set_xlabel("mean excess band error (MEBE)")
+    axis.set_ylabel("attack-balanced macro TPR")
+    axis.set_title("Reliability-utility frontier")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    figure.tight_layout()
+    figure.savefig(output, dpi=300, bbox_inches="tight")
+    plt.close(figure)
+    return output
+
+
+def build_assumption_stress_figure(output: Path, results_root: Path) -> Path:
+    """Render assumption-stress coverage from the campaign statistics bundle."""
+    statistics_root = results_root / "statistics"
+    if not statistics_root.is_dir():
+        raise FileNotFoundError(
+            f"Assumption-stress figure requires campaign statistics, run the synthetic stresses first ({statistics_root})"
+        )
+    frames: list[pd.DataFrame] = []
+    for path in sorted(statistics_root.glob("*.json")):
+        import json
+
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(payload, dict) and "coverage" in payload:
+            frames.append(pd.DataFrame([{"cell": path.stem, "coverage": payload["coverage"]}]))
+    if not frames:
+        raise FileNotFoundError(f"No coverage statistics found under {statistics_root}")
+    combined = pd.concat(frames, ignore_index=True)
+    figure, axis = plt.subplots(figsize=(8, 5))
+    axis.bar(combined["cell"], combined["coverage"])
+    axis.set_xlabel("stress cell")
+    axis.set_ylabel("realized in-band coverage")
+    axis.set_title("Assumption stress")
+    axis.tick_params(axis="x", rotation=45, labelsize=8)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    figure.tight_layout()
+    figure.savefig(output, dpi=300, bbox_inches="tight")
+    plt.close(figure)
+    return output
+
+
+def build_external_replication_figure(output: Path, results_root: Path) -> Path:
+    """Render external-replication FPR operating points from the DIAD bundle."""
+    frame = _require_bundle_table(results_root, "table_8_external_replication.csv")
+    if "client_id" not in frame.columns or "fpr" not in frame.columns:
+        raise ValueError("external replication table lacks client_id/fpr columns")
+    figure, axis = plt.subplots(figsize=(9, 5))
+    axis.scatter(range(len(frame)), frame["fpr"], s=18)
+    for level in (0.005, 0.01, 0.015):
+        axis.axhline(level, color="gray", linestyle=":", linewidth=0.8)
+    axis.set_xlabel("eligible DIAD client")
+    axis.set_ylabel("final-test FPR")
+    axis.set_title("External replication")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    figure.tight_layout()
+    figure.savefig(output, dpi=300, bbox_inches="tight")
+    plt.close(figure)
+    return output
+
+
+def _catalogue_axis_values(spec_id: ExperimentId, axis_id: ExperimentAxisId) -> tuple[float, ...]:
+    """Resolve one locked experiment-grid axis from the catalogue."""
+    study = Study.load()
+    values = study.catalogue.spec(spec_id).axis(axis_id).values
+    return tuple(float(value) for value in values)
+
+
+def build_readiness_frontier_from_catalogue(output: Path) -> Path:
+    """Render the readiness frontier using the locked readiness sweep."""
+    counts = tuple(
+        int(value)
+        for value in _catalogue_axis_values(
+            ExperimentId.READINESS_SAMPLE_SIZE, ExperimentAxisId.CALIBRATION_N
+        )
+    )
+    protocol = Study.load().study_config.protocol
+    return build_readiness_frontier_figure(
+        output, counts, protocol.band, protocol.readiness_assurance
+    )
+
+
+def build_mismatch_power_map_from_catalogue(output: Path) -> Path:
+    """Render the mismatch power map using the locked evidence-budget grids."""
+    sample_counts = tuple(
+        int(value)
+        for value in _catalogue_axis_values(
+            ExperimentId.MISMATCH_SAMPLE_SIZE, ExperimentAxisId.MISMATCH_N
+        )
+    )
+    true_fprs = tuple(
+        value
+        for value in _catalogue_axis_values(ExperimentId.MISMATCH_POWER, ExperimentAxisId.TRUE_FPR)
+    )
+    protocol = Study.load().study_config.protocol
+    return build_mismatch_power_map_figure(
+        output, sample_counts, true_fprs, protocol.band, protocol.mismatch_confidence
+    )
+
+
+def build_phase_transition_from_catalogue(output: Path) -> Path:
+    """Render the calibration-size phase transition from the locked sweeps."""
+    calibration_counts = tuple(
+        int(value)
+        for value in _catalogue_axis_values(
+            ExperimentId.READINESS_SAMPLE_SIZE, ExperimentAxisId.CALIBRATION_N
+        )
+    )
+    gate_counts = tuple(
+        int(value)
+        for value in _catalogue_axis_values(
+            ExperimentId.MISMATCH_SAMPLE_SIZE, ExperimentAxisId.MISMATCH_N
+        )
+    )
+    protocol = Study.load().study_config.protocol
+    return build_phase_transition_figure(
+        output, calibration_counts, gate_counts, protocol.band, protocol.readiness_assurance
+    )
 
 
 def build_repository_report(outputs: Path, config: ExperimentConfig) -> Path:
