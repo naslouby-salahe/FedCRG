@@ -21,6 +21,7 @@ from fedcrg.config import ExperimentConfig, ExperimentSpec, Study
 from fedcrg.evidence.models import (
     ClientTrainingCount,
     MetricRecord,
+    RunConfig,
     RunManifest,
     ThresholdRecord,
     TrainingManifest,
@@ -38,9 +39,9 @@ from fedcrg.evidence.store import (
     atomic_write_json,
     atomic_write_text,
     capture_environment,
-    sha256_file,
     write_jsonl,
 )
+from fedcrg.hashing import sha256_file
 from fedcrg.learning.detectors import (
     DeepSvdd,
     DetectorModel,
@@ -314,22 +315,22 @@ class RunExperiment:
         atomic_write_json(layout.environment, environment)
         atomic_write_json(
             layout.run_config,
-            {
-                "run_id": run_id,
-                "experiment_id": experiment_id.value,
-                "policy_id": policy.value,
-                "parameters": config.model_dump(mode="json"),
-                "model_seed": int(model_seed),
-                "calibration_seed": int(calibration_seed),
-                "config_hash": config.config_hash,
-                "data_spec_hash": config.data_spec_hash,
-                "training_spec_hash": config.training_spec_hash,
-                "git_commit": environment.git_commit,
-                "git_clean": environment.git_clean,
-                "git_patch_sha256": environment.git_patch_sha256,
-                "environment_pin_sha256": environment.environment_pin_sha256,
-                "environment_pin_kind": environment.environment_pin_kind,
-            },
+            RunConfig(
+                run_id=run_id,
+                experiment_id=experiment_id,
+                policy_id=policy,
+                parameters=config,
+                model_seed=model_seed,
+                calibration_seed=calibration_seed,
+                config_hash=config.config_hash,
+                data_spec_hash=config.data_spec_hash,
+                training_spec_hash=config.training_spec_hash,
+                git_commit=environment.git_commit,
+                git_clean=environment.git_clean,
+                git_patch_sha256=environment.git_patch_sha256,
+                environment_pin_sha256=environment.environment_pin_sha256,
+                environment_pin_kind=environment.environment_pin_kind,
+            ),
         )
         return plan, layout
 

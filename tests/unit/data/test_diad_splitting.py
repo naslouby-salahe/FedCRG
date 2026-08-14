@@ -6,45 +6,36 @@ import numpy as np
 import pandas as pd
 from pydantic import TypeAdapter
 
-from fedcrg.config import DatasetConfig, ExpectedBenignCounts, SplitConfig
+from fedcrg.config import DatasetConfig, SplitConfig, Study
 from fedcrg.data.datasets import ClientData
 from fedcrg.data.splits import BaseSplitBuilder
 from fedcrg.types import (
     ChronologyStatus,
     ClientId,
     DataRole,
-    DatasetFeatureContractId,
     DatasetId,
+    ExperimentId,
 )
 
 _CLIENT_ID_ADAPTER = TypeAdapter(ClientId)
+_DIAD_DATASET = Study.load().resolve(ExperimentId.EXTERNAL_DIAD).dataset
 
 
 def _diad_config() -> DatasetConfig:
-    return DatasetConfig(
-        id=DatasetId.DIAD,
-        feature_contract=DatasetFeatureContractId.DIAD_LOCKED_86,
-        source_version="1",
-        parser_version="1",
-        feature_count=86,
-        expected_source_clients=115,
-        minimum_clients=10,
-        minimum_benign_rows=7800,
-        minimum_malicious_rows=1000,
-        expected_benign_counts=ExpectedBenignCounts({}),
-        split=SplitConfig(
-            train_benign=2,
-            reference_benign=1,
-            mismatch_benign=2,
-            calibration_benign=2,
-            benign_guard=1,
-            min_benign_test=2,
-            attack_dev=4,
-            min_attack_test=4,
-            min_attack_test_per_group=2,
-        ),
-        calibration_seeds=(2000,),
-        primary_calibration_seed=2000,
+    return _DIAD_DATASET.model_copy(
+        update={
+            "split": SplitConfig(
+                train_benign=2,
+                reference_benign=1,
+                mismatch_benign=2,
+                calibration_benign=2,
+                benign_guard=1,
+                min_benign_test=2,
+                attack_dev=4,
+                min_attack_test=4,
+                min_attack_test_per_group=2,
+            )
+        }
     )
 
 

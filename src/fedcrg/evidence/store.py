@@ -3,10 +3,10 @@ JSON/JSONL writes, file hashing, and manifest stores."""
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import uuid
+from enum import StrEnum
 from pathlib import Path
 from typing import Generic, TypeVar
 
@@ -18,16 +18,18 @@ from fedcrg.evidence.models import (
     CalibrationAssignmentManifest,
     CacheReference,
     EligibilityManifest,
+    EnvironmentPin,
     GitEnvironment,
     PreparedDatasetManifest,
     RunManifest,
     TrainingManifest,
 )
+from fedcrg.hashing import sha256_file, sha256_text
 from fedcrg.types import (
     ArtifactType,
-    ByteCount,
     CalibrationSeed,
     DetectorId,
+    ExperimentStatus,
     Identifier,
     JsonValue,
     ModelSeed,
@@ -40,13 +42,61 @@ from fedcrg.types import (
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
-def sha256_file(path: Path, chunk_size: ByteCount = 1024 * 1024) -> Sha256: #TODO: this seems to be duplicated all over the project. Fix that
-    """SHA-256 of one file using an IO-sized read chunk."""
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(chunk_size), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+class LayoutDirectory(StrEnum):
+    """Reserved directory names of the immutable output layout."""
+
+    OUTPUTS = "outputs"
+    RUNS = "runs"
+    DATA = "data"
+    TRAINING = "training"
+    SCORES = "scores"
+    DECISIONS = "decisions"
+    METRICS = "metrics"
+    TABLES = "tables"
+    FIGURES = "figures"
+    REPORTS = "reports"
+    LOGS = "logs"
+    VERIFICATION = "verification"
+    CACHE = "cache"
+    MODELS = "models"
+    ANALYSIS = "analysis"
+    CAMPAIGNS = "campaigns"
+    MONITORING = "monitoring"
+    PUBLICATION = "publication"
+    LATEST = "latest"
+    STATISTICS = "statistics"
+    PROVENANCE = "provenance"
+    RESOLVED_CONFIGS = "resolved_configs"
+
+
+class LayoutArtifact(StrEnum):
+    """Reserved artifact filenames of the immutable output layout."""
+
+    MANIFEST = "manifest.json"
+    RUN_CONFIG = "run_config.json"
+    RESOLVED_CONFIG = "resolved_config.yaml"
+    ENVIRONMENT = "environment.json"
+    MODEL_REFERENCE = "model_reference.json"
+    SCORE_REFERENCE = "cache_reference.json"
+    THRESHOLD_RECORDS = "threshold_record.jsonl"
+    METRIC_RECORDS = "metric_record.jsonl"
+    FEDERATION = "federation.json"
+    ADMISSION = "admission.json"
+    EVALUATION_SUMMARY = "evaluation_summary.json"
+    DATASET_MANIFEST = "dataset_manifest.json"
+    PREPROCESSING = "preprocessing.json"
+    ELIGIBILITY = "eligibility.json"
+    CALIBRATION_ASSIGNMENT = "calibration_assignment.json"
+    TRAINING = "training.json"
+    HASHES = "hashes.json"
+    CHECKSUMS = "checksums.json"
+    PRIMARY_NBAIOT_CONFIG = "primary_nbaiot.json"
+    METRIC_RECORDS_BUNDLE = "metric_records.json"
+    READINESS_PLANS = "readiness_plans.json"
+    MISMATCH_CUTOFFS = "mismatch_cutoffs.json"
+    PROVENANCE = "provenance.json"
+    TELEMETRY = "telemetry.jsonl"
+    BENCHMARK = "benchmark.json"
 
 
 def _jsonable(value: object) -> JsonValue:
@@ -141,7 +191,7 @@ class RunManifestStore(ModelStore[RunManifest]):
 
     model = RunManifest
 
-    _TERMINAL_STATUSES = frozenset({"complete", "failed"})
+    _TERMINAL_STATUSES = frozenset({ExperimentStatus.COMPLETE.value, ExperimentStatus.FAILED.value})
 
     def save(self, path: Path, manifest: RunManifest) -> None:
         if path.is_file():
@@ -202,103 +252,111 @@ class RunLayout:
 
     @classmethod
     def for_run(cls, outputs_root: Path, run_id: RunId) -> RunLayout:
-        return cls(outputs_root / "runs" / str(run_id)) #TODO: use enum for these hardcoded strings. Use constants instead of str primitives
+        return cls(OutputsLayout(outputs_root).runs / str(run_id))
 
     @property
     def manifest(self) -> Path:
-        return self.root / "manifest.json" #TODO: use enum for these hardcoded strings. Use constants instead of str primitives
+        return self.root / LayoutArtifact.MANIFEST.value
 
     @property
     def run_config(self) -> Path:
-        return self.root / "run_config.json"
+        return self.root / LayoutArtifact.RUN_CONFIG.value
 
     @property
     def resolved_config(self) -> Path:
-        return self.root / "resolved_config.yaml"
+        return self.root / LayoutArtifact.RESOLVED_CONFIG.value
 
     @property
     def environment(self) -> Path:
-        return self.root / "environment.json"
+        return self.root / LayoutArtifact.ENVIRONMENT.value
 
     @property
     def data(self) -> Path:
-        return self.root / "data"
+        return self.root / LayoutDirectory.DATA.value
 
     @property
     def training(self) -> Path:
-        return self.root / "training"
+        return self.root / LayoutDirectory.TRAINING.value
 
     @property
     def model_reference(self) -> Path:
-        return self.training / "model_reference.json"
+        return self.training / LayoutArtifact.MODEL_REFERENCE.value
 
     @property
     def scores(self) -> Path:
-        return self.root / "scores"
+        return self.root / LayoutDirectory.SCORES.value
 
     @property
     def score_reference(self) -> Path:
-        return self.scores / "cache_reference.json"
+        return self.scores / LayoutArtifact.SCORE_REFERENCE.value
 
     @property
     def decisions(self) -> Path:
-        return self.root / "decisions"
+        return self.root / LayoutDirectory.DECISIONS.value
 
     @property
     def threshold_records(self) -> Path:
-        return self.decisions / "threshold_record.jsonl"
+        return self.decisions / LayoutArtifact.THRESHOLD_RECORDS.value
 
     @property
     def metrics(self) -> Path:
-        return self.root / "metrics"
+        return self.root / LayoutDirectory.METRICS.value
 
     @property
     def metric_records(self) -> Path:
-        return self.metrics / "metric_record.jsonl"
+        return self.metrics / LayoutArtifact.METRIC_RECORDS.value
 
     @property
     def federation_metrics(self) -> Path:
-        return self.metrics / "federation.json"
+        return self.metrics / LayoutArtifact.FEDERATION.value
 
     @property
     def tables(self) -> Path:
-        return self.root / "tables"
+        return self.root / LayoutDirectory.TABLES.value
 
     @property
     def figures(self) -> Path:
-        return self.root / "figures"
+        return self.root / LayoutDirectory.FIGURES.value
 
     @property
     def reports(self) -> Path:
-        return self.root / "reports"
+        return self.root / LayoutDirectory.REPORTS.value
 
     @property
     def admission(self) -> Path:
-        return self.metrics / "admission.json"
+        return self.metrics / LayoutArtifact.ADMISSION.value
 
     @property
     def evaluation_summary(self) -> Path:
-        return self.reports / "evaluation_summary.json"
+        return self.reports / LayoutArtifact.EVALUATION_SUMMARY.value
 
     @property
     def dataset_manifest(self) -> Path:
-        return self.data / "dataset_manifest.json"
+        return self.data / LayoutArtifact.DATASET_MANIFEST.value
 
     @property
     def preprocessing_evidence(self) -> Path:
-        return self.data / "preprocessing.json"
+        return self.data / LayoutArtifact.PREPROCESSING.value
+
+    @property
+    def training_manifest(self) -> Path:
+        return self.training / LayoutArtifact.TRAINING.value
 
     @property
     def score_manifest(self) -> Path:
-        return self.scores / "manifest.json"
+        return self.scores / LayoutArtifact.MANIFEST.value
 
     @property
     def logs(self) -> Path:
-        return self.root / "logs"
+        return self.root / LayoutDirectory.LOGS.value
 
     @property
     def verification(self) -> Path:
-        return self.root / "verification"
+        return self.root / LayoutDirectory.VERIFICATION.value
+
+    @property
+    def hashes(self) -> Path:
+        return self.verification / LayoutArtifact.HASHES.value
 
     def create(self) -> None:
         self.root.mkdir(parents=True, exist_ok=False)
@@ -337,72 +395,72 @@ class OutputsLayout:
     """Reserved outputs/ directory tree: runs, caches, campaigns, logs,
     monitoring, reports, environment and telemetry files."""
 
-    def __init__(self, outputs_root: Path = Path("outputs")) -> None: #TODO: use enum for these hardcoded strings. Use constants instead of str primitives
+    def __init__(self, outputs_root: Path = Path(LayoutDirectory.OUTPUTS.value)) -> None:
         self.outputs_root = outputs_root
 
     @property
     def runs(self) -> Path:
-        return self.outputs_root / "runs" #TODO: use enum for these hardcoded strings. Use constants instead of str primitives
+        return self.outputs_root / LayoutDirectory.RUNS.value
 
     @property
     def cache(self) -> Path:
-        return self.outputs_root / "cache"
+        return self.outputs_root / LayoutDirectory.CACHE.value
 
     @property
     def cache_models(self) -> Path:
-        return self.cache / "models"
+        return self.cache / LayoutDirectory.MODELS.value
 
     @property
     def cache_scores(self) -> Path:
-        return self.cache / "scores"
+        return self.cache / LayoutDirectory.SCORES.value
 
     @property
     def cache_analysis(self) -> Path:
-        return self.cache / "analysis"
+        return self.cache / LayoutDirectory.ANALYSIS.value
 
     @property
     def campaigns(self) -> Path:
-        return self.outputs_root / "campaigns"
+        return self.outputs_root / LayoutDirectory.CAMPAIGNS.value
 
     @property
     def logs(self) -> Path:
-        return self.outputs_root / "logs"
+        return self.outputs_root / LayoutDirectory.LOGS.value
 
     @property
     def monitoring(self) -> Path:
-        return self.outputs_root / "monitoring"
+        return self.outputs_root / LayoutDirectory.MONITORING.value
 
     @property
     def reports(self) -> Path:
-        return self.outputs_root / "reports"
+        return self.outputs_root / LayoutDirectory.REPORTS.value
 
     @property
     def publication_root(self) -> Path:
-        return self.reports / "publication"
+        return self.reports / LayoutDirectory.PUBLICATION.value
 
     @property
     def publication_manifest(self) -> Path:
-        return self.publication_root / "manifest.json"
+        return self.publication_root / LayoutArtifact.MANIFEST.value
 
     @property
     def environment_file(self) -> Path:
-        return self.outputs_root / "environment.json"
+        return self.outputs_root / LayoutArtifact.ENVIRONMENT.value
 
     @property
     def telemetry_file(self) -> Path:
-        return self.monitoring / "telemetry.jsonl"
+        return self.monitoring / LayoutArtifact.TELEMETRY.value
 
     @property
     def benchmark_report(self) -> Path:
-        return self.reports / "benchmark.json"
+        return self.reports / LayoutArtifact.BENCHMARK.value
 
     @property
     def readiness_plans_file(self) -> Path:
-        return self.cache_analysis / "readiness_plans.json"
+        return self.cache_analysis / LayoutArtifact.READINESS_PLANS.value
 
     @property
     def mismatch_cutoffs_file(self) -> Path:
-        return self.cache_analysis / "mismatch_cutoffs.json"
+        return self.cache_analysis / LayoutArtifact.MISMATCH_CUTOFFS.value
 
     def model_root(
         self,
@@ -443,70 +501,73 @@ class ResultsBundleLayout:
 
     @property
     def manifest(self) -> Path:
-        return self.root / "manifest.json"
+        return self.root / LayoutArtifact.MANIFEST.value
 
     @property
     def checksums(self) -> Path:
-        return self.root / "checksums.json"
+        return self.root / LayoutArtifact.CHECKSUMS.value
 
     @property
     def resolved_configs(self) -> Path:
-        return self.root / "resolved_configs"
+        return self.root / LayoutDirectory.RESOLVED_CONFIGS.value
 
     @property
     def metrics(self) -> Path:
-        return self.root / "metrics"
+        return self.root / LayoutDirectory.METRICS.value
 
     @property
     def statistics(self) -> Path:
-        return self.root / "statistics"
+        return self.root / LayoutDirectory.STATISTICS.value
 
     @property
     def tables(self) -> Path:
-        return self.root / "tables"
+        return self.root / LayoutDirectory.TABLES.value
 
     @property
     def figures(self) -> Path:
-        return self.root / "figures"
+        return self.root / LayoutDirectory.FIGURES.value
 
     @property
     def reports(self) -> Path:
-        return self.root / "reports"
+        return self.root / LayoutDirectory.REPORTS.value
 
     @property
     def provenance(self) -> Path:
-        return self.root / "provenance"
+        return self.root / LayoutDirectory.PROVENANCE.value
 
     @property
     def primary_nbaiot_config(self) -> Path:
-        return self.resolved_configs / "primary_nbaiot.json"
+        return self.resolved_configs / LayoutArtifact.PRIMARY_NBAIOT_CONFIG.value
 
     @property
     def metric_records(self) -> Path:
-        return self.metrics / "metric_records.json"
+        return self.metrics / LayoutArtifact.METRIC_RECORDS_BUNDLE.value
 
     @property
     def readiness_plans(self) -> Path:
-        return self.statistics / "readiness_plans.json"
+        return self.statistics / LayoutArtifact.READINESS_PLANS.value
 
     @property
     def mismatch_cutoffs(self) -> Path:
-        return self.statistics / "mismatch_cutoffs.json"
+        return self.statistics / LayoutArtifact.MISMATCH_CUTOFFS.value
 
     @property
     def provenance_json(self) -> Path:
-        return self.provenance / "provenance.json"
+        return self.provenance / LayoutArtifact.PROVENANCE.value
 
     @property
     def required_directories(self) -> tuple[Identifier, ...]:
-        return (
-            "metrics", #TODO: use enum for these hardcoded strings. Use constants instead of str primitives
-            "statistics",
-            "tables",
-            "figures",
-            "reports",
-            "provenance",
-            "resolved_configs",
+        return tuple(
+            directory.value
+            for directory in (
+                LayoutDirectory.METRICS,
+                LayoutDirectory.STATISTICS,
+                LayoutDirectory.TABLES,
+                LayoutDirectory.FIGURES,
+                LayoutDirectory.REPORTS,
+                LayoutDirectory.PROVENANCE,
+                LayoutDirectory.RESOLVED_CONFIGS,
+            )
         )
 
 
@@ -570,16 +631,16 @@ class ArtifactVerifier:
     def _path_for(self, layout: RunLayout, artifact: ArtifactType) -> Path | None:
         mapping = {
             ArtifactType.RESOLVED_CONFIG: layout.resolved_config,
-            ArtifactType.DATASET_MANIFEST: layout.data / "dataset_manifest.json",
-            ArtifactType.ELIGIBILITY_MANIFEST: layout.data / "eligibility.json",
-            ArtifactType.SPLIT_MANIFEST: layout.data / "calibration_assignment.json",
-            ArtifactType.PREPROCESSING_MANIFEST: layout.data / "preprocessing.json",
-            ArtifactType.TRAINING_MANIFEST: layout.training / "training.json",
+            ArtifactType.DATASET_MANIFEST: layout.dataset_manifest,
+            ArtifactType.ELIGIBILITY_MANIFEST: layout.data / LayoutArtifact.ELIGIBILITY.value,
+            ArtifactType.SPLIT_MANIFEST: layout.data / LayoutArtifact.CALIBRATION_ASSIGNMENT.value,
+            ArtifactType.PREPROCESSING_MANIFEST: layout.preprocessing_evidence,
+            ArtifactType.TRAINING_MANIFEST: layout.training_manifest,
             ArtifactType.MODEL: layout.model_reference,
             ArtifactType.SCORE_MANIFEST: layout.score_manifest,
             ArtifactType.THRESHOLD_RECORDS: layout.threshold_records,
             ArtifactType.METRICS: layout.metric_records,
-            ArtifactType.VERIFICATION: layout.verification / "hashes.json",
+            ArtifactType.VERIFICATION: layout.hashes,
         }
         return mapping.get(artifact)
 
@@ -617,7 +678,7 @@ class ArtifactVerifier:
                 mismatched.append(relative)
         if layout.verification.is_dir():
             atomic_write_json(
-                layout.verification / "hashes.json",
+                layout.hashes,
                 {
                     "files": [
                         {"relative_path": item.relative_path, "sha256": item.sha256}
@@ -635,8 +696,8 @@ class ArtifactVerifier:
     @staticmethod
     def _expected_hash(layout: RunLayout, relative: Identifier) -> Sha256 | None:
         reference_paths = {
-            "training/model_reference.json": layout.model_reference, #TODO: use enum for these hardcoded strings. Use constants instead of str primitives
-            "scores/cache_reference.json": layout.score_reference,
+            layout.model_reference.relative_to(layout.root).as_posix(): layout.model_reference,
+            layout.score_reference.relative_to(layout.root).as_posix(): layout.score_reference,
         }
         reference = reference_paths.get(relative)
         if reference is None or not reference.is_file():
@@ -674,24 +735,23 @@ def capture_environment(repository_root: Path) -> GitEnvironment:
     patch = run("diff")
     patch_hash: Sha256 | None = None
     if patch:
-        patch_hash = hashlib.sha256(patch.encode("utf-8")).hexdigest()
+        patch_hash = sha256_text(patch)
     import platform
     import sys
 
     import torch
 
-    pin_payload = {
-        "python": sys.version.split()[0], #TODO: use pydantic model for this payload
-        "torch": torch.__version__,
-        "platform": platform.platform(),
-        "commit": commit,
-        "patch_sha256": patch_hash,
-    }
-    pin_sha = hashlib.sha256(json.dumps(pin_payload, sort_keys=True).encode("utf-8")).hexdigest()
+    pin = EnvironmentPin(
+        python=sys.version.split()[0],
+        torch=torch.__version__,
+        platform=platform.platform(),
+        commit=commit,
+        patch_sha256=patch_hash,
+    )
     return GitEnvironment(
         git_commit=commit,
         git_clean=clean,
         git_patch_sha256=patch_hash,
-        environment_pin_sha256=pin_sha,
+        environment_pin_sha256=pin.sha256,
         environment_pin_kind="python-torch-platform-commit",
     )

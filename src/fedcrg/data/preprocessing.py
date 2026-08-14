@@ -22,6 +22,7 @@ from fedcrg.types import (
     FeatureName,
     PositiveCount,
     PreparedColumn,
+    Probability,
     Score,
     Sha256,
 )
@@ -29,7 +30,6 @@ from fedcrg.types import (
 Frozen = ConfigDict(frozen=True)
 
 _METADATA = {column.value for column in PreparedColumn}
-_DIAD_FINITE_RATE_MINIMUM = 0.99 #TODO: should be in config
 
 
 def model_feature_columns(frame: pd.DataFrame, expected: PositiveCount) -> tuple[FeatureName, ...]:
@@ -120,6 +120,8 @@ class TrainOnlyPreprocessing:
         splits: ClientSplits,
         dataset: DatasetId,
         expected_features: PositiveCount,
+        *,
+        finite_rate_minimum: Probability | None = None,
     ) -> tuple[FeatureName, ...]:
         train = splits.get(DataRole.TRAIN)
         columns = model_feature_columns(train, expected_features)
@@ -128,11 +130,15 @@ class TrainOnlyPreprocessing:
             if not np.isfinite(values).all():
                 raise DataIntegrityError("N-BaIoT training features must all be finite")
         elif dataset is DatasetId.DIAD:
+            if finite_rate_minimum is None:
+                raise DataIntegrityError(
+                    "DIAD preprocessing requires a configured per-feature finite-rate minimum"
+                )
             finite_rate = np.isfinite(values).mean(axis=0)
             failing = [
                 columns[index]
                 for index, rate in enumerate(finite_rate)
-                if rate < _DIAD_FINITE_RATE_MINIMUM
+                if rate < finite_rate_minimum
             ]
             if failing:
                 raise DataIntegrityError("DIAD_FEATURE_FINITE_RATE_FAIL: " + ", ".join(failing[:5]))
@@ -143,8 +149,15 @@ class TrainOnlyPreprocessing:
         splits: ClientSplits,
         dataset: DatasetId,
         expected_features: PositiveCount,
+        *,
+        finite_rate_minimum: Probability | None = None,
     ) -> ClientPreprocessingStatistics:
-        columns = self.validate_training_rows(splits, dataset, expected_features)
+        columns = self.validate_training_rows(
+            splits,
+            dataset,
+            expected_features,
+            finite_rate_minimum=finite_rate_minimum,
+        )
         train_frame = splits.get(DataRole.TRAIN)
         training_row_hash = hash_row_ids(
             train_frame[PreparedColumn.ROW_ID.value].astype(str).tolist()

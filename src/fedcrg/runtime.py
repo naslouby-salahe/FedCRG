@@ -16,6 +16,7 @@ import time
 from collections.abc import Generator, Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
+from enum import StrEnum
 from pathlib import Path
 
 import psutil
@@ -38,6 +39,24 @@ from fedcrg.types import (
 )
 
 _FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+_LOG_FILENAME = "fedcrg.log"
+
+
+class CampaignStatusColumn(StrEnum):
+    """Column names of the rendered campaign status table."""
+
+    STATUS = "status"
+    COMPLETED = "completed"
+    TOTAL = "total"
+    CURRENT = "current"
+    ELAPSED_SECONDS = "elapsed_s"
+
+
+class CacheOutcome(StrEnum):
+    """Closed domain of rendered cache reuse outcomes."""
+
+    HIT = "hit"
+    MISS = "miss"
 
 
 def configure_logging(logs_root: Path | None = None, level: LogLevel | None = None) -> None:
@@ -46,7 +65,7 @@ def configure_logging(logs_root: Path | None = None, level: LogLevel | None = No
     handlers: list[logging.Handler] = [logging.StreamHandler(sys.stderr)]
     if logs_root is not None:
         logs_root.mkdir(parents=True, exist_ok=True)
-        file_handler = logging.FileHandler(logs_root / "fedcrg.log", encoding="utf-8")
+        file_handler = logging.FileHandler(logs_root / _LOG_FILENAME, encoding="utf-8")
         file_handler.setFormatter(logging.Formatter(_FORMAT))
         handlers.append(file_handler)
     logging.basicConfig(
@@ -247,11 +266,11 @@ def render_campaign_status(
     """Render campaign progress for the terminal."""
     console = Console()
     table = Table(title=f"campaign {campaign_id}")
-    table.add_column("status") #TODO: use enum for column names
-    table.add_column("completed") #TODO: use enum for column names
-    table.add_column("total")
-    table.add_column("current")
-    table.add_column("elapsed_s")
+    table.add_column(CampaignStatusColumn.STATUS.value)
+    table.add_column(CampaignStatusColumn.COMPLETED.value)
+    table.add_column(CampaignStatusColumn.TOTAL.value)
+    table.add_column(CampaignStatusColumn.CURRENT.value)
+    table.add_column(CampaignStatusColumn.ELAPSED_SECONDS.value)
     table.add_row(
         status,
         str(completed),
@@ -270,6 +289,6 @@ def render_cache_status(
 ) -> None:
     """Render cache reuse status for the terminal."""
     console = Console()
-    hit_text = "hit" if hit else "miss" #TODO: use enum for hit/miss instead of hardcoded strings
+    outcome = CacheOutcome.HIT if hit else CacheOutcome.MISS
     suffix = f" ({detail})" if detail else ""
-    console.print(f"[{hit_text}] {cache_kind} {target}{suffix}")
+    console.print(f"[{outcome.value}] {cache_kind} {target}{suffix}")

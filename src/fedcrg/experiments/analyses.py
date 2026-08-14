@@ -47,6 +47,7 @@ from fedcrg.types import (
     Duration,
     ExperimentAxisId,
     ExperimentId,
+    ExperimentStatus,
     Fpr,
     Fraction,
     Identifier,
@@ -68,6 +69,15 @@ from fedcrg.types import (
 Frozen = ConfigDict(frozen=True)
 
 _CLIENT_ID_ADAPTER = TypeAdapter(ClientId)
+
+
+class BenchmarkPrimitive(StrEnum):
+    """Timed protocol primitives of the computational benchmark."""
+
+    REFERENCE_CONSTRUCTION = "reference_construction"
+    READINESS_ORDER_STATISTIC = "readiness_order_statistic"
+    MISMATCH_EVIDENCE = "mismatch_evidence"
+    DEPLOYMENT_DECISION = "deployment_decision"
 
 
 class SyntheticCoverageResult(BaseModel):
@@ -478,21 +488,15 @@ class RunSyntheticExperiments:
         config: ExperimentConfig,
         output: Path,
     ) -> Path:
-        if experiment_id is ExperimentId.READINESS_THEOREM:
-            return self._run_s1(spec, config, output)
-        if experiment_id is ExperimentId.TARGET_FPR_SYNTHETIC:
-            return self._run_s2(spec, config, output)
-        if experiment_id is ExperimentId.TEMPORAL_DEPENDENCE:
-            return self._run_s3(spec, config, output)
-        if experiment_id is ExperimentId.CALIBRATION_SHIFT:
-            return self._run_s4(spec, config, output)
-        if experiment_id is ExperimentId.CALIBRATION_CONTAMINATION:
-            return self._run_s5(spec, config, output)
-        if experiment_id is ExperimentId.MISMATCH_POWER:
-            return self._run_s6(spec, config, output)
-        raise ValueError(f"Unsupported synthetic experiment: {experiment_id.value}")
+        try:
+            runner = self._RUNNERS[experiment_id]
+        except KeyError:
+            raise ValueError(f"Unsupported synthetic experiment: {experiment_id.value}") from None
+        return runner(self, spec, config, output)
 
-    def _run_s1(self, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path: #TODO: Don't use canonical names for these methods. Use the experiment id instead of a hardcoded name. Use a dict to map experiment ids to methods instead of a long if/else chain.
+    def _run_readiness_theorem(
+        self, spec: ExperimentSpec, config: ExperimentConfig, output: Path
+    ) -> Path:
         repetitions = self._int_values(spec, ExperimentAxisId.REPETITIONS)[0]
         cells = tuple(
             iid_readiness_validation(
@@ -510,7 +514,9 @@ class RunSyntheticExperiments:
         )
         return self.write(output, spec, cells, len(cells) * repetitions)
 
-    def _run_s2(self, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path: #TODO: Don't use canonical names for these methods. Use the experiment id instead of a hardcoded name. Use a dict to map experiment ids to methods instead of a long if/else chain.
+    def _run_target_fpr_synthetic(
+        self, spec: ExperimentSpec, config: ExperimentConfig, output: Path
+    ) -> Path:
         repetitions = self._int_values(spec, ExperimentAxisId.REPETITIONS)[0]
         rows: list[SyntheticCoverageResult] = []
         for cell in spec.coupled_cells:
@@ -531,7 +537,9 @@ class RunSyntheticExperiments:
                 )
         return self.write(output, spec, tuple(rows), len(rows) * repetitions)
 
-    def _run_s3(self, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path:
+    def _run_temporal_dependence(
+        self, spec: ExperimentSpec, config: ExperimentConfig, output: Path
+    ) -> Path:
         repetitions = self._int_values(spec, ExperimentAxisId.REPETITIONS)[0]
         cells = tuple(
             temporal_dependence_stress(
@@ -547,7 +555,9 @@ class RunSyntheticExperiments:
         )
         return self.write(output, spec, cells, len(cells) * repetitions)
 
-    def _run_s4(self, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path:
+    def _run_calibration_shift(
+        self, spec: ExperimentSpec, config: ExperimentConfig, output: Path
+    ) -> Path:
         repetitions = self._int_values(spec, ExperimentAxisId.REPETITIONS)[0]
         cells = tuple(
             calibration_shift_stress(
@@ -562,7 +572,9 @@ class RunSyntheticExperiments:
         )
         return self.write(output, spec, cells, len(cells) * repetitions)
 
-    def _run_s5(self, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path:
+    def _run_calibration_contamination(
+        self, spec: ExperimentSpec, config: ExperimentConfig, output: Path
+    ) -> Path:
         repetitions = self._int_values(spec, ExperimentAxisId.REPETITIONS)[0]
         cells = tuple(
             contamination_validation(
@@ -579,7 +591,9 @@ class RunSyntheticExperiments:
         )
         return self.write(output, spec, cells, len(cells) * repetitions)
 
-    def _run_s6(self, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path:
+    def _run_mismatch_power(
+        self, spec: ExperimentSpec, config: ExperimentConfig, output: Path
+    ) -> Path:
         cells = tuple(
             exact_mismatch_power(
                 sample_count,
@@ -591,6 +605,18 @@ class RunSyntheticExperiments:
             for true_fpr in self._float_values(spec, ExperimentAxisId.TRUE_FPR)
         )
         return self.write(output, spec, cells, 0)
+
+    _RUNNERS: dict[
+        ExperimentId,
+        Callable[[RunSyntheticExperiments, ExperimentSpec, ExperimentConfig, Path], Path],
+    ] = {
+        ExperimentId.READINESS_THEOREM: _run_readiness_theorem,
+        ExperimentId.TARGET_FPR_SYNTHETIC: _run_target_fpr_synthetic,
+        ExperimentId.TEMPORAL_DEPENDENCE: _run_temporal_dependence,
+        ExperimentId.CALIBRATION_SHIFT: _run_calibration_shift,
+        ExperimentId.CALIBRATION_CONTAMINATION: _run_calibration_contamination,
+        ExperimentId.MISMATCH_POWER: _run_mismatch_power,
+    }
 
 
 class FederationResultRecord(BaseModel):
@@ -610,33 +636,9 @@ class FederationResultRecord(BaseModel):
     attack_balanced_macro_tpr: Tpr | None
 
 
-class RunConfigPayload(BaseModel):
-    """Run-configuration envelope; parameters validate into the typed section."""
-
-    model_config = Frozen
-
-    parameters: RunConfigParameters
-
-
-class RunConfigDataset(BaseModel):
-    """Dataset identity embedded in a run-config payload."""
-
-    model_config = Frozen
-
-    id: DatasetId
-
-
-class RunConfigParameters(BaseModel):
-    """Parameters section of a run-config payload."""
-
-    model_config = Frozen
-
-    dataset: RunConfigDataset
-
-
 def load_federation_results(run_dirs: tuple[Path, ...]) -> tuple[FederationResultRecord, ...]:
     """Load completed federation records from run directories."""
-    from fedcrg.evidence.models import RunManifest
+    from fedcrg.evidence.models import RunConfig, RunManifest
     from fedcrg.evidence.store import RunLayout, load_json_model
 
     rows: list[FederationResultRecord] = []
@@ -651,13 +653,13 @@ def load_federation_results(run_dirs: tuple[Path, ...]) -> tuple[FederationResul
         try:
             manifest = RunManifest.model_validate_json(layout.manifest.read_text(encoding="utf-8"))
             federation = load_json_model(layout.federation_metrics, FederationMetrics)
-            config_payload = RunConfigPayload.model_validate_json(
+            config_payload = RunConfig.model_validate_json(
                 layout.run_config.read_text(encoding="utf-8")
             )
             dataset_id = config_payload.parameters.dataset.id
         except Exception:
             continue
-        if manifest.status.value != "complete":
+        if manifest.status is not ExperimentStatus.COMPLETE:
             continue
         rows.append(
             FederationResultRecord(
@@ -1166,15 +1168,15 @@ class RunBenchmark:
 
         primitives = (
             (
-                "reference_construction", #TODO: Don't use hardcoded strings
+                BenchmarkPrimitive.REFERENCE_CONSTRUCTION,
                 lambda: build_reference_threshold(reference_scores, self.config.protocol.alpha),
             ),
             (
-                "readiness_order_statistic",
+                BenchmarkPrimitive.READINESS_ORDER_STATISTIC,
                 lambda: readiness_evaluator.evaluate(calibration_scores, plan),
             ),
             (
-                "mismatch_evidence",
+                BenchmarkPrimitive.MISMATCH_EVIDENCE,
                 lambda: mismatch_evaluator.evaluate(
                     mismatch_scores,
                     reference.value,
@@ -1183,7 +1185,7 @@ class RunBenchmark:
                 ),
             ),
             (
-                "deployment_decision",
+                BenchmarkPrimitive.DEPLOYMENT_DECISION,
                 lambda: decision_engine.decide(
                     reference, readiness, mismatch, self.config.protocol.reject_calibration_ties
                 ),
@@ -1191,14 +1193,14 @@ class RunBenchmark:
         )
 
         cells: list[BenchmarkCell] = []
-        for name, primitive in primitives:
-            sample_count = self._sample_count(name, split)
+        for primitive, run_primitive in primitives:
+            sample_count = self._sample_count(primitive, split)
             for _ in range(warmups):
-                primitive()
-            timings = _timed_repetitions(primitive, repetitions)
+                run_primitive()
+            timings = _timed_repetitions(run_primitive, repetitions)
             cells.append(
                 BenchmarkCell(
-                    primitive=name,
+                    primitive=primitive.value,
                     sample_count=sample_count,
                     warmups=warmups,
                     repetitions=repetitions,
@@ -1218,14 +1220,14 @@ class RunBenchmark:
         return output
 
     @staticmethod
-    def _sample_count(name: Identifier, split: SplitConfig) -> SampleCount:
-        mapping = {
-            "reference_construction": split.reference_benign,
-            "readiness_order_statistic": split.calibration_benign,
-            "mismatch_evidence": split.mismatch_benign,
-            "deployment_decision": split.calibration_benign,
+    def _sample_count(primitive: BenchmarkPrimitive, split: SplitConfig) -> SampleCount:
+        mapping: dict[BenchmarkPrimitive, SampleCount] = {
+            BenchmarkPrimitive.REFERENCE_CONSTRUCTION: split.reference_benign,
+            BenchmarkPrimitive.READINESS_ORDER_STATISTIC: split.calibration_benign,
+            BenchmarkPrimitive.MISMATCH_EVIDENCE: split.mismatch_benign,
+            BenchmarkPrimitive.DEPLOYMENT_DECISION: split.calibration_benign,
         }
-        return int(mapping[name])
+        return int(mapping[primitive])
 
 
 class TimedRepetitions(BaseModel):

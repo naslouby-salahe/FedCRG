@@ -13,11 +13,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from fedcrg.data.nbaiot import NBAIOT_FEATURE_HEADERS, NBaiotAdapter
-from fedcrg.types import ClientId
+from fedcrg.config import Study
+from fedcrg.data.nbaiot import NBaiotAdapter
+from fedcrg.types import ClientId, ExperimentId
 from pydantic import TypeAdapter
 
 
+_NBAIOT_DATASET = Study.load().resolve(ExperimentId.PRIMARY_NBAIOT).dataset
 _NINE_DEVICES = (
     "Danmini_Doorbell",
     "Ennio_Doorbell",
@@ -35,7 +37,7 @@ def _write_device(root: Path, name: str) -> None:
     device = root / name
     (device / "gafgyt_attacks").mkdir(parents=True)
     (device / "mirai_attacks").mkdir(parents=True)
-    columns = list(NBAIOT_FEATURE_HEADERS)
+    columns = list(_NBAIOT_DATASET.source_headers)
     benign = pd.DataFrame(np.zeros((4, 115), dtype=np.float64), columns=columns)
     benign.to_csv(device / "benign_traffic.csv", index=False)
     for subtype in ("combo", "junk", "scan", "tcp", "udp"):
@@ -57,8 +59,8 @@ def test_row_ids_are_relative_to_the_dataset_root(tmp_path: Path) -> None:
     for root in (first_root, second_root):
         _write_all_devices(root)
 
-    first = NBaiotAdapter(first_root, expected_feature_count=115)
-    second = NBaiotAdapter(second_root, expected_feature_count=115)
+    first = NBaiotAdapter(first_root, _NBAIOT_DATASET)
+    second = NBaiotAdapter(second_root, _NBAIOT_DATASET)
     client_id = TypeAdapter(ClientId).validate_python("nb01")
 
     first_data = first.load_client(client_id)
@@ -74,7 +76,7 @@ def test_row_ids_are_relative_to_the_dataset_root(tmp_path: Path) -> None:
 def test_nbaiot_source_paths_are_relative_and_stable(tmp_path: Path) -> None:
     root = tmp_path / "data" / "raw"
     _write_all_devices(root)
-    adapter = NBaiotAdapter(root, expected_feature_count=115)
+    adapter = NBaiotAdapter(root, _NBAIOT_DATASET)
     client_id = TypeAdapter(ClientId).validate_python("nb01")
     data = adapter.load_client(client_id)
     sources = set(data.benign["source_file"].astype(str)) | set(

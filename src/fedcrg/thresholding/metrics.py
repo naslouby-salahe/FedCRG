@@ -9,7 +9,7 @@ composition that produces one ``ClientEvaluationResult`` per client.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Iterable, Mapping
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict
@@ -49,8 +49,6 @@ from fedcrg.types import (
 )
 
 Frozen = ConfigDict(frozen=True)
-
-ReferenceEstimator = Callable[[Mapping[ClientId, np.ndarray], ProtocolConfig], ReferenceThreshold]
 
 
 class ConfusionMatrix(BaseModel):
@@ -373,7 +371,6 @@ class ClientEvaluation:
 
     def __init__(
         self,
-        reference_estimator: ReferenceEstimator | None = None, #TODO: looks like dead code. Check if needs to be wired or something
         readiness_evaluator: CalibrationReadinessEvaluator | None = None,
         mismatch_evaluator: ReferenceMismatchEvaluator | None = None,
         decision_engine: DeploymentDecision | None = None,

@@ -3,11 +3,14 @@ training manifests, prepared-dataset manifests, and environment pins."""
 
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import datetime
 from pathlib import PurePosixPath
 
 from pydantic import BaseModel, ConfigDict
 
+from fedcrg.config import ExperimentConfig
 from fedcrg.learning.federated import TrainingResult
 from fedcrg.types import (
     Assurance,
@@ -20,6 +23,7 @@ from fedcrg.types import (
     DecisionReason,
     DecisionState,
     DetectorId,
+    DeviceName,
     ExperimentId,
     ExperimentStatus,
     FailureCode,
@@ -108,7 +112,16 @@ class PreparedDatasetManifest(BaseModel):
     external_replication_supported: bool
     dataset_level_code: FailureCode | None = None
     created_at: datetime
-    deterministic_payload_sha256: Sha256
+
+    @property
+    def deterministic_payload_sha256(self) -> Sha256:
+        """SHA-256 of the deterministic payload, excluding the timestamp."""
+        payload = self.model_dump(
+            mode="json",
+            exclude={"created_at", "deterministic_payload_sha256"},
+        )
+        serialized = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return hashlib.sha256(serialized).hexdigest()
 
     @property
     def client_ids(self) -> tuple[ClientId, ...]:
@@ -212,6 +225,27 @@ class RunManifest(BaseModel):
     status: ExperimentStatus
 
 
+class RunConfig(BaseModel):
+    """Frozen run-configuration payload persisted in each run directory."""
+
+    model_config = Frozen
+
+    run_id: RunId
+    experiment_id: ExperimentId
+    policy_id: PolicyId
+    parameters: ExperimentConfig
+    model_seed: ModelSeed
+    calibration_seed: CalibrationSeed
+    config_hash: Sha256
+    data_spec_hash: Sha256
+    training_spec_hash: Sha256
+    git_commit: Identifier
+    git_clean: bool
+    git_patch_sha256: Sha256 | None = None
+    environment_pin_sha256: Sha256
+    environment_pin_kind: Identifier
+
+
 class ThresholdRecord(BaseModel):
     """Serialized threshold decision evidence for one client."""
 
@@ -292,3 +326,21 @@ class GitEnvironment(BaseModel):
     git_patch_sha256: Sha256 | None = None
     environment_pin_sha256: Sha256
     environment_pin_kind: Identifier
+
+
+class EnvironmentPin(BaseModel):
+    """Frozen runtime environment pin hashed into run provenance."""
+
+    model_config = Frozen
+
+    python: Version
+    torch: Version
+    platform: DeviceName
+    commit: Identifier
+    patch_sha256: Sha256 | None = None
+
+    @property
+    def sha256(self) -> Sha256:
+        """Stable hash of the pin, independent of the git status fields."""
+        serialized = self.model_dump_json().encode("utf-8")
+        return hashlib.sha256(serialized).hexdigest()

@@ -24,7 +24,8 @@ from pydantic import BaseModel, ConfigDict
 
 from fedcrg.config import Study, validate_experiment_config
 from fedcrg.data.preparation import PrepareData
-from fedcrg.evidence.store import OutputsLayout, PreparedLayout, sha256_file
+from fedcrg.evidence.store import OutputsLayout, PreparedLayout
+from fedcrg.hashing import sha256_file
 from fedcrg.experiments.analyses import (
     ProtocolTablePrecomputer,
     RunBenchmark,
@@ -51,6 +52,7 @@ from fedcrg.runtime import (
 from fedcrg.types import (
     CalibrationSeed,
     CampaignId,
+    CampaignStage,
     DatasetId,
     Duration,
     ExperimentId,
@@ -237,7 +239,7 @@ def _purge_experiment_evidence(experiment_id: ExperimentId, outputs_root: Path) 
     if not runs_root.is_dir():
         return
     for run_dir in runs_root.iterdir():
-        run_config = run_dir / "run_config.json"
+        run_config = RunLayout(run_dir).run_config
         if not run_config.is_file():
             continue
         try:
@@ -440,7 +442,9 @@ def campaign(ctx: click.Context, overwrite: bool) -> None:
     _print(
         CampaignPayload(
             campaign_id=campaign_id,
-            status=status.current_stage.value if status.current_stage else "pending",
+            status=status.current_stage.value
+            if status.current_stage
+            else CampaignStage.PENDING.value,
             completed=len(status.completed_experiments),
             total=max(1, len(work_items)),
             current_experiment=status.current_experiment,

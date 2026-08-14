@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from fedcrg.data.diad import DIAD_FEATURES
+from fedcrg.config import Study
+from fedcrg.types import DatasetId, ExperimentId
+
+_DIAD_FEATURES = Study.load().resolve(ExperimentId.EXTERNAL_DIAD).dataset.feature_names
 
 
 def test_identity_labels_ports_and_category_are_not_model_features() -> None:
@@ -15,12 +18,13 @@ def test_identity_labels_ports_and_category_are_not_model_features() -> None:
         "port_class_dst",
         "stream",
     }
-    assert forbidden.isdisjoint(DIAD_FEATURES)
-    assert len(DIAD_FEATURES) == 86
+    assert forbidden.isdisjoint(_DIAD_FEATURES)
+    assert len(_DIAD_FEATURES) == 86
+    assert Study.load().datasets.contract(DatasetId.DIAD).feature_count == 86
 
 
 def test_feature_contract_is_frozen() -> None:
-    assert DIAD_FEATURES[:11] == (
+    assert _DIAD_FEATURES[:11] == (
         "inter_arrival_time",
         "time_since_previously_displayed_frame",
         "l4_tcp",
@@ -33,5 +37,5 @@ def test_feature_contract_is_frozen() -> None:
         "l3_ip_dst_count",
         "jitter",
     )
-    assert DIAD_FEATURES[11] == "stream_1_count"
-    assert DIAD_FEATURES[-1] == "stream_jitter_60_var"
+    assert _DIAD_FEATURES[11] == "stream_1_count"
+    assert _DIAD_FEATURES[-1] == "stream_jitter_60_var"

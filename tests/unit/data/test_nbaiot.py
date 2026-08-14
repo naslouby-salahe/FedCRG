@@ -9,19 +9,21 @@ import pandas as pd
 import pytest
 from pydantic import TypeAdapter
 
-from fedcrg.data.nbaiot import NBAIOT_DEVICES, NBAIOT_FEATURE_HEADERS, NBaiotAdapter
-from fedcrg.types import ClientId, DataIntegrityError, DatasetId
+from fedcrg.config import Study
+from fedcrg.data.nbaiot import NBaiotAdapter
+from fedcrg.types import ClientId, DataIntegrityError, DatasetId, ExperimentId
 
 _CLIENT_ID_ADAPTER = TypeAdapter(ClientId)
-_NBAIOT_CLIENT_IDS = tuple(_CLIENT_ID_ADAPTER.validate_python(value) for value in NBAIOT_DEVICES)
+_NBAIOT_DATASET = Study.load().resolve(ExperimentId.PRIMARY_NBAIOT).dataset
+_NBAIOT_CLIENT_IDS = tuple(device.client_id for device in _NBAIOT_DATASET.device_directories)
 
 
 def test_nbaiot_adapter_maps_exact_nine_clients_and_preserves_provenance(
     tmp_path: Path,
 ) -> None:
-    columns = list(NBAIOT_FEATURE_HEADERS)
-    for tokens in NBAIOT_DEVICES.values():
-        root = tmp_path / "_".join(tokens)
+    columns = list(_NBAIOT_DATASET.source_headers)
+    for device in _NBAIOT_DATASET.device_directories:
+        root = tmp_path / "_".join(device.tokens)
         (root / "gafgyt").mkdir(parents=True)
         pd.DataFrame(np.zeros((2, 115)), columns=columns).to_csv(
             root / "benign_traffic.csv", index=False
@@ -29,7 +31,7 @@ def test_nbaiot_adapter_maps_exact_nine_clients_and_preserves_provenance(
         pd.DataFrame(np.ones((2, 115)), columns=columns).to_csv(
             root / "gafgyt" / "combo.csv", index=False
         )
-    adapter = NBaiotAdapter(tmp_path, 115)
+    adapter = NBaiotAdapter(tmp_path, _NBAIOT_DATASET)
     assert adapter.discover_clients() == _NBAIOT_CLIENT_IDS
     client = adapter.load_client(_CLIENT_ID_ADAPTER.validate_python("nb01"))
     assert client.dataset is DatasetId.NBAIOT
@@ -40,9 +42,9 @@ def test_nbaiot_adapter_maps_exact_nine_clients_and_preserves_provenance(
 
 
 def test_nbaiot_adapter_rejects_unknown_client(tmp_path: Path) -> None:
-    columns = list(NBAIOT_FEATURE_HEADERS)
-    for tokens in NBAIOT_DEVICES.values():
-        root = tmp_path / "_".join(tokens)
+    columns = list(_NBAIOT_DATASET.source_headers)
+    for device in _NBAIOT_DATASET.device_directories:
+        root = tmp_path / "_".join(device.tokens)
         (root / "gafgyt").mkdir(parents=True)
         pd.DataFrame(np.zeros((1, 115)), columns=columns).to_csv(
             root / "benign_traffic.csv", index=False
@@ -50,6 +52,6 @@ def test_nbaiot_adapter_rejects_unknown_client(tmp_path: Path) -> None:
         pd.DataFrame(np.ones((1, 115)), columns=columns).to_csv(
             root / "gafgyt" / "scan.csv", index=False
         )
-    adapter = NBaiotAdapter(tmp_path, 115)
+    adapter = NBaiotAdapter(tmp_path, _NBAIOT_DATASET)
     with pytest.raises(DataIntegrityError):
         adapter.load_client(_CLIENT_ID_ADAPTER.validate_python("nb99"))

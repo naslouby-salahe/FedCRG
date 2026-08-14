@@ -23,6 +23,7 @@ import torch
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from fedcrg.config import DatasetConfig
+from fedcrg.hashing import sha256_file
 from fedcrg.learning.detectors import DetectorModel
 from fedcrg.runtime import resolve_compute_device
 from fedcrg.types import (
@@ -78,15 +79,6 @@ _BASE_SCORE_ROLES = (
 
 _REQUIRED_BASE_ROLES = set(_BASE_SCORE_ROLES)
 _FORBIDDEN_DERIVED_ROLES = set(_CALIBRATION_ROLES)
-
-
-def sha256_file(path: Path) -> Sha256: #TODO:  duplicated code in src/fedcrg/learning/scores.py. Move it to a common utility module and import it from there.
-    """SHA-256 of one file using an IO-sized read chunk."""
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 class RoleScoreInput(BaseModel):

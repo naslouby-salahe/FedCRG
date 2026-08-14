@@ -10,7 +10,6 @@ one immutable staging root, then atomically promotes it.
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import shutil
 import time
@@ -19,9 +18,8 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
 import pandas as pd
-from pydantic import TypeAdapter
 
-from fedcrg.config import ExperimentConfig
+from fedcrg.config import DatasetConfig, ExperimentConfig
 from fedcrg.data.datasets import (
     ClientData,
     ClientEligibilityEvaluator,
@@ -31,7 +29,7 @@ from fedcrg.data.datasets import (
     hash_row_ids,
 )
 from fedcrg.data.diad import DiadAdapter
-from fedcrg.data.nbaiot import NBAIOT_DEVICES, NBaiotAdapter
+from fedcrg.data.nbaiot import NBaiotAdapter
 from fedcrg.data.preprocessing import (
     ClientPreprocessingStatistics,
     PreprocessingModel,
@@ -62,7 +60,6 @@ from fedcrg.evidence.store import (
 )
 from fedcrg.runtime import get_logger
 from fedcrg.types import (
-    AttackGroupId,
     CalibrationAssignmentMode,
     CalibrationSeed,
     ClientId,
@@ -71,14 +68,12 @@ from fedcrg.types import (
     DatasetId,
     EligibilityStatus,
     FailureCode,
-    FeatureCount,
     FeatureName,
     PreparedColumn,
     Sha256,
 )
 
 _LOGGER = get_logger(__name__)
-_ATTACK_GROUP_ADAPTER = TypeAdapter(AttackGroupId) #TODO: This is deadcode
 
 _BASE_ROLES = (
     DataRole.TRAIN,
@@ -111,14 +106,12 @@ class PrepareData:
         )
 
     @staticmethod
-    def adapter(
-        dataset: DatasetId, root: Path, expected_feature_count: FeatureCount
-    ) -> DatasetAdapter:
-        if dataset is DatasetId.NBAIOT:
-            return NBaiotAdapter(root, expected_feature_count)
-        if dataset is DatasetId.DIAD:
-            return DiadAdapter(root, expected_feature_count)
-        raise ValueError(f"No filesystem adapter for {dataset.value}")
+    def adapter(dataset: DatasetConfig, root: Path) -> DatasetAdapter:
+        if dataset.id is DatasetId.NBAIOT:
+            return NBaiotAdapter(root, dataset)
+        if dataset.id is DatasetId.DIAD:
+            return DiadAdapter(root, dataset)
+        raise ValueError(f"No filesystem adapter for {dataset.id.value}")
 
     @staticmethod
     def _source_identity_hash(sources: tuple[SourceFileManifest, ...]) -> Sha256:
@@ -154,9 +147,8 @@ class PrepareData:
         matches but whose artifacts fail validation is rebuilt.
         """
         adapter = adapter_override or self.adapter(
-            config.dataset.id,
+            config.dataset,
             data_root / config.dataset.source_directory,
-            config.dataset.feature_count,
         )
         if adapter.dataset_id is not config.dataset.id:
             raise ValueError("Adapter dataset identity does not match experiment config")
@@ -314,7 +306,10 @@ class PrepareData:
         self, config: ExperimentConfig, discovered: tuple[ClientId, ...]
     ) -> None:
         if config.dataset.id is DatasetId.NBAIOT:
-            if tuple(sorted(discovered)) != tuple(sorted(NBAIOT_DEVICES)):
+            expected_devices = tuple(
+                device.client_id for device in config.dataset.device_directories
+            )
+            if tuple(sorted(discovered)) != tuple(sorted(expected_devices)):
                 raise DataIntegrityError(
                     f"{FailureCode.DATASET_COUNT_MISMATCH.value}: expected nine N-BaIoT devices"
                 )
@@ -364,6 +359,7 @@ class PrepareData:
                 splits,
                 config.dataset.id,
                 config.dataset.feature_count,
+                finite_rate_minimum=config.dataset.diad_finite_rate_minimum,
             )
             self._write_raw_splits(root, splits)
             _LOGGER.info("client %s staged in %.1fs", client_id, time.monotonic() - started)
@@ -570,49 +566,16 @@ class PrepareData:
         feature_names: tuple[FeatureName, ...],
         assignments: tuple[CalibrationAssignmentReference, ...],
     ) -> None:
-        payload = { #TODO: use pydantic model for this payload
-            "dataset_id": config.dataset.id.value,
-            "source_version": config.dataset.source_version,
-            "parser_version": config.dataset.parser_version,
-            "data_spec_hash": config.data_spec_hash,
-            "feature_names": list(feature_names),
-            "clients": [
-                {
-                    "client_id": client.client_id,
-                    "roles": [
-                        {
-                            PreparedColumn.ROLE.value: role.role.value,
-                            "rows": role.rows,
-                            "row_id_sha256": role.row_id_sha256,
-                            "relative_path": str(role.relative_path),
-                            "file_sha256": role.file_sha256,
-                        }
-                        for role in client.roles
-                    ],
-                }
-                for client in clients
-            ],
-            "source_files": [
-                {
-                    "relative_path": str(item.relative_path),
-                    "sha256": item.sha256,
-                    "size_bytes": item.size_bytes,
-                }
-                for item in sources
-            ],
-            "calibration_assignments": [
-                {
-                    "calibration_seed": int(item.calibration_seed),
-                    "mode": item.mode.value,
-                    "relative_path": str(item.relative_path),
-                    "sha256": item.sha256,
-                }
-                for item in assignments
-            ],
-            "external_replication_supported": config.dataset.id is DatasetId.DIAD,
-        }
-        payload["created_at"] = datetime.now(UTC).isoformat()
-        payload["deterministic_payload_sha256"] = hashlib.sha256(
-            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        ).hexdigest()
-        atomic_write_json(root / PreparedLayout.manifest_filename, payload)
+        manifest = PreparedDatasetManifest(
+            dataset_id=config.dataset.id,
+            source_version=config.dataset.source_version,
+            parser_version=config.dataset.parser_version,
+            data_spec_hash=config.data_spec_hash,
+            feature_names=feature_names,
+            clients=clients,
+            source_files=sources,
+            calibration_assignments=assignments,
+            external_replication_supported=config.dataset.id is DatasetId.DIAD,
+            created_at=datetime.now(UTC),
+        )
+        self.manifests.save(root / PreparedLayout.manifest_filename, manifest)

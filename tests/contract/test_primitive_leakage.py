@@ -36,7 +36,6 @@ _PRIMITIVE_LEAF = {"float", "int", "str", "object", "Any"}
 # (relative path, enclosing class or function, member name) -> architectural reason.
 _ALLOWED_ANNOTATIONS: dict[tuple[str, str, str], str] = {
     ("config.py", "load_yaml_mapping", "return"): "YAML parse boundary before validation",
-    ("config.py", "_sha256_json", "payload"): "generic JSON payload hash boundary",
     ("evidence/store.py", "atomic_write_text", "content"): "serialization output is str",
     ("evidence/store.py", "atomic_write_json", "payload"): "arbitrary JSON payload boundary",
     ("evidence/store.py", "_jsonable", "value"): "JSON serialization boundary",
@@ -80,12 +79,16 @@ _COERCE_VALIDATORS = (
     "_coerce_required_evidence",
     "_coerce_root",
     "_coerce_calibration_seeds",
+    "_coerce_device_directories",
 )
 for _name in _COERCE_VALIDATORS:
     _ALLOWED_ANNOTATIONS[("config.py", _name, "return")] = "YAML/JSON input before validation"
     _ALLOWED_ANNOTATIONS[("config.py", _name, "value")] = "YAML/JSON input before validation"
 
 _ALLOWED_ANNOTATIONS[("config.py", "serialized_payload", "return")] = "JSON serialization output"
+_ALLOWED_ANNOTATIONS[("hashing.py", "sha256_text", "text")] = (
+    "UTF-8 text digest input (crypto boundary)"
+)
 _ALLOWED_ANNOTATIONS[("data/datasets.py", "hash_row_ids", "values")] = (
     "row-id collection boundary (RowId | str)"
 )
@@ -97,9 +100,6 @@ _ALLOWED_ANNOTATIONS[("data/datasets.py", "stable_row_id", "source")] = (
 )
 _ALLOWED_ANNOTATIONS[("data/splits.py", "validate_split_disjointness", "row_id_column")] = (
     "pandas column-name boundary"
-)
-_ALLOWED_ANNOTATIONS[("data/nbaiot.py", "_normalized_name", "return")] = (
-    "string normalization helper output"
 )
 _ALLOWED_ANNOTATIONS[("data/diad.py", "_normalized_mac", "value")] = (
     "raw dataset text boundary before MAC normalization"

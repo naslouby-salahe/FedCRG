@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
+from fractions import Fraction as Rational
 from pathlib import Path
 from typing import Annotated, Literal, Self, TypeAlias
 
@@ -66,6 +68,7 @@ from fedcrg.types import (
     ExperimentType,
     FeatureCount,
     FeatureName,
+    Identifier,
     JsonValue,
     LearningRate,
     MetricDifference,
@@ -98,11 +101,21 @@ FrozenModel = ConfigDict(frozen=True, extra="forbid", use_enum_values=False)
 _CALIBRATION_SEED_ADAPTER = TypeAdapter(CalibrationSeed)
 
 
-def _sha256_json(payload: object) -> Sha256:
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode(
-        "utf-8"
-    )
-    return hashlib.sha256(encoded).hexdigest()
+@dataclass(frozen=True, slots=True)
+class NbaiotDevice:
+    """One fixed N-BaIoT device: client identity and directory-match tokens."""
+
+    client_id: ClientId
+    tokens: tuple[Identifier, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DiadFeatureDerivation:
+    """Training-schema feature-derivation rules for the numeric-safe contract."""
+
+    excluded_feature_exact: frozenset[Identifier]
+    excluded_feature_name_markers: tuple[Identifier, ...]
+    architecture_hidden_ratios: tuple[Rational, ...]
 
 
 class ProtocolConfig(BaseModel):
@@ -322,6 +335,11 @@ class DatasetConfig(BaseModel):
     parser_version: Version
     feature_count: FeatureCount
     feature_names: tuple[FeatureName, ...] = ()
+    source_headers: tuple[Identifier, ...] = ()
+    device_directories: tuple[NbaiotDevice, ...] = ()
+    diad_client_id_mac_digest_length: PositiveCount | None = None
+    diad_finite_rate_minimum: Probability | None = None
+    diad_feature_derivation: DiadFeatureDerivation | None = None
     expected_clients: PositiveCount | None = None
     expected_source_clients: PositiveCount | None = None
     minimum_clients: PositiveCount
@@ -331,6 +349,16 @@ class DatasetConfig(BaseModel):
     calibration_seeds: tuple[CalibrationSeed, ...]
     primary_calibration_seed: CalibrationSeed
     expected_benign_counts: ExpectedBenignCounts
+
+    @field_validator("device_directories", mode="before")
+    @classmethod
+    def _coerce_device_directories(cls, value: object) -> object:
+        if isinstance(value, dict):
+            return [
+                NbaiotDevice(client_id=client_id, tokens=tuple(tokens))
+                for client_id, tokens in value.items()
+            ]
+        return value
 
     @model_validator(mode="after")
     def _validate(self) -> Self:
@@ -346,12 +374,22 @@ class DatasetConfig(BaseModel):
         if self.id is DatasetId.NBAIOT:
             if self.feature_contract is not DatasetFeatureContractId.NBAIOT_LOCKED_115:
                 raise ValueError("N-BaIoT must use the locked 115-feature contract")
+            if len(self.feature_names) != self.feature_count:
+                raise ValueError("N-BaIoT must declare the locked 115-feature contract")
+            if len(self.source_headers) != self.feature_count:
+                raise ValueError("N-BaIoT must declare its locked source-header order")
+            if len(self.device_directories) != (self.expected_clients or 0):
+                raise ValueError("N-BaIoT must declare its nine-device directory table")
             if self.expected_clients is None or self.expected_clients < 1:
                 raise ValueError("N-BaIoT must declare its nine-client contract")
             if len(self.expected_benign_counts) != self.expected_clients:
                 raise ValueError("N-BaIoT expected-benign-count ledger must match the client count")
 
         elif self.id is DatasetId.DIAD:
+            if self.diad_client_id_mac_digest_length is None:
+                raise ValueError("DIAD must declare its client-id MAC digest length")
+            if self.diad_finite_rate_minimum is None:
+                raise ValueError("DIAD must declare its per-feature finite-rate minimum")
             if self.feature_contract not in {
                 DatasetFeatureContractId.DIAD_LOCKED_86,
                 DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE,
@@ -361,14 +399,8 @@ class DatasetConfig(BaseModel):
                 raise ValueError("DIAD must declare its source identity count")
             if self.minimum_benign_rows is None or self.minimum_malicious_rows is None:
                 raise ValueError("DIAD eligibility counts must be declared")
-            if self.feature_contract is DatasetFeatureContractId.DIAD_LOCKED_86:
-                if self.feature_names:
-                    raise ValueError("Locked DIAD feature names are owned by the dataset adapter")
-            else:
-                if not self.feature_names or len(self.feature_names) != self.feature_count:
-                    raise ValueError(
-                        "Training-derived DIAD requires a frozen feature-name list matching feature_count"
-                    )
+            if len(self.feature_names) != self.feature_count:
+                raise ValueError("DIAD requires a frozen feature-name list matching feature_count")
 
         elif self.id is DatasetId.SYNTHETIC:
             if self.feature_contract is not DatasetFeatureContractId.SYNTHETIC:
@@ -604,6 +636,25 @@ class ExperimentCatalogue(RootModel[tuple[ExperimentSpec, ...]]):
         return self.root
 
 
+class DataSpecification(BaseModel):
+    """Seed-independent inputs that determine the prepared dataset cache."""
+
+    model_config = FrozenModel
+
+    dataset: DatasetConfig
+    attack_split_seed: ModelSeed
+
+
+class TrainingSpecification(BaseModel):
+    """Exact detector-training inputs; policy and protocol axes excluded."""
+
+    model_config = FrozenModel
+
+    data_spec_hash: Sha256
+    detector: DetectorConfig | None = None
+    training: TrainingConfig | None = None
+
+
 class ExperimentConfig(BaseModel):
     """Fully resolved, validated execution configuration for one experiment cell."""
 
@@ -669,29 +720,27 @@ class ExperimentConfig(BaseModel):
     @property
     def data_spec_hash(self) -> Sha256:
         """Hash only inputs that determine the seed-independent prepared dataset cache."""
-        dataset_payload = self.dataset.model_dump(
-            mode="json",
-            exclude={"calibration_seeds", "primary_calibration_seed"},
+        specification = DataSpecification(
+            dataset=self.dataset,
+            attack_split_seed=self.randomness.attack_split_seed,
         )
-        return _sha256_json( #TODO: use pydantic's `model_dump_json` for a more direct approach
-            {
-                "dataset": dataset_payload,
-                "attack_split_seed": self.randomness.attack_split_seed,
-            }
+        serialized = specification.model_dump_json(
+            exclude={"dataset": {"calibration_seeds", "primary_calibration_seed"}}
         )
+        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
     @property
     def training_spec_hash(self) -> Sha256:
         """Hash the exact detector-training specification, excluding policy/protocol axes."""
         if self.detector is None or self.training is None:
             return self.data_spec_hash
-        return _sha256_json( #TODO: use pydantic's `model_dump_json` for a more direct approach
-            {
-                "data_spec_hash": self.data_spec_hash,
-                "detector": self.detector.model_dump(mode="json"),
-                "training": self.training.model_dump(mode="json"),
-            }
+        specification = TrainingSpecification(
+            data_spec_hash=self.data_spec_hash,
+            detector=self.detector,
+            training=self.training,
         )
+        serialized = specification.model_dump_json()
+        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
 def load_yaml_mapping(path: Path) -> dict[str, JsonValue]:

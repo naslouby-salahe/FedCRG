@@ -29,12 +29,13 @@ from fedcrg.evidence.models import (
 )
 from fedcrg.evidence.store import (
     ArtifactVerifier,
+    LayoutDirectory,
     OutputsLayout,
     ResultsBundleLayout,
     RunLayout,
     atomic_write_json,
-    sha256_file,
 )
+from fedcrg.hashing import sha256_file
 from fedcrg.experiments.analyses import (
     confirmatory_contrasts,
     load_federation_results,
@@ -56,6 +57,7 @@ from fedcrg.types import (
     DatasetId,
     ExperimentAxisId,
     ExperimentId,
+    ExperimentStatus,
     ExperimentType,
     FailureCode,
     Fpr,
@@ -110,7 +112,7 @@ def _completed_runs(outputs_root: Path) -> tuple[Path, ...]:
                 )
             except Exception:
                 continue
-            if manifest.status.value == "complete":
+            if manifest.status is ExperimentStatus.COMPLETE:
                 rows.append(path)
     return tuple(rows)
 
@@ -444,8 +446,8 @@ class PublicationPackageBuilder:
         destination: Path | None = None,
     ) -> PublicationPackage:
         destination = destination or OutputsLayout(outputs_root).publication_root
-        table_root = destination / "tables"
-        figure_root = destination / "figures"
+        table_root = destination / LayoutDirectory.TABLES.value
+        figure_root = destination / LayoutDirectory.FIGURES.value
         table_root.mkdir(parents=True, exist_ok=True)
         figure_root.mkdir(parents=True, exist_ok=True)
 
@@ -557,7 +559,9 @@ class PublicationPackageBuilder:
         atomic_write_json(
             manifest_path,
             {
-                "complete": all(item.available for item in (*tables, *figures)),
+                ExperimentStatus.COMPLETE.value: all(
+                    item.available for item in (*tables, *figures)
+                ),
                 "tables": [
                     {
                         "name": item.name,
@@ -817,7 +821,7 @@ def build_phase_transition_figure(
 
 def _require_bundle_table(results_root: Path, filename: Identifier) -> pd.DataFrame:
     """Load one publication table; results-driven figures never fabricate data."""
-    path = results_root / "tables" / filename
+    path = ResultsBundleLayout(results_root).tables / filename
     if not path.is_file():
         raise FileNotFoundError(
             f"Results-driven figure requires the {filename} table, run the campaign first ({path})"
@@ -877,7 +881,7 @@ def build_reliability_utility_frontier_figure(output: Path, results_root: Path) 
 
 def build_assumption_stress_figure(output: Path, results_root: Path) -> Path:
     """Render assumption-stress coverage from the campaign statistics bundle."""
-    statistics_root = results_root / "statistics"
+    statistics_root = ResultsBundleLayout(results_root).statistics
     if not statistics_root.is_dir():
         raise FileNotFoundError(
             f"Assumption-stress figure requires campaign statistics, run the synthetic stresses first ({statistics_root})"
@@ -990,7 +994,7 @@ def build_phase_transition_from_catalogue(output: Path) -> Path:
 
 def build_repository_report(outputs: Path, config: ExperimentConfig) -> Path:
     """Publication-oriented evidence index from every completed run."""
-    reports_root = outputs / "reports" / "latest"
+    reports_root = OutputsLayout(outputs).reports / LayoutDirectory.LATEST.value
     reports_root.mkdir(parents=True, exist_ok=True)
     run_dirs = _completed_runs(outputs)
     builder = PublicationTableBuilder()
@@ -1193,7 +1197,7 @@ class ResultsBuilder:
                 )
             except pydantic.ValidationError:
                 continue
-            if manifest.status.value != "complete":
+            if manifest.status is not ExperimentStatus.COMPLETE:
                 continue
             metric_path = run_layout.metric_records
             if not metric_path.is_file():
@@ -1245,12 +1249,12 @@ class ResultsBuilder:
 
     @staticmethod
     def _copy_tables_and_figures(outputs_root: Path, layout: ResultsBundleLayout) -> None:
-        publication_root = outputs_root / "reports" / "publication"
+        publication_root = OutputsLayout(outputs_root).publication_root
         if not publication_root.exists():
             return
         for source_dir, target_dir in (
-            ("tables", layout.tables),
-            ("figures", layout.figures),
+            (LayoutDirectory.TABLES.value, layout.tables),
+            (LayoutDirectory.FIGURES.value, layout.figures),
         ):
             source = publication_root / source_dir
             if not source.exists():

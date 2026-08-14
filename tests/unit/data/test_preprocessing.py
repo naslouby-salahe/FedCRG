@@ -50,7 +50,11 @@ def test_diad_preprocessing_imputes_from_client_train_median() -> None:
     frame.loc[0, "f1"] = np.nan
     splits = ClientSplits(client_id=C1, roles=(RoleFrame(role=DataRole.TRAIN, frame=frame),))
     preprocessor = TrainOnlyPreprocessing()
-    statistics = (preprocessor.client_statistics(splits, DatasetId.DIAD, expected_features=2),)
+    statistics = (
+        preprocessor.client_statistics(
+            splits, DatasetId.DIAD, expected_features=2, finite_rate_minimum=0.99
+        ),
+    )
     model = preprocessor.aggregate(statistics, DatasetId.DIAD)
     assert model.parameters_for(C1).medians == (50.0, 99.0)
     transformed = model.transform(frame, C1)
@@ -62,7 +66,10 @@ def test_diad_training_finite_rate_is_enforced() -> None:
     values[:2, 0] = np.nan
     with pytest.raises(DataIntegrityError, match="DIAD_FEATURE_FINITE_RATE_FAIL"):
         TrainOnlyPreprocessing().validate_training_rows(
-            _splits(values), DatasetId.DIAD, expected_features=2
+            _splits(values),
+            DatasetId.DIAD,
+            expected_features=2,
+            finite_rate_minimum=0.99,
         )
 
 

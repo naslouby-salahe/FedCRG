@@ -3,6 +3,9 @@
 These values mirror the frozen primary YAML profiles so unit tests never depend
 on runtime resolution while also never declaring scientific defaults in
 production code. They are regression fixtures for the locked primary contract.
+The locked dataset contracts (feature names, source headers, device table,
+DIAD derivation rules) are owned by ``config/datasets.yaml`` and are loaded
+once here so the fixtures cannot drift from the single source of truth.
 """
 
 from __future__ import annotations
@@ -23,6 +26,7 @@ from fedcrg.config import (
     RandomnessConfig,
     SplitConfig,
     StatisticsConfig,
+    Study,
     TrainingConfig,
 )
 from fedcrg.data.datasets import hash_row_ids
@@ -31,7 +35,8 @@ from fedcrg.evidence.models import (
     PreparedDatasetManifest,
     RoleArtifactManifest,
 )
-from fedcrg.evidence.store import PreparedDatasetManifestStore, atomic_write_json, sha256_file
+from fedcrg.evidence.store import PreparedDatasetManifestStore, atomic_write_json
+from fedcrg.hashing import sha256_file
 from fedcrg.types import (
     ActivationId,
     AggregationId,
@@ -49,6 +54,10 @@ from fedcrg.types import (
 from pydantic import TypeAdapter
 
 _CLIENT_ID_ADAPTER = TypeAdapter(ClientId)
+
+_STUDY = Study.load()
+_NBAIOT_DATASET = _STUDY.resolve(ExperimentId.PRIMARY_NBAIOT).dataset
+_DIAD_DATASET = _STUDY.resolve(ExperimentId.EXTERNAL_DIAD).dataset
 
 _DIAD_PIPELINE_FEATURES = ("f1", "f2", "f3", "f4")
 _DIAD_PIPELINE_ROLE_ROWS = {
@@ -72,6 +81,8 @@ def diad_pipeline_config(root: Path) -> ExperimentConfig:
             parser_version="1",
             feature_count=4,
             feature_names=_DIAD_PIPELINE_FEATURES,
+            diad_client_id_mac_digest_length=_DIAD_DATASET.diad_client_id_mac_digest_length,
+            diad_finite_rate_minimum=_DIAD_DATASET.diad_finite_rate_minimum,
             expected_source_clients=115,
             minimum_clients=10,
             minimum_benign_rows=7800,
@@ -163,7 +174,6 @@ def write_prepared_diad(root: Path, config: ExperimentConfig) -> Path:
         external_replication_supported=True,
         dataset_level_code=None,
         created_at=datetime.now(UTC),
-        deterministic_payload_sha256="b" * 64,
     )
     PreparedDatasetManifestStore().save(root / "manifest.json", manifest)
     atomic_write_json(root / "preprocessing.json", {"note": "test fixture, values already scaled"})
@@ -256,6 +266,9 @@ def nbaiot_dataset_config(
         feature_contract=DatasetFeatureContractId.NBAIOT_LOCKED_115,
         source_version="1",
         feature_count=115,
+        feature_names=_NBAIOT_DATASET.feature_names,
+        source_headers=_NBAIOT_DATASET.source_headers,
+        device_directories=_NBAIOT_DATASET.device_directories,
         expected_clients=9,
         minimum_clients=1,
         parser_version="1",

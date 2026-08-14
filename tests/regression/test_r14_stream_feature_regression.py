@@ -7,10 +7,20 @@ import pandas as pd
 import pytest
 from pydantic import TypeAdapter
 
+from fedcrg.config import DiadFeatureDerivation, Study
 from fedcrg.data.diad import ClientTrainingFrame, derive_numeric_safe_features
-from fedcrg.types import ClientId
+from fedcrg.types import ClientId, DatasetId
 
 _CLIENT_ID_ADAPTER = TypeAdapter(ClientId)
+
+
+def _derivation() -> DiadFeatureDerivation:
+    derivation = Study.load().datasets.contract(DatasetId.DIAD).diad_feature_derivation
+    assert derivation is not None
+    return derivation
+
+
+_DERIVATION = _derivation()
 
 
 def _stream_frame(rows: int = 200) -> pd.DataFrame:
@@ -33,7 +43,7 @@ def _training_frames() -> tuple[ClientTrainingFrame, ...]:
 
 
 def test_derive_numeric_safe_features_keeps_only_numeric_stream_features() -> None:
-    result = derive_numeric_safe_features(_training_frames())
+    result = derive_numeric_safe_features(_training_frames(), _DERIVATION)
     assert result.features == ("numeric_behavior", "stream_1_count", "stream_1_mean")
     assert result.dimension == 3
     assert result.encoder_hidden_dims == (2, 1, 1, 1)
@@ -41,8 +51,8 @@ def test_derive_numeric_safe_features_keeps_only_numeric_stream_features() -> No
 
 
 def test_derive_numeric_safe_features_is_deterministic() -> None:
-    first = derive_numeric_safe_features(_training_frames())
-    second = derive_numeric_safe_features(_training_frames())
+    first = derive_numeric_safe_features(_training_frames(), _DERIVATION)
+    second = derive_numeric_safe_features(_training_frames(), _DERIVATION)
     assert first.features == second.features
     assert first.architecture == second.architecture
     assert first.training_row_hashes == second.training_row_hashes
@@ -50,4 +60,4 @@ def test_derive_numeric_safe_features_is_deterministic() -> None:
 
 def test_derive_numeric_safe_features_rejects_empty_input() -> None:
     with pytest.raises(ValueError):
-        derive_numeric_safe_features(())
+        derive_numeric_safe_features((), _DERIVATION)

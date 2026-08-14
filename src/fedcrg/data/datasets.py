@@ -189,8 +189,6 @@ _DIAD_PRECEDENCE = (
     FailureCode.ATTACK_DEV_CAPACITY_LT_500,
 )
 
-_DIAD_FINITE_RATE_MINIMUM = 0.99 #TODO: this should be a config param.
-
 
 class ClientEligibilityEvaluator:
     """Evaluate dataset-contract rules before detector or threshold outcomes exist."""
@@ -199,13 +197,12 @@ class ClientEligibilityEvaluator:
     def model_features(config: DatasetConfig) -> tuple[FeatureName, ...]:
         if config.id is not DatasetId.DIAD:
             return ()
-        if config.feature_contract is DatasetFeatureContractId.DIAD_LOCKED_86:
-            from fedcrg.data.diad import DIAD_FEATURES
-
-            return DIAD_FEATURES
-        if config.feature_contract is DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE:
+        if config.feature_contract in {
+            DatasetFeatureContractId.DIAD_LOCKED_86,
+            DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE,
+        }:
             if not config.feature_names:
-                raise ValueError("The training-schema-derived DIAD feature contract is not frozen")
+                raise ValueError("The DIAD feature contract is not frozen")
             return config.feature_names
         raise ValueError(f"Unsupported DIAD feature contract: {config.feature_contract.value}")
 
@@ -232,7 +229,8 @@ class ClientEligibilityEvaluator:
         if len(train) >= config.split.train_benign and not missing:
             values = train.loc[:, list(model_features)].to_numpy(dtype=np.float64)
             finite_rates = np.isfinite(values).mean(axis=0)
-            if np.any(finite_rates < _DIAD_FINITE_RATE_MINIMUM):
+            minimum = config.diad_finite_rate_minimum
+            if minimum is not None and np.any(finite_rates < minimum):
                 violations.append(FailureCode.FINITE_RATE_FAIL)
 
         if config.minimum_benign_rows is not None and benign_count < config.minimum_benign_rows:

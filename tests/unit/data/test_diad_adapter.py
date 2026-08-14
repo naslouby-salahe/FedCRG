@@ -8,11 +8,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fedcrg.data.diad import DIAD_FEATURES, DiadAdapter
-from fedcrg.types import ClientId, DataIntegrityError
+from fedcrg.config import Study
+from fedcrg.data.diad import DiadAdapter
+from fedcrg.types import ClientId, DataIntegrityError, ExperimentId
 from pydantic import TypeAdapter
 
 _CLIENT_ID_ADAPTER = TypeAdapter(ClientId)
+_DIAD_DATASET = Study.load().resolve(ExperimentId.EXTERNAL_DIAD).dataset
 
 
 def _packet_frame(
@@ -24,7 +26,7 @@ def _packet_frame(
     data: dict[str, object] = {
         "stream": np.arange(rows),
         "device_mac": [mac] * rows,
-        **{name: np.linspace(offset, offset + 1.0, rows) for name in DIAD_FEATURES},
+        **{name: np.linspace(offset, offset + 1.0, rows) for name in _DIAD_DATASET.feature_names},
     }
     frame = pd.DataFrame(data)
     if header_suffix:
@@ -53,23 +55,25 @@ def _write_diad_layout(root: Path) -> None:
 
 def test_diad_adapter_discovers_normalized_macs(tmp_path: Path) -> None:
     _write_diad_layout(tmp_path)
-    adapter = DiadAdapter(tmp_path, expected_feature_count=86)
+    adapter = DiadAdapter(tmp_path, _DIAD_DATASET)
     clients = adapter.discover_clients()
+    digest_length = _DIAD_DATASET.diad_client_id_mac_digest_length
+    assert digest_length is not None
     assert len(clients) == 2
     assert all(client_id.startswith("diad_") for client_id in clients)
-    assert all(len(client_id) == 5 + 12 for client_id in clients)
+    assert all(len(client_id) == 5 + digest_length for client_id in clients)
 
 
 def test_diad_adapter_loads_benign_and_attack_roles(tmp_path: Path) -> None:
     _write_diad_layout(tmp_path)
-    adapter = DiadAdapter(tmp_path, expected_feature_count=86)
+    adapter = DiadAdapter(tmp_path, _DIAD_DATASET)
     first = adapter.discover_clients()[0]
     data = adapter.load_client(first)
     # 8 + 3 benign rows (MAC normalized case-insensitively) and 5 attack rows.
     assert len(data.benign) == 11
     assert len(data.attack) == 5
     assert sorted(data.attack["attack_group"].unique()) == ["mirai"]
-    assert all(name in data.benign.columns for name in DIAD_FEATURES)
+    assert all(name in data.benign.columns for name in _DIAD_DATASET.feature_names)
     assert "device_mac" not in data.benign.columns
     assert data.benign["row_id"].nunique() == len(data.benign)
     assert all(str(source).startswith("BenignTraffic/") for source in data.benign["source_file"])
@@ -78,6 +82,6 @@ def test_diad_adapter_loads_benign_and_attack_roles(tmp_path: Path) -> None:
 
 def test_diad_adapter_rejects_unknown_client(tmp_path: Path) -> None:
     _write_diad_layout(tmp_path)
-    adapter = DiadAdapter(tmp_path, expected_feature_count=86)
+    adapter = DiadAdapter(tmp_path, _DIAD_DATASET)
     with pytest.raises(DataIntegrityError, match="Unknown DIAD client"):
         adapter.load_client(_CLIENT_ID_ADAPTER.validate_python("diad_ffffffffffff"))
