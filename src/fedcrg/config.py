@@ -5,7 +5,7 @@ import json
 from dataclasses import dataclass
 from fractions import Fraction as Rational
 from pathlib import Path
-from typing import Annotated, Literal, Self, TypeAlias
+from typing import Annotated, Literal, Self
 
 import yaml
 from pydantic import (
@@ -397,7 +397,7 @@ class DatasetCatalogue(RootModel[dict[DatasetId, DatasetConfig]]):
             raise ConfigurationError(f"Unknown dataset contract: {dataset_id}") from exc
 
 
-AxisValue: TypeAlias = (
+type AxisValue = (
     int
     | float
     | SyntheticDistribution

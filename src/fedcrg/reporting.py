@@ -1154,7 +1154,12 @@ class ResultsBuilder:
             (outputs_layout.mismatch_cutoffs_file, layout.mismatch_cutoffs),
         ):
             if source.is_file():
-                target.write_bytes(source.read_bytes())
+                resolved_target = target.resolve()
+                if resolved_target.parent != layout.statistics.resolve():
+                    raise DataIntegrityError(
+                        f"Statistics artifact escapes the statistics directory: {target}"
+                    )
+                resolved_target.write_bytes(source.read_bytes())
 
     def _write_reports(
         self, outputs_root: Path, config: ExperimentConfig, layout: ResultsBundleLayout

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
-from typing import Annotated, TypeAliasType
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
@@ -86,16 +86,8 @@ Version = Annotated[
 
 Description = Annotated[str, StringConstraints(min_length=0, max_length=512)]
 
-JsonValue = TypeAliasType(
-    "JsonValue",
-    str
-    | int
-    | float
-    | bool
-    | None
-    | tuple["JsonValue", ...]
-    | list["JsonValue"]
-    | dict[str, "JsonValue"],
+type JsonValue = (
+    str | int | float | bool | None | tuple[JsonValue, ...] | list[JsonValue] | dict[str, JsonValue]
 )
 
 LogLevel = Annotated[

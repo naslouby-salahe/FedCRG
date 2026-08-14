@@ -53,10 +53,10 @@ Physical detector scores are cached **once per dataset/model seed**. Calibration
 
 ## Install
 
-Python 3.11 or 3.12 is supported.
+Python 3.12 is supported.
 
 ```bash
-python -m pip install -e '.[dev]'
+uv sync --extra dev
 ```
 
 After the first validated protocol environment, freeze the exact installed runtime versions:

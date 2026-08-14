@@ -3,7 +3,6 @@
 # config/study.yaml, so no target accepts path variables.
 
 PYTHON ?= python3
-PIP ?= pip
 RUFF ?= ruff
 PYRIGHT ?= pyright
 PYTEST ?= pytest
@@ -19,8 +18,8 @@ EXPERIMENT ?= primary_nbaiot
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'
 
-install: ## Install the package and dev tooling
-	$(PIP) install -e ".[dev]"
+install: ## Install the package and dev tooling from the locked dependency graph
+	uv sync --locked --extra dev
 
 format: ## Apply ruff formatting
 	$(RUFF) format src tests

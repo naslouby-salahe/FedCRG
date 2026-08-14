@@ -18,8 +18,10 @@ from pydantic import BaseModel, ConfigDict
 
 from fedcrg.config import ExperimentConfig, ExperimentSpec, Study
 from fedcrg.evidence.models import (
+    ClientDatasetManifest,
     ClientTrainingCount,
     MetricRecord,
+    PreparedDatasetManifest,
     RunConfig,
     RunManifest,
     ThresholdRecord,
@@ -102,6 +104,7 @@ from fedcrg.thresholding.policies import (
     BenignPolicyEvidence,
     FinalTestEvidence,
     PolicyThresholdSelector,
+    PolicyThresholdSet,
     SupervisedDevelopmentEvidence,
     oracle_choice,
 )
@@ -435,26 +438,12 @@ class TrainDetector:
                 f"Detector tensor-byte contract failed: {model.trainable_tensor_bytes()} != {expected_bytes}"
             )
 
-    def train_from_cache(
-        self,
-        config: ExperimentConfig,
+    @staticmethod
+    def _load_training_tensors(
         prepared_root: Path,
-        model_seed: ModelSeed,
-    ) -> tuple[Path, Path]:
-        if int(model_seed) not in config.randomness.model_seeds:
-            raise ValueError(f"Model seed {int(model_seed)} is not configured")
-
-        prepared_layout = PreparedDatasetLayout(prepared_root)
-        prepared_manifest = self.dataset_manifests.load_model(prepared_layout.manifest)
-
-        if prepared_manifest.data_spec_hash != config.data_spec_hash:
-            raise ValueError("Prepared dataset data-spec hash does not match training config")
-        if prepared_manifest.dataset_id is not config.dataset.id:
-            raise ValueError("Prepared dataset identity does not match training config")
-
-        prepared_manifest_hash = sha256_file(prepared_layout.manifest)
-        preprocessing_hash = sha256_file(prepared_layout.preprocessing)
-
+        config: ExperimentConfig,
+        prepared_manifest: PreparedDatasetManifest,
+    ) -> tuple[dict[ClientId, torch.Tensor], list[ClientTrainingCount]]:
         datasets: dict[ClientId, torch.Tensor] = {}
         training_rows: list[ClientTrainingCount] = []
 
@@ -484,6 +473,32 @@ class TrainDetector:
 
             datasets[client_id] = tensor
             training_rows.append(ClientTrainingCount(client_id=client_id, rows=len(frame)))
+
+        return datasets, training_rows
+
+    def train_from_cache(
+        self,
+        config: ExperimentConfig,
+        prepared_root: Path,
+        model_seed: ModelSeed,
+    ) -> tuple[Path, Path]:
+        if int(model_seed) not in config.randomness.model_seeds:
+            raise ValueError(f"Model seed {int(model_seed)} is not configured")
+
+        prepared_layout = PreparedDatasetLayout(prepared_root)
+        prepared_manifest = self.dataset_manifests.load_model(prepared_layout.manifest)
+
+        if prepared_manifest.data_spec_hash != config.data_spec_hash:
+            raise ValueError("Prepared dataset data-spec hash does not match training config")
+        if prepared_manifest.dataset_id is not config.dataset.id:
+            raise ValueError("Prepared dataset identity does not match training config")
+
+        prepared_manifest_hash = sha256_file(prepared_layout.manifest)
+        preprocessing_hash = sha256_file(prepared_layout.preprocessing)
+
+        datasets, training_rows = self._load_training_tensors(
+            prepared_root, config, prepared_manifest
+        )
 
         if config.detector is None:
             raise ValueError("Training requires a detector profile")
@@ -612,26 +627,15 @@ class ComputeScores:
         self.training_manifests = training_manifests or TrainingManifestStore()
         self.dataset_manifests = dataset_manifests or PreparedDatasetManifestStore()
 
-    def score_from_cache(
-        self,
+    @staticmethod
+    def _validate_training_manifest(
+        training: TrainingManifest,
         config: ExperimentConfig,
-        prepared_root: Path,
-        model_path: Path,
         model_seed: ModelSeed,
-        training_manifest: Path,
-    ) -> Path:
-        prepared_layout = PreparedDatasetLayout(prepared_root)
-        prepared_manifest = self.dataset_manifests.load_model(prepared_layout.manifest)
-
-        if prepared_manifest.data_spec_hash != config.data_spec_hash:
-            raise ValueError("Prepared dataset data-spec hash does not match scoring config")
-        if prepared_manifest.dataset_id is not config.dataset.id:
-            raise ValueError("Prepared dataset identity does not match scoring config")
-
-        prepared_manifest_hash = sha256_file(prepared_layout.manifest)
-        preprocessing_hash = sha256_file(prepared_layout.preprocessing)
-        training = self.training_manifests.load_model(training_manifest)
-
+        model_path: Path,
+        prepared_manifest_hash: Sha256,
+        preprocessing_hash: Sha256,
+    ) -> None:
         checks = [
             (
                 training.training_spec_hash,
@@ -668,6 +672,75 @@ class ComputeScores:
             if actual != expected:
                 raise ValueError(msg)
 
+    def _score_client(
+        self,
+        model: DetectorModel,
+        client_manifest: ClientDatasetManifest,
+        prepared_root: Path,
+        config: ExperimentConfig,
+    ) -> ClientScoreSet:
+        assert config.training is not None
+        client_id = client_manifest.client_id
+        scored_roles: list[RoleScores] = []
+
+        for role in _BASE_SCORE_ROLES:
+            role_manifest = client_manifest.role(role)
+            path = prepared_root / role_manifest.relative_path
+            if sha256_file(path) != role_manifest.file_sha256:
+                raise ValueError(f"Prepared role hash mismatch for {client_id}/{role}")
+
+            frame = pd.read_csv(path)
+            val_cols = [c for c in frame.columns if c not in _METADATA_COLUMNS]
+            values = frame[val_cols].to_numpy(dtype=np.float64)
+            row_ids = tuple(frame[PreparedColumn.ROW_ID].astype(str))
+
+            if len(row_ids) != len(values):
+                raise ValueError(f"Prepared role row ids do not align for {client_id}/{role}")
+
+            groups = (
+                tuple(frame[PreparedColumn.ATTACK_GROUP].astype(str))
+                if role is DataRole.ATTACK_TEST and PreparedColumn.ATTACK_GROUP in frame.columns
+                else ()
+            )
+            groups = groups or None
+            computed = self.computer.compute(
+                model, values, config.training.device, config.training.batch_size
+            )
+
+            scored_roles.append(
+                RoleScores(
+                    role=role,
+                    values=computed,
+                    client_id=client_id,
+                    row_ids=row_ids,
+                    attack_groups=groups,
+                )
+            )
+        return ClientScoreSet(client_id=client_id, scores=tuple(scored_roles))
+
+    def score_from_cache(
+        self,
+        config: ExperimentConfig,
+        prepared_root: Path,
+        model_path: Path,
+        model_seed: ModelSeed,
+        training_manifest: Path,
+    ) -> Path:
+        prepared_layout = PreparedDatasetLayout(prepared_root)
+        prepared_manifest = self.dataset_manifests.load_model(prepared_layout.manifest)
+
+        if prepared_manifest.data_spec_hash != config.data_spec_hash:
+            raise ValueError("Prepared dataset data-spec hash does not match scoring config")
+        if prepared_manifest.dataset_id is not config.dataset.id:
+            raise ValueError("Prepared dataset identity does not match scoring config")
+
+        prepared_manifest_hash = sha256_file(prepared_layout.manifest)
+        preprocessing_hash = sha256_file(prepared_layout.preprocessing)
+        training = self.training_manifests.load_model(training_manifest)
+        self._validate_training_manifest(
+            training, config, model_seed, model_path, prepared_manifest_hash, preprocessing_hash
+        )
+
         model = self.trainer.load_model(config, model_path)
         model_hash = model.state_hash()
         if model_hash != training.result.final_model_hash:
@@ -697,45 +770,10 @@ class ComputeScores:
         if config.training is None:
             raise ValueError("Scoring requires a training profile")
 
-        role_scores: list[ClientScoreSet] = []
-        for client_manifest in prepared_manifest.clients:
-            client_id = client_manifest.client_id
-            scored_roles: list[RoleScores] = []
-
-            for role in _BASE_SCORE_ROLES:
-                role_manifest = client_manifest.role(role)
-                path = prepared_root / role_manifest.relative_path
-                if sha256_file(path) != role_manifest.file_sha256:
-                    raise ValueError(f"Prepared role hash mismatch for {client_id}/{role}")
-
-                frame = pd.read_csv(path)
-                val_cols = [c for c in frame.columns if c not in _METADATA_COLUMNS]
-                values = frame[val_cols].to_numpy(dtype=np.float64)
-                row_ids = tuple(frame[PreparedColumn.ROW_ID].astype(str))
-
-                if len(row_ids) != len(values):
-                    raise ValueError(f"Prepared role row ids do not align for {client_id}/{role}")
-
-                groups = (
-                    tuple(frame[PreparedColumn.ATTACK_GROUP].astype(str))
-                    if role is DataRole.ATTACK_TEST and PreparedColumn.ATTACK_GROUP in frame.columns
-                    else ()
-                )
-                groups = groups or None
-                computed = self.computer.compute(
-                    model, values, config.training.device, config.training.batch_size
-                )
-
-                scored_roles.append(
-                    RoleScores(
-                        role=role,
-                        values=computed,
-                        client_id=client_id,
-                        row_ids=row_ids,
-                        attack_groups=groups,
-                    )
-                )
-            role_scores.append(ClientScoreSet(client_id=client_id, scores=tuple(scored_roles)))
+        role_scores = [
+            self._score_client(model, client_manifest, prepared_root, config)
+            for client_manifest in prepared_manifest.clients
+        ]
 
         manifest = ScoreManifest(
             dataset=config.dataset.id,
@@ -778,6 +816,117 @@ class EvaluatePolicies:
         if identity.training_spec_hash != config.training_spec_hash:
             raise ValueError("SCORE_CACHE_HASH_MISMATCH: training specification differs")
 
+    def _evaluate_client(
+        self,
+        config: ExperimentConfig,
+        score_root: Path,
+        client_id: ClientId,
+        thresholds: PolicyThresholdSet,
+        benign_by_client: dict[ClientId, BenignPolicyEvidence],
+        oracle_requested: bool,
+    ) -> list[PolicyEvaluation]:
+        benign_test = self.score_cache.read_role(score_root, client_id, DataRole.BENIGN_TEST)
+        attack_test = self.score_cache.read_role(score_root, client_id, DataRole.ATTACK_TEST)
+
+        if attack_test.attack_groups is None:
+            raise ValueError(f"Final attack scores lack attack-group metadata for {client_id}")
+        attack_groups = attack_test.attack_groups
+
+        final = FinalTestEvidence(
+            benign=benign_by_client[client_id],
+            benign_test_scores=benign_test.values,
+            attack_test_scores=attack_test.values,
+            attack_test_groups=attack_groups,
+        )
+
+        oracle_th = None
+        if oracle_requested:
+            oracle_th = oracle_choice(
+                final,
+                (
+                    thresholds.for_client(PolicyId.GLOBAL_QUANTILE, client_id)
+                    or _oracle_candidate_missing(client_id),
+                    thresholds.for_client(PolicyId.LOCAL_QUANTILE, client_id)
+                    or _oracle_candidate_missing(client_id),
+                    benign_by_client[client_id].evaluation.decision.threshold,
+                ),
+                config.protocol.band,
+            )
+
+        test_scores = np.concatenate((benign_test.values, attack_test.values))
+        test_labels = np.concatenate(
+            (
+                np.zeros(len(benign_test.values), dtype=np.int64),
+                np.ones(len(attack_test.values), dtype=np.int64),
+            )
+        )
+        test_groups = np.asarray(
+            ("__benign__",) * len(benign_test.values) + tuple(attack_groups), dtype=object
+        )
+        ranking_auroc = auroc(test_scores, test_labels)
+        ranking_auprc = auprc(test_scores, test_labels)
+
+        evaluations: list[PolicyEvaluation] = []
+        for policy_id in config.policies:
+            threshold = (
+                oracle_th
+                if policy_id is PolicyId.ORACLE_TEST
+                else thresholds.for_client(policy_id, client_id)
+            )
+            if threshold is None:
+                evaluations.append(
+                    PolicyEvaluation(
+                        client_id=client_id,
+                        policy=policy_id,
+                        threshold=None,
+                        status=PolicyEvaluationStatus.UNDEFINED,
+                        metrics=None,
+                    )
+                )
+                continue
+
+            cm = confusion_matrix(test_scores, test_labels, threshold)
+            client_fpr = fpr(cm)
+            if client_fpr is None:
+                raise RuntimeError("Final benign test set is empty")
+
+            client_metrics = ClientMetrics(
+                benign_n=cm.fp + cm.tn,
+                attack_n=cm.tp + cm.fn,
+                fp=cm.fp,
+                tn=cm.tn,
+                tp=cm.tp,
+                fn=cm.fn,
+                fpr=client_fpr,
+                tpr=tpr(cm),
+                precision=precision(cm),
+                recall=recall(cm),
+                f1=f1(cm),
+                balanced_accuracy=balanced_accuracy(cm),
+                auroc=ranking_auroc,
+                auprc=ranking_auprc,
+                band_error=band_error(client_fpr, config.protocol.band),
+                high_excess=high_excess(client_fpr, config.protocol.band),
+                band_violation=band_violation(client_fpr, config.protocol.band),
+                absolute_fpr_error=absolute_fpr_error(client_fpr, config.protocol.alpha),
+                attack_balanced_tpr=attack_balanced_tpr(
+                    test_scores, test_labels, test_groups, threshold
+                ),
+                fpr_reference_interval=clopper_pearson_interval(
+                    BinomialCounts(cm.fp, cm.fp + cm.tn), config.protocol.mismatch_confidence
+                ),
+            )
+            evaluations.append(
+                PolicyEvaluation(
+                    client_id=client_id,
+                    policy=policy_id,
+                    threshold=threshold,
+                    status=PolicyEvaluationStatus.EVALUATED,
+                    metrics=client_metrics,
+                )
+            )
+        return evaluations
+
     def evaluate_from_cache(
         self,
         config: ExperimentConfig,
@@ -811,109 +960,15 @@ class EvaluatePolicies:
             supervised_inputs,
         )
         benign_by_client = {item.client_id: item for item in benign_inputs}
-        evaluations: list[PolicyEvaluation] = []
         oracle_requested = PolicyId.ORACLE_TEST in config.policies
 
+        evaluations: list[PolicyEvaluation] = []
         for client_id in descriptor.client_ids:
-            benign_test = self.score_cache.read_role(score_root, client_id, DataRole.BENIGN_TEST)
-            attack_test = self.score_cache.read_role(score_root, client_id, DataRole.ATTACK_TEST)
-
-            if attack_test.attack_groups is None:
-                raise ValueError(f"Final attack scores lack attack-group metadata for {client_id}")
-            attack_groups = attack_test.attack_groups
-
-            final = FinalTestEvidence(
-                benign=benign_by_client[client_id],
-                benign_test_scores=benign_test.values,
-                attack_test_scores=attack_test.values,
-                attack_test_groups=attack_groups,
-            )
-
-            oracle_th = None
-            if oracle_requested:
-                oracle_th = oracle_choice(
-                    final,
-                    (
-                        thresholds.for_client(PolicyId.GLOBAL_QUANTILE, client_id)
-                        or _oracle_candidate_missing(client_id),
-                        thresholds.for_client(PolicyId.LOCAL_QUANTILE, client_id)
-                        or _oracle_candidate_missing(client_id),
-                        benign_by_client[client_id].evaluation.decision.threshold,
-                    ),
-                    config.protocol.band,
-                )
-
-            test_scores = np.concatenate((benign_test.values, attack_test.values))
-            test_labels = np.concatenate(
-                (
-                    np.zeros(len(benign_test.values), dtype=np.int64),
-                    np.ones(len(attack_test.values), dtype=np.int64),
+            evaluations.extend(
+                self._evaluate_client(
+                    config, score_root, client_id, thresholds, benign_by_client, oracle_requested
                 )
             )
-            test_groups = np.asarray(
-                ("__benign__",) * len(benign_test.values) + tuple(attack_groups), dtype=object
-            )
-            ranking_auroc = auroc(test_scores, test_labels)
-            ranking_auprc = auprc(test_scores, test_labels)
-
-            for policy_id in config.policies:
-                threshold = (
-                    oracle_th
-                    if policy_id is PolicyId.ORACLE_TEST
-                    else thresholds.for_client(policy_id, client_id)
-                )
-                if threshold is None:
-                    evaluations.append(
-                        PolicyEvaluation(
-                            client_id=client_id,
-                            policy=policy_id,
-                            threshold=None,
-                            status=PolicyEvaluationStatus.UNDEFINED,
-                            metrics=None,
-                        )
-                    )
-                    continue
-
-                cm = confusion_matrix(test_scores, test_labels, threshold)
-                client_fpr = fpr(cm)
-                if client_fpr is None:
-                    raise RuntimeError("Final benign test set is empty")
-
-                client_metrics = ClientMetrics(
-                    benign_n=cm.fp + cm.tn,
-                    attack_n=cm.tp + cm.fn,
-                    fp=cm.fp,
-                    tn=cm.tn,
-                    tp=cm.tp,
-                    fn=cm.fn,
-                    fpr=client_fpr,
-                    tpr=tpr(cm),
-                    precision=precision(cm),
-                    recall=recall(cm),
-                    f1=f1(cm),
-                    balanced_accuracy=balanced_accuracy(cm),
-                    auroc=ranking_auroc,
-                    auprc=ranking_auprc,
-                    band_error=band_error(client_fpr, config.protocol.band),
-                    high_excess=high_excess(client_fpr, config.protocol.band),
-                    band_violation=band_violation(client_fpr, config.protocol.band),
-                    absolute_fpr_error=absolute_fpr_error(client_fpr, config.protocol.alpha),
-                    attack_balanced_tpr=attack_balanced_tpr(
-                        test_scores, test_labels, test_groups, threshold
-                    ),
-                    fpr_reference_interval=clopper_pearson_interval(
-                        BinomialCounts(cm.fp, cm.fp + cm.tn), config.protocol.mismatch_confidence
-                    ),
-                )
-                evaluations.append(
-                    PolicyEvaluation(
-                        client_id=client_id,
-                        policy=policy_id,
-                        threshold=threshold,
-                        status=PolicyEvaluationStatus.EVALUATED,
-                        metrics=client_metrics,
-                    )
-                )
 
         client_rows = tuple(evaluations)
         assert_ranking_metric_invariance(

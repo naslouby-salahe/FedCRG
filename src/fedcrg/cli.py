@@ -244,7 +244,7 @@ def doctor() -> None:
 
 
 @cli.command(name="validate")
-@click.argument("experiment_id", type=click.Choice(list(ExperimentId)))
+@click.argument("experiment_id", type=click.Choice([member.value for member in ExperimentId]))
 @click.pass_context
 def validate(ctx: click.Context, experiment_id: str) -> None:
     study = _study(ctx)
@@ -266,7 +266,7 @@ def validate(ctx: click.Context, experiment_id: str) -> None:
 
 
 @cli.command(name="plan")
-@click.argument("experiment_id", type=click.Choice(list(ExperimentId)))
+@click.argument("experiment_id", type=click.Choice([member.value for member in ExperimentId]))
 @click.pass_context
 def plan(ctx: click.Context, experiment_id: str) -> None:
     study = _study(ctx)
@@ -290,7 +290,7 @@ def plan(ctx: click.Context, experiment_id: str) -> None:
 @click.argument(
     "dataset_id",
     required=False,
-    type=click.Choice(list(DatasetId)),
+    type=click.Choice([member.value for member in DatasetId]),
 )
 @click.option("--overwrite", is_flag=True, help="Rebuild the prepared cache explicitly.")
 @click.pass_context
@@ -327,7 +327,7 @@ def preprocess(ctx: click.Context, dataset_id: str | None, overwrite: bool) -> N
 
 
 @cli.command(name="run")
-@click.argument("experiment_id", type=click.Choice(list(ExperimentId)))
+@click.argument("experiment_id", type=click.Choice([member.value for member in ExperimentId]))
 @click.option("--overwrite", is_flag=True, help="Re-run and replace regenerable evidence.")
 @click.pass_context
 def run(ctx: click.Context, experiment_id: str, overwrite: bool) -> None:
@@ -437,7 +437,7 @@ def _collect_run_status_counts(runs_root: Path) -> dict[ExperimentId, RunStatusC
 @click.argument(
     "experiment_id",
     required=False,
-    type=click.Choice(list(ExperimentId)),
+    type=click.Choice([member.value for member in ExperimentId]),
 )
 @click.pass_context
 def status(ctx: click.Context, experiment_id: str | None) -> None:

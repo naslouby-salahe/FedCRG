@@ -9,7 +9,6 @@ import sys
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Generic, TypeVar
 
 import yaml
 from pydantic import BaseModel
@@ -40,8 +39,6 @@ from fedcrg.types import (
     RunId,
     Sha256,
 )
-
-ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
 def _jsonable(value: object) -> JsonValue:
@@ -91,7 +88,7 @@ def write_jsonl(path: Path, records: tuple[BaseModel, ...]) -> None:
             handle.write(json.dumps(record.model_dump(mode="json"), sort_keys=True) + "\n")
 
 
-def load_json_model(path: Path, model: type[ModelT]) -> ModelT:
+def load_json_model[ModelT: BaseModel](path: Path, model: type[ModelT]) -> ModelT:
     return model.model_validate_json(path.read_text(encoding="utf-8"))
 
 
@@ -102,7 +99,7 @@ def load_yaml_mapping(path: Path) -> object:
     return {str(key): value for key, value in raw.items()}
 
 
-class ModelStore(Generic[ModelT]):
+class ModelStore[ModelT: BaseModel]:
     model: type[ModelT]
 
     def save(self, path: Path, manifest: ModelT) -> None:
