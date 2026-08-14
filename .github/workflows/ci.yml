@@ -17,7 +17,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: uv sync --locked --no-build --no-install-project --extra dev
       - run: uv build --wheel -o dist
-      - run: uv pip install --no-build --no-deps dist/*.whl
+      - run: uv pip install --no-build --no-deps --no-index --offline dist/*.whl
       - name: Format check
         run: uv run --no-sync --no-build ruff format --check src tests
       - name: Lint
