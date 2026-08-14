@@ -223,6 +223,7 @@ def primary_statistics() -> StatisticsConfig:
         split_sensitivity_percentiles=(5, 25, 50, 75, 95),
         bootstrap_ci_percentiles=(2.5, 97.5),
         benchmark_p95_percentile=95,
+        iqr_percentiles=(25, 75),
     )
 
 

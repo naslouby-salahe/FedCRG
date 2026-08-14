@@ -34,7 +34,7 @@ def test_primary_policy_payload_ledger() -> None:
 
 
 def test_stability_summaries_are_explicit() -> None:
-    threshold = summarize_threshold_stability((1.0, 2.0, 3.0))
+    threshold = summarize_threshold_stability((1.0, 2.0, 3.0), (25, 75))
     assert threshold.count == 3
     assert threshold.iqr == 1.0
     states = summarize_state_stability(

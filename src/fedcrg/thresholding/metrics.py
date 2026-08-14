@@ -31,6 +31,7 @@ from fedcrg.types import (
     MismatchOutcome,
     NonNegativeCount,
     OperatingBand,
+    Percentage,
     PolicyEvaluationStatus,
     PolicyId,
     PositiveCount,
@@ -291,6 +292,7 @@ def _mean_defined(values: Iterable[Metric | None]) -> Metric | None:
 def aggregate_policy(
     policy: PolicyId,
     evaluations: tuple[PolicyEvaluation, ...],
+    iqr_percentiles: tuple[Percentage, Percentage],
 ) -> FederationMetrics:
     rows = [
         row.metrics
@@ -312,7 +314,7 @@ def aggregate_policy(
         band_violation_rate=float(np.mean([row.band_violation for row in rows])),
         mafe=float(np.mean([row.absolute_fpr_error for row in rows])),
         max_fpr=float(np.max(fprs)),
-        fpr_iqr=iqr(fprs),
+        fpr_iqr=iqr(fprs, iqr_percentiles),
         attack_balanced_macro_tpr=_mean_defined([row.attack_balanced_tpr for row in rows]),
         macro_tpr=_mean_defined([row.tpr for row in rows]),
         worst_client_tpr=min(

@@ -134,6 +134,7 @@ class StatisticsConfig(BaseModel):
     split_sensitivity_percentiles: tuple[Percentage, Percentage, Percentage, Percentage, Percentage]
     bootstrap_ci_percentiles: tuple[Percentage, Percentage]
     benchmark_p95_percentile: Percentage
+    iqr_percentiles: tuple[Percentage, Percentage]
 
     @property
     def utility_margin_allowance(self) -> MetricDifference:

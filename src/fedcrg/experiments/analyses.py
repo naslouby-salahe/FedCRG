@@ -775,14 +775,16 @@ class StateStability(BaseModel):
     state_frequencies: tuple[StateFrequency, ...]
 
 
-def summarize_threshold_stability(values: tuple[Metric, ...]) -> ThresholdStability:
+def summarize_threshold_stability(
+    values: tuple[Metric, ...], iqr_percentiles: tuple[Percentage, Percentage]
+) -> ThresholdStability:
     data = np.asarray(values, dtype=np.float64)
     if data.ndim != 1 or len(data) == 0 or not np.isfinite(data).all():
         raise ValueError("Threshold stability requires finite non-empty values")
     return ThresholdStability(
         count=len(data),
         standard_deviation=float(np.std(data, ddof=1)) if len(data) > 1 else 0.0,
-        iqr=iqr(data),
+        iqr=iqr(data, iqr_percentiles),
         minimum=float(np.min(data)),
         maximum=float(np.max(data)),
     )

@@ -9,7 +9,7 @@ import torch
 import torch.nn.functional as F
 
 from fedcrg.config import ActivationId, AutoencoderConfig, DeepSvddConfig, DetectorConfig
-from fedcrg.types import ByteCount, Dimension, ParameterCount, PositiveCount, Sha256
+from fedcrg.types import ByteCount, Dimension, ParameterCount, PositiveCount, Sha256, XavierGain
 
 
 class DetectorModel(torch.nn.Module, ABC):
@@ -55,7 +55,7 @@ def build_mlp(
 
 def initialize_weights(
     module: torch.nn.Module,
-    gain: float,
+    gain: XavierGain,
     forbid_bias: bool = False
 ) -> None:
     for m in module.modules():

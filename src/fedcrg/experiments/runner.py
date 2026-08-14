@@ -781,7 +781,10 @@ class EvaluatePolicies:
 
         client_rows = tuple(evaluations)
         assert_ranking_metric_invariance(client_rows, tolerance=config.statistics.ranking_invariance_tolerance)
-        federation_rows = tuple(aggregate_policy(policy, client_rows) for policy in config.policies)
+        federation_rows = tuple(
+            aggregate_policy(policy, client_rows, config.statistics.iqr_percentiles)
+            for policy in config.policies
+        )
         
         return EvaluationBundle(
             clients=client_rows,

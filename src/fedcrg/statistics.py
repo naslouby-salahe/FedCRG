@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from fedcrg.types import Metric
-
-_IQR_PERCENTILES = (25, 75)
+from fedcrg.types import Metric, Percentage
 
 
-def iqr(values: np.ndarray) -> Metric:
-    lower, upper = np.percentile(values, _IQR_PERCENTILES)
+def iqr(values: np.ndarray, percentiles: tuple[Percentage, Percentage]) -> Metric:
+    lower, upper = np.percentile(values, percentiles)
     return float(upper - lower)

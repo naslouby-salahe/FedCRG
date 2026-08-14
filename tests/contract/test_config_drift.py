@@ -29,6 +29,7 @@ _ALLOWED_SOURCE_LITERALS: dict[tuple[str, object], str] = {
     ("experiments/analyses.py", 75): "IQR upper quantile (75th percentile)",
     ("experiments/analyses.py", 95): "upper percentile quantile (95th percentile)",
     ("learning/federated.py", 0.5): "cosine learning-rate schedule midpoint",
+    ("thresholding/metrics.py", 4.0): "confusion matrix bin count (tn/fp/fn/tp), not a scientific value",
     (
         "learning/federated.py",
         4,
