@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 
@@ -31,6 +32,12 @@ from fedcrg.types import (
 
 Frozen = ConfigDict(frozen=True)
 _ATTACK_GROUP_ADAPTER = TypeAdapter(AttackGroupId)
+_CALIBRATION_ROLES = frozenset({
+    DataRole.REFERENCE,
+    DataRole.MISMATCH,
+    DataRole.CALIBRATION,
+    DataRole.BENIGN_GUARD,
+})
 
 
 class RoleFrame(BaseModel):
@@ -47,16 +54,13 @@ class ClientSplits(BaseModel):
     roles: tuple[RoleFrame, ...]
 
     def get(self, role: DataRole) -> pd.DataFrame:
-        for item in self.roles:
-            if item.role is role:
-                return item.frame
-        raise KeyError(role.value)
+        frame = self.try_get(role)
+        if frame is None:
+            raise KeyError(role.value)
+        return frame
 
     def try_get(self, role: DataRole) -> pd.DataFrame | None:
-        for item in self.roles:
-            if item.role is role:
-                return item.frame
-        return None
+        return next((item.frame for item in self.roles if item.role is role), None)
 
 
 class RolePositions(BaseModel):
@@ -76,23 +80,18 @@ class CalibrationRoleAssignment(BaseModel):
     roles: tuple[RolePositions, ...]
 
     def positions_for(self, role: DataRole) -> tuple[Position, ...]:
-        if role not in {
-            DataRole.REFERENCE,
-            DataRole.MISMATCH,
-            DataRole.CALIBRATION,
-            DataRole.BENIGN_GUARD,
-        }:
+        if role not in _CALIBRATION_ROLES:
             raise ValueError(f"{role.value} is not a calibration-reservoir role")
-        for item in self.roles:
-            if item.role is role:
-                return item.positions
-        raise KeyError(role.value)
+        match = next((item.positions for item in self.roles if item.role is role), None)
+        if match is None:
+            raise KeyError(role.value)
+        return match
 
     def row_id_hash_for(self, role: DataRole) -> Sha256:
-        for item in self.roles:
-            if item.role is role:
-                return item.row_id_hash
-        raise KeyError(role.value)
+        match = next((item.row_id_hash for item in self.roles if item.role is role), None)
+        if match is None:
+            raise KeyError(role.value)
+        return match
 
 
 def validate_split_disjointness(
@@ -106,11 +105,11 @@ def validate_split_disjointness(
             continue
         if row_id_column not in frame.columns:
             raise DataIntegrityError(f"{role.value} is missing {row_id_column}")
-        role_ids = set(frame[row_id_column].astype(str))
+        
+        role_ids = set(frame[row_id_column].astype(str).unique())
         overlap = seen.intersection(role_ids)
         if overlap:
-            examples = sorted(overlap)[:5]
-            raise DataIntegrityError(f"Split overlap in {role.value}: {examples}")
+            raise DataIntegrityError(f"Split overlap in {role.value}: {sorted(overlap)[:5]}")
         seen.update(role_ids)
 
 
@@ -131,40 +130,37 @@ class CalibrationAssignmentBuilder:
             + split.calibration_benign
             + split.benign_guard
         )
+        
         if len(frame) != reservoir_total:
             raise DataIntegrityError(
                 f"Reservoir row count {len(frame)} != {reservoir_total} for {client_id}"
             )
-        positions: tuple[Position, ...] = tuple(range(reservoir_total))
+            
         if mode is CalibrationAssignmentMode.SEEDED_PERMUTATION:
             rng = calibration_rng(dataset, client_id, calibration_seed)
             positions = tuple(int(index) for index in rng.permutation(reservoir_total))
+        else:
+            positions = tuple(range(reservoir_total))
+
         boundaries = (
             split.reference_benign,
             split.reference_benign + split.mismatch_benign,
             split.reference_benign + split.mismatch_benign + split.calibration_benign,
         )
+        
+        row_id_series = frame[PreparedColumn.ROW_ID.value].astype(str)
         roles: list[RolePositions] = []
-        for role, (start, end) in zip(
-            (
-                DataRole.REFERENCE,
-                DataRole.MISMATCH,
-                DataRole.CALIBRATION,
-                DataRole.BENIGN_GUARD,
-            ),
-            (
-                (0, boundaries[0]),
-                (boundaries[0], boundaries[1]),
-                (boundaries[1], boundaries[2]),
-                (boundaries[2], reservoir_total),
-            ),
-            strict=True,
-        ):
+        
+        role_slices = (
+            (DataRole.REFERENCE, 0, boundaries[0]),
+            (DataRole.MISMATCH, boundaries[0], boundaries[1]),
+            (DataRole.CALIBRATION, boundaries[1], boundaries[2]),
+            (DataRole.BENIGN_GUARD, boundaries[2], reservoir_total),
+        )
+
+        for role, start, end in role_slices:
             role_positions = positions[start:end]
-            row_ids = tuple(
-                frame[PreparedColumn.ROW_ID.value].astype(str).iloc[index]
-                for index in role_positions
-            )
+            row_ids = [str(row_id_series.iat[index]) for index in role_positions]
             roles.append(
                 RolePositions(
                     role=role,
@@ -172,6 +168,7 @@ class CalibrationAssignmentBuilder:
                     row_id_hash=hash_row_ids(row_ids),
                 )
             )
+
         return CalibrationRoleAssignment(
             client_id=client_id,
             calibration_seed=calibration_seed,
@@ -193,10 +190,7 @@ class AttackGroupAllocation(BaseModel):
     groups: tuple[AttackGroupCount, ...]
 
     def for_group(self, group: AttackGroupId) -> NonNegativeCount:
-        for item in self.groups:
-            if item.group == group:
-                return item.count
-        return 0
+        return next((item.count for item in self.groups if item.group == group), 0)
 
 
 class BaseSplitBuilder:
@@ -208,32 +202,33 @@ class BaseSplitBuilder:
     ) -> ClientSplits:
         split = config.split
         benign = data.benign.reset_index(drop=True)
-        if len(benign) < split.train_benign + split.reservoir_size + split.min_benign_test:
+        
+        req_benign = split.train_benign + split.reservoir_size + split.min_benign_test
+        if len(benign) < req_benign:
             raise DataIntegrityError(f"Benign evidence is insufficient for {data.client_id}")
+            
         train = benign.iloc[: split.train_benign].copy()
-        reservoir = benign.iloc[
-            split.train_benign : split.train_benign + split.reservoir_size
-        ].copy()
-        benign_test = benign.iloc[
-            split.train_benign + split.reservoir_size : split.train_benign
-            + split.reservoir_size
-            + split.min_benign_test
-        ].copy()
+        reservoir = benign.iloc[split.train_benign : split.train_benign + split.reservoir_size].copy()
+        benign_test = benign.iloc[split.train_benign + split.reservoir_size : req_benign].copy()
+
         attack = data.attack.reset_index(drop=True)
         if PreparedColumn.ATTACK_GROUP.value not in attack.columns:
             raise DataIntegrityError(f"Attack frame lacks attack_group for {data.client_id}")
+            
         group_values = attack[PreparedColumn.ATTACK_GROUP.value].astype(str)
-        groups = tuple(
-            sorted(_ATTACK_GROUP_ADAPTER.validate_python(value) for value in set(group_values))
-        )
+        unique_groups = group_values.unique()
+        groups = tuple(sorted(_ATTACK_GROUP_ADAPTER.validate_python(g) for g in unique_groups))
+        
         group_counts = AttackGroupAllocation(
             groups=tuple(
                 AttackGroupCount(
-                    group=_ATTACK_GROUP_ADAPTER.validate_python(str(group)), count=int(count)
+                    group=_ATTACK_GROUP_ADAPTER.validate_python(str(group)), 
+                    count=int(count)
                 )
                 for group, count in group_values.value_counts().items()
             )
         )
+
         development = self._development_allocation(
             data.dataset,
             groups,
@@ -241,53 +236,42 @@ class BaseSplitBuilder:
             split.attack_dev,
             split.min_attack_test_per_group,
         )
+
         dev_rows: list[Position] = []
         for group in groups:
-            members = sorted(
-                index for index in range(len(attack)) if group_values.iloc[index] == group
-            )
+            members = np.flatnonzero(group_values == group)
             rng = attack_rng(data.dataset, data.client_id, group, attack_split_seed)
-            chosen = tuple(
-                int(index)
-                for index in rng.choice(
-                    len(members), size=development.for_group(group), replace=False
-                )
-            )
-            dev_rows.extend(members[index] for index in chosen)
+            chosen = rng.choice(len(members), size=development.for_group(group), replace=False)
+            dev_rows.extend(int(members[index]) for index in chosen)
+
         dev_index = set(dev_rows)
-        test_rows = [index for index in range(len(attack)) if index not in dev_index]
+        test_rows = [i for i in range(len(attack)) if i not in dev_index]
+        
         attack_dev = attack.iloc[dev_rows].copy()
         attack_test = attack.iloc[test_rows].copy()
 
-        for frame, role in (
+        role_frames = (
             (train, DataRole.TRAIN),
             (reservoir, DataRole.RESERVOIR),
             (benign_test, DataRole.BENIGN_TEST),
             (attack_dev, DataRole.ATTACK_DEV),
             (attack_test, DataRole.ATTACK_TEST),
-        ):
+        )
+
+        processed_roles = []
+        for frame, role in role_frames:
             frame[PreparedColumn.ROLE.value] = role.value
             frame[PreparedColumn.LABEL.value] = (
                 0 if role in {DataRole.TRAIN, DataRole.RESERVOIR, DataRole.BENIGN_TEST} else 1
             )
             if PreparedColumn.ROW_ID.value not in frame.columns:
                 frame[PreparedColumn.ROW_ID.value] = [
-                    stable_row_id(data.dataset, data.client_id, role.value, int(index))
-                    for index in range(len(frame))
+                    stable_row_id(data.dataset, data.client_id, role.value, int(i))
+                    for i in range(len(frame))
                 ]
-        splits = ClientSplits(
-            client_id=data.client_id,
-            roles=tuple(
-                RoleFrame(role=role, frame=frame)
-                for role, frame in (
-                    (DataRole.TRAIN, train),
-                    (DataRole.RESERVOIR, reservoir),
-                    (DataRole.BENIGN_TEST, benign_test),
-                    (DataRole.ATTACK_DEV, attack_dev),
-                    (DataRole.ATTACK_TEST, attack_test),
-                )
-            ),
-        )
+            processed_roles.append(RoleFrame(role=role, frame=frame))
+
+        splits = ClientSplits(client_id=data.client_id, roles=tuple(processed_roles))
         validate_split_disjointness(splits)
         return splits
 
@@ -310,6 +294,7 @@ class BaseSplitBuilder:
                 )
             )
             return BaseSplitBuilder.waterfill_allocation(groups, capacities, development_budget)
+        
         return BaseSplitBuilder._nbaiot_balanced_allocation(
             groups, group_counts, development_budget, reserve_per_group
         )
@@ -323,24 +308,27 @@ class BaseSplitBuilder:
     ) -> AttackGroupAllocation:
         if not groups:
             raise DataIntegrityError("Attack frame contains no attack groups")
+        
         per_group, remainder = divmod(int(development_budget), len(groups))
-        allocation: dict[AttackGroupId, NonNegativeCount] = {
-            group: int(per_group) for group in groups
-        }
+        allocation = {group: int(per_group) for group in groups}
+        
         for group in groups[:remainder]:
-            allocation[group] = int(allocation[group]) + 1
+            allocation[group] += 1
+            
         for group in groups:
             total = group_counts.for_group(group)
             capacity = total - min(reserve_per_group, total)
-            if int(allocation[group]) > capacity:
+            if allocation[group] > capacity:
                 raise DataIntegrityError(
                     f"{FailureCode.NBAIOT_ATTACK_BUDGET_FAIL.value}: attack group {group} "
                     f"cannot retain {reserve_per_group} final-test rows"
                 )
-        if sum(int(value) for value in allocation.values()) != int(development_budget):
+                
+        if sum(allocation.values()) != int(development_budget):
             raise RuntimeError("Attack development allocation is unbalanced")
+            
         return AttackGroupAllocation(
-            groups=tuple(AttackGroupCount(group=group, count=allocation[group]) for group in groups)
+            groups=tuple(AttackGroupCount(group=g, count=c) for g, c in allocation.items())
         )
 
     @staticmethod
@@ -351,26 +339,26 @@ class BaseSplitBuilder:
     ) -> AttackGroupAllocation:
         if not groups:
             raise DataIntegrityError("Attack development allocation requires groups")
-        development: dict[AttackGroupId, NonNegativeCount] = {group: 0 for group in groups}
-        for _ in range(int(development_budget)):
-            eligible = [
-                group
-                for group in groups
-                if int(development[group]) < int(capacities.for_group(group))
-            ]
+            
+        development = {group: 0 for group in groups}
+        budget = int(development_budget)
+        
+        for _ in range(budget):
+            eligible = [g for g in groups if development[g] < capacities.for_group(g)]
             if not eligible:
                 raise DataIntegrityError(
                     f"{FailureCode.ATTACK_DEV_CAPACITY_LT_500.value}: "
                     "attack development capacity is exhausted before the budget is met"
                 )
-            minimum = min(int(development[group]) for group in eligible)
-            chosen = next(group for group in eligible if int(development[group]) == minimum)
-            development[chosen] = int(development[chosen]) + 1
+            
+            minimum = min(development[g] for g in eligible)
+            chosen = next(g for g in eligible if development[g] == minimum)
+            development[chosen] += 1
+
         for group in groups:
-            if not 0 <= int(development[group]) <= int(capacities.for_group(group)):
+            if not 0 <= development[group] <= capacities.for_group(group):
                 raise RuntimeError("Attack development allocation violates group capacity")
+
         return AttackGroupAllocation(
-            groups=tuple(
-                AttackGroupCount(group=group, count=development[group]) for group in groups
-            )
+            groups=tuple(AttackGroupCount(group=g, count=c) for g, c in development.items())
         )
