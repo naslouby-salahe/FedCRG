@@ -9,7 +9,9 @@ deployable threshold.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict
@@ -72,7 +74,8 @@ def threshold_policy_communication(
     the summary-statistic/F1 candidate vectors. Every other policy constructs
     its threshold from local evidence or from reference scores already
     uploaded, so it adds no upload payload. All counts are read from the
-    resolved experiment configuration.
+    resolved experiment configuration; each policy's payload category comes
+    from the central policy registry.
     """
     if client_count <= 0:
         raise ValueError("Policy traffic accounting requires a positive client count")
@@ -84,30 +87,25 @@ def threshold_policy_communication(
     moment_payload = 2 * (_INT64_BYTES + 2 * _FLOAT64_BYTES)
     candidate_payload = candidates * _FLOAT64_BYTES
 
-    rows = (
+    def upload_bytes(kind: PolicyUploadKind) -> ByteCount:
+        if kind is PolicyUploadKind.NONE:
+            return 0
+        if kind is PolicyUploadKind.REFERENCE_SCORES:
+            return reference_payload
+        if kind is PolicyUploadKind.FULL_POLICY_BUDGET:
+            return full_budget_payload
+        if kind is PolicyUploadKind.SUMMARY_MOMENTS_AND_CANDIDATES:
+            return moment_payload + candidate_payload
+        if kind is PolicyUploadKind.SUPERVISED_CANDIDATES:
+            return candidate_payload
+        raise RuntimeError(f"Unhandled policy upload payload kind: {kind.value}")
+
+    rows = tuple(
         PolicyTrafficLedgerRow(
-            policy=PolicyId.REFERENCE_QUANTILE, upload_bytes_per_client=reference_payload
-        ),
-        PolicyTrafficLedgerRow(
-            policy=PolicyId.GLOBAL_QUANTILE, upload_bytes_per_client=full_budget_payload
-        ),
-        PolicyTrafficLedgerRow(policy=PolicyId.LOCAL_QUANTILE, upload_bytes_per_client=0),
-        PolicyTrafficLedgerRow(policy=PolicyId.READINESS_ONLY, upload_bytes_per_client=0),
-        PolicyTrafficLedgerRow(policy=PolicyId.MISMATCH_ONLY, upload_bytes_per_client=0),
-        PolicyTrafficLedgerRow(policy=PolicyId.SHRINKAGE, upload_bytes_per_client=0),
-        PolicyTrafficLedgerRow(
-            policy=PolicyId.THREE_SIGMA, upload_bytes_per_client=full_budget_payload
-        ),
-        PolicyTrafficLedgerRow(policy=PolicyId.DEV_F1_SELECT, upload_bytes_per_client=0),
-        PolicyTrafficLedgerRow(
-            policy=PolicyId.SUMMARY_STATISTIC_SELECT,
-            upload_bytes_per_client=moment_payload + candidate_payload,
-        ),
-        PolicyTrafficLedgerRow(
-            policy=PolicyId.SUPERVISED_F1, upload_bytes_per_client=candidate_payload
-        ),
-        PolicyTrafficLedgerRow(policy=PolicyId.ORACLE_TEST, upload_bytes_per_client=0),
-        PolicyTrafficLedgerRow(policy=PolicyId.FEDCRG, upload_bytes_per_client=reference_payload),
+            policy=policy,
+            upload_bytes_per_client=upload_bytes(POLICIES[policy].upload_payload),
+        )
+        for policy in PolicyId
     )
     if len(rows) != len(PolicyId):
         raise RuntimeError("Policy traffic ledger must contain exactly one row per policy")
@@ -471,27 +469,316 @@ def oracle_choice(
     return best.threshold
 
 
-SUPERVISED_POLICIES = frozenset(
-    {
-        PolicyId.DEV_F1_SELECT,
-        PolicyId.SUMMARY_STATISTIC_SELECT,
-        PolicyId.SUPERVISED_F1,
-    }
-)
+class PolicyStrategy(StrEnum):
+    """Evaluator dispatch key of one locked threshold policy."""
+
+    REFERENCE = "reference"
+    GLOBAL_QUANTILE = "global_quantile"
+    LOCAL_QUANTILE = "local_quantile"
+    READINESS = "readiness"
+    MISMATCH = "mismatch"
+    SHRINKAGE = "shrinkage"
+    THREE_SIGMA = "three_sigma"
+    DEV_F1 = "dev_f1"
+    SUMMARY_STATISTIC = "summary_statistic"
+    SUPERVISED_F1 = "supervised_f1"
+    FEDCRG = "fedcrg"
+    ORACLE = "oracle"
+
+
+class ThresholdOrigin(StrEnum):
+    """Which evidence set produces the frozen threshold."""
+
+    CALIBRATION = "calibration"
+    DEVELOPMENT = "development"
+    FINAL_TEST = "final_test"
+
+
+class PolicyUploadKind(StrEnum):
+    """Threshold-policy upload payload category for the communication ledger."""
+
+    NONE = "none"
+    REFERENCE_SCORES = "reference_scores"
+    FULL_POLICY_BUDGET = "full_policy_budget"
+    SUMMARY_MOMENTS_AND_CANDIDATES = "summary_moments_and_candidates"
+    SUPERVISED_CANDIDATES = "supervised_candidates"
+
+
+class PolicySpec(BaseModel):
+    """One typed definition of a locked threshold policy.
+
+    The registry is the single source for the information regime, the
+    deployability decision, the supervised status, the required evidence
+    bundles, the evaluator dispatch, the result semantics (whether the
+    reference threshold enters the final threshold composition, whether the
+    final threshold comes from the development set or the final-test set, and
+    whether the final-test set is required at all), and the communication-ledger
+    payload category. No other module maintains per-policy metadata.
+    """
+
+    model_config = Frozen
+
+    policy: PolicyId
+    strategy: PolicyStrategy
+    regime: InformationRegime
+    deployable: bool
+    supervised: bool
+    requires_reference: bool
+    threshold_origin: ThresholdOrigin
+    requires_final_test: bool
+    requires_supervised_development: bool
+    uses_global_budget: bool = False
+    uses_local_budget: bool = False
+    needs_method: bool = False
+    uses_shrinkage_tuning: bool = False
+    uses_three_sigma: bool = False
+    uses_summary_statistic: bool = False
+    uses_supervised_f1: bool = False
+    candidate_policies: tuple[PolicyId, ...] = ()
+    upload_payload: PolicyUploadKind
+
+
+POLICIES: dict[PolicyId, PolicySpec] = {
+    PolicyId.REFERENCE_QUANTILE: PolicySpec(
+        policy=PolicyId.REFERENCE_QUANTILE,
+        strategy=PolicyStrategy.REFERENCE,
+        regime=InformationRegime.BENIGN_ONLY,
+        deployable=True,
+        supervised=False,
+        requires_reference=True,
+        threshold_origin=ThresholdOrigin.CALIBRATION,
+        requires_final_test=False,
+        requires_supervised_development=False,
+        upload_payload=PolicyUploadKind.REFERENCE_SCORES,
+    ),
+    PolicyId.GLOBAL_QUANTILE: PolicySpec(
+        policy=PolicyId.GLOBAL_QUANTILE,
+        strategy=PolicyStrategy.GLOBAL_QUANTILE,
+        regime=InformationRegime.BENIGN_ONLY,
+        deployable=True,
+        supervised=False,
+        requires_reference=False,
+        threshold_origin=ThresholdOrigin.CALIBRATION,
+        requires_final_test=False,
+        requires_supervised_development=False,
+        uses_global_budget=True,
+        upload_payload=PolicyUploadKind.FULL_POLICY_BUDGET,
+    ),
+    PolicyId.LOCAL_QUANTILE: PolicySpec(
+        policy=PolicyId.LOCAL_QUANTILE,
+        strategy=PolicyStrategy.LOCAL_QUANTILE,
+        regime=InformationRegime.BENIGN_ONLY,
+        deployable=True,
+        supervised=False,
+        requires_reference=False,
+        threshold_origin=ThresholdOrigin.CALIBRATION,
+        requires_final_test=False,
+        requires_supervised_development=False,
+        uses_local_budget=True,
+        upload_payload=PolicyUploadKind.NONE,
+    ),
+    PolicyId.READINESS_ONLY: PolicySpec(
+        policy=PolicyId.READINESS_ONLY,
+        strategy=PolicyStrategy.READINESS,
+        regime=InformationRegime.BENIGN_ONLY,
+        deployable=True,
+        supervised=False,
+        requires_reference=True,
+        threshold_origin=ThresholdOrigin.CALIBRATION,
+        requires_final_test=False,
+        requires_supervised_development=False,
+        upload_payload=PolicyUploadKind.NONE,
+    ),
+    PolicyId.MISMATCH_ONLY: PolicySpec(
+        policy=PolicyId.MISMATCH_ONLY,
+        strategy=PolicyStrategy.MISMATCH,
+        regime=InformationRegime.BENIGN_ONLY,
+        deployable=True,
+        supervised=False,
+        requires_reference=True,
+        threshold_origin=ThresholdOrigin.CALIBRATION,
+        requires_final_test=False,
+        requires_supervised_development=False,
+        upload_payload=PolicyUploadKind.NONE,
+    ),
+    PolicyId.SHRINKAGE: PolicySpec(
+        policy=PolicyId.SHRINKAGE,
+        strategy=PolicyStrategy.SHRINKAGE,
+        regime=InformationRegime.BENIGN_ONLY,
+        deployable=True,
+        supervised=False,
+        requires_reference=True,
+        threshold_origin=ThresholdOrigin.CALIBRATION,
+        requires_final_test=False,
+        requires_supervised_development=False,
+        uses_shrinkage_tuning=True,
+        upload_payload=PolicyUploadKind.NONE,
+    ),
+    PolicyId.THREE_SIGMA: PolicySpec(
+        policy=PolicyId.THREE_SIGMA,
+        strategy=PolicyStrategy.THREE_SIGMA,
+        regime=InformationRegime.BENIGN_ONLY,
+        deployable=True,
+        supervised=False,
+        requires_reference=False,
+        threshold_origin=ThresholdOrigin.CALIBRATION,
+        requires_final_test=False,
+        requires_supervised_development=False,
+        uses_global_budget=True,
+        uses_three_sigma=True,
+        upload_payload=PolicyUploadKind.FULL_POLICY_BUDGET,
+    ),
+    PolicyId.DEV_F1_SELECT: PolicySpec(
+        policy=PolicyId.DEV_F1_SELECT,
+        strategy=PolicyStrategy.DEV_F1,
+        regime=InformationRegime.SUPERVISED_DEVELOPMENT,
+        deployable=False,
+        supervised=True,
+        requires_reference=False,
+        threshold_origin=ThresholdOrigin.DEVELOPMENT,
+        requires_final_test=False,
+        requires_supervised_development=True,
+        uses_global_budget=True,
+        uses_local_budget=True,
+        upload_payload=PolicyUploadKind.NONE,
+    ),
+    PolicyId.SUMMARY_STATISTIC_SELECT: PolicySpec(
+        policy=PolicyId.SUMMARY_STATISTIC_SELECT,
+        strategy=PolicyStrategy.SUMMARY_STATISTIC,
+        regime=InformationRegime.SUPERVISED_DEVELOPMENT,
+        deployable=False,
+        supervised=True,
+        requires_reference=False,
+        threshold_origin=ThresholdOrigin.DEVELOPMENT,
+        requires_final_test=False,
+        requires_supervised_development=True,
+        uses_summary_statistic=True,
+        upload_payload=PolicyUploadKind.SUMMARY_MOMENTS_AND_CANDIDATES,
+    ),
+    PolicyId.SUPERVISED_F1: PolicySpec(
+        policy=PolicyId.SUPERVISED_F1,
+        strategy=PolicyStrategy.SUPERVISED_F1,
+        regime=InformationRegime.SUPERVISED_DEVELOPMENT,
+        deployable=False,
+        supervised=True,
+        requires_reference=False,
+        threshold_origin=ThresholdOrigin.DEVELOPMENT,
+        requires_final_test=False,
+        requires_supervised_development=True,
+        uses_supervised_f1=True,
+        upload_payload=PolicyUploadKind.SUPERVISED_CANDIDATES,
+    ),
+    PolicyId.ORACLE_TEST: PolicySpec(
+        policy=PolicyId.ORACLE_TEST,
+        strategy=PolicyStrategy.ORACLE,
+        regime=InformationRegime.FINAL_TEST_ORACLE,
+        deployable=False,
+        supervised=False,
+        requires_reference=False,
+        threshold_origin=ThresholdOrigin.FINAL_TEST,
+        requires_final_test=True,
+        requires_supervised_development=False,
+        uses_global_budget=True,
+        uses_local_budget=True,
+        needs_method=True,
+        candidate_policies=(
+            PolicyId.GLOBAL_QUANTILE,
+            PolicyId.LOCAL_QUANTILE,
+            PolicyId.FEDCRG,
+        ),
+        upload_payload=PolicyUploadKind.NONE,
+    ),
+    PolicyId.FEDCRG: PolicySpec(
+        policy=PolicyId.FEDCRG,
+        strategy=PolicyStrategy.FEDCRG,
+        regime=InformationRegime.BENIGN_ONLY,
+        deployable=True,
+        supervised=False,
+        requires_reference=True,
+        threshold_origin=ThresholdOrigin.CALIBRATION,
+        requires_final_test=False,
+        requires_supervised_development=False,
+        needs_method=True,
+        upload_payload=PolicyUploadKind.REFERENCE_SCORES,
+    ),
+}
+
+SUPERVISED_POLICIES = frozenset(spec.policy for spec in POLICIES.values() if spec.supervised)
 
 
 def information_regime(policy_id: PolicyId) -> InformationRegime:
-    """Information regime of one policy."""
-    if policy_id is PolicyId.ORACLE_TEST:
-        return InformationRegime.FINAL_TEST_ORACLE
-    if policy_id in SUPERVISED_POLICIES:
-        return InformationRegime.SUPERVISED_DEVELOPMENT
-    return InformationRegime.BENIGN_ONLY
+    """Information regime of one policy, from the central registry."""
+    return POLICIES[policy_id].regime
 
 
 def is_deployable(policy_id: PolicyId) -> bool:
-    """Whether one policy may deploy client thresholds."""
-    return policy_id not in SUPERVISED_POLICIES and policy_id is not PolicyId.ORACLE_TEST
+    """Whether one policy may deploy client thresholds, from the central registry."""
+    return POLICIES[policy_id].deployable
+
+
+@dataclass(frozen=True, slots=True)
+class _PreparedThresholds:
+    """Shared threshold inputs materialized once for the requested policies."""
+
+    global_q: Threshold | None
+    local_q: Mapping[ClientId, Threshold]
+    shrinkage_n0: NonNegativeInt | None
+    three_sigma_threshold: Threshold | None
+    summary_threshold: Threshold | None
+    supervised_threshold: Threshold | None
+    supervised_by_client: Mapping[ClientId, SupervisedDevelopmentEvidence]
+
+
+def _evaluate(
+    strategy: PolicyStrategy,
+    benign: BenignPolicyEvidence,
+    prepared: _PreparedThresholds,
+    alpha: Alpha,
+) -> Threshold | None:
+    """Dispatch one policy strategy to its threshold evaluator.
+
+    A None result is a legitimate undefined threshold (the summary-statistic
+    comparator); every other strategy must materialize its shared input.
+    """
+    match strategy:
+        case PolicyStrategy.REFERENCE:
+            return reference_quantile(benign)
+        case PolicyStrategy.GLOBAL_QUANTILE:
+            if prepared.global_q is None:
+                raise RuntimeError("Global quantile was not materialized")
+            return prepared.global_q
+        case PolicyStrategy.LOCAL_QUANTILE:
+            return prepared.local_q[benign.client_id]
+        case PolicyStrategy.READINESS:
+            return readiness_only(benign)
+        case PolicyStrategy.MISMATCH:
+            return mismatch_only(benign, alpha)
+        case PolicyStrategy.SHRINKAGE:
+            if prepared.shrinkage_n0 is None:
+                raise RuntimeError("Shrinkage tuning was not materialized")
+            return shrinkage(benign, alpha, prepared.shrinkage_n0)
+        case PolicyStrategy.THREE_SIGMA:
+            if prepared.three_sigma_threshold is None:
+                raise RuntimeError("Three-sigma threshold was not materialized")
+            return prepared.three_sigma_threshold
+        case PolicyStrategy.DEV_F1:
+            if prepared.global_q is None:
+                raise RuntimeError("Global quantile was not materialized")
+            return dev_local_global(
+                prepared.supervised_by_client[benign.client_id],
+                prepared.global_q,
+                prepared.local_q[benign.client_id],
+            )
+        case PolicyStrategy.SUMMARY_STATISTIC:
+            return prepared.summary_threshold
+        case PolicyStrategy.SUPERVISED_F1:
+            if prepared.supervised_threshold is None:
+                raise RuntimeError("Supervised F1 threshold was not materialized")
+            return prepared.supervised_threshold
+        case PolicyStrategy.FEDCRG:
+            return benign.evaluation.decision.threshold
+        case _:
+            raise RuntimeError(f"Unhandled threshold strategy: {strategy.value}")
 
 
 class PolicyThresholdSelector:
@@ -517,7 +804,9 @@ class PolicyThresholdSelector:
         if len(set(client_ids)) != len(client_ids):
             raise ValueError("Policy selection received duplicate client identities")
 
-        supervised_needed = bool(set(non_oracle) & SUPERVISED_POLICIES)
+        supervised_needed = any(
+            POLICIES[policy].requires_supervised_development for policy in non_oracle
+        )
         supervised_by_client: dict[ClientId, SupervisedDevelopmentEvidence] = {}
         if supervised_needed:
             if supervised_clients is None:
@@ -530,27 +819,9 @@ class PolicyThresholdSelector:
                 "Supervised development evidence was supplied although no supervised policy was requested"
             )
 
-        need_global = (
-            bool(
-                set(non_oracle)
-                & {
-                    PolicyId.GLOBAL_QUANTILE,
-                    PolicyId.DEV_F1_SELECT,
-                }
-            )
-            or PolicyId.ORACLE_TEST in requested_policies
-        )
-        need_local = (
-            bool(
-                set(non_oracle)
-                & {
-                    PolicyId.LOCAL_QUANTILE,
-                    PolicyId.DEV_F1_SELECT,
-                }
-            )
-            or PolicyId.ORACLE_TEST in requested_policies
-        )
-        need_method = PolicyId.FEDCRG in non_oracle or PolicyId.ORACLE_TEST in requested_policies
+        need_global = any(POLICIES[policy].uses_global_budget for policy in requested_policies)
+        need_local = any(POLICIES[policy].uses_local_budget for policy in requested_policies)
+        need_method = any(POLICIES[policy].needs_method for policy in requested_policies)
 
         global_q = global_quantile(benign_clients, protocol.alpha) if need_global else None
         local_q = (
@@ -564,18 +835,20 @@ class PolicyThresholdSelector:
                 protocol.alpha,
                 statistics.shrinkage_n0_candidates,
             )
-            if PolicyId.SHRINKAGE in non_oracle
+            if any(POLICIES[policy].uses_shrinkage_tuning for policy in non_oracle)
             else None
         )
         three_sigma_threshold = (
-            three_sigma(benign_clients) if PolicyId.THREE_SIGMA in non_oracle else None
+            three_sigma(benign_clients)
+            if any(POLICIES[policy].uses_three_sigma for policy in non_oracle)
+            else None
         )
         summary_threshold = (
             summary_statistic_threshold(
                 tuple(supervised_by_client.values()),
                 statistics.supervised_threshold_candidates,
             )
-            if PolicyId.SUMMARY_STATISTIC_SELECT in non_oracle
+            if any(POLICIES[policy].uses_summary_statistic for policy in non_oracle)
             else None
         )
         supervised_threshold = (
@@ -583,8 +856,17 @@ class PolicyThresholdSelector:
                 tuple(supervised_by_client.values()),
                 statistics.supervised_threshold_candidates,
             )
-            if PolicyId.SUPERVISED_F1 in non_oracle
+            if any(POLICIES[policy].uses_supervised_f1 for policy in non_oracle)
             else None
+        )
+        prepared = _PreparedThresholds(
+            global_q=global_q,
+            local_q=local_q,
+            shrinkage_n0=shrinkage_n0,
+            three_sigma_threshold=three_sigma_threshold,
+            summary_threshold=summary_threshold,
+            supervised_threshold=supervised_threshold,
+            supervised_by_client=supervised_by_client,
         )
 
         entries: list[ClientPolicyThreshold] = []
@@ -600,53 +882,20 @@ class PolicyThresholdSelector:
         for benign in benign_clients:
             client_id = benign.client_id
             for policy in non_oracle:
-                threshold: Threshold | None
-                if policy is PolicyId.REFERENCE_QUANTILE:
-                    threshold = reference_quantile(benign)
-                elif policy is PolicyId.GLOBAL_QUANTILE:
-                    threshold = global_q
-                elif policy is PolicyId.LOCAL_QUANTILE:
-                    threshold = local_q[client_id]
-                elif policy is PolicyId.READINESS_ONLY:
-                    threshold = readiness_only(benign)
-                elif policy is PolicyId.MISMATCH_ONLY:
-                    threshold = mismatch_only(benign, protocol.alpha)
-                elif policy is PolicyId.SHRINKAGE:
-                    if shrinkage_n0 is None:
-                        raise RuntimeError("Shrinkage tuning was not materialized")
-                    threshold = shrinkage(benign, protocol.alpha, shrinkage_n0)
-                elif policy is PolicyId.THREE_SIGMA:
-                    threshold = three_sigma_threshold
-                elif policy is PolicyId.DEV_F1_SELECT:
-                    if global_q is None:
-                        raise RuntimeError("Global quantile was not materialized")
-                    threshold = dev_local_global(
-                        supervised_by_client[client_id],
-                        global_q,
-                        local_q[client_id],
-                    )
-                elif policy is PolicyId.SUMMARY_STATISTIC_SELECT:
-                    threshold = summary_threshold
-                elif policy is PolicyId.SUPERVISED_F1:
-                    threshold = supervised_threshold
-                elif policy is PolicyId.FEDCRG:
-                    threshold = benign.evaluation.decision.threshold
-                else:
-                    raise RuntimeError(f"Unhandled non-oracle policy: {policy.value}")
+                threshold = _evaluate(POLICIES[policy].strategy, benign, prepared, protocol.alpha)
                 entries.append(ClientPolicyThreshold(policy, client_id, threshold))
 
             if PolicyId.ORACLE_TEST in requested_policies:
                 if global_q is None or client_id not in local_q or not need_method:
                     raise RuntimeError("Oracle candidate thresholds were not prepared")
-                for policy, threshold in (
-                    (PolicyId.GLOBAL_QUANTILE, global_q),
-                    (PolicyId.LOCAL_QUANTILE, local_q[client_id]),
-                    (PolicyId.FEDCRG, benign.evaluation.decision.threshold),
-                ):
+                for policy in POLICIES[PolicyId.ORACLE_TEST].candidate_policies:
                     if not any(
                         item.policy is policy and item.client_id == client_id for item in entries
                     ):
-                        entries.append(ClientPolicyThreshold(policy, client_id, threshold))
+                        candidate = _evaluate(
+                            POLICIES[policy].strategy, benign, prepared, protocol.alpha
+                        )
+                        entries.append(ClientPolicyThreshold(policy, client_id, candidate))
 
         expected = {(policy, client_id) for policy in non_oracle for client_id in client_ids}
         observed = {

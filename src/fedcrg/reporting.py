@@ -56,7 +56,6 @@ from fedcrg.types import (
     FailureCode,
     Fraction,
     Identifier,
-    InformationRegime,
     Metric,
     ModelSeed,
     NonNegativeCount,
@@ -167,15 +166,6 @@ def _definition_for(manifest: RunManifest):
     return Study.load().catalogue.spec(manifest.experiment_id)
 
 
-class LiteratureBoundaryRow(BaseModel):
-    """One literature-boundary table row."""
-
-    model_config = Frozen
-
-    policy_id: PolicyId
-    information_regime: InformationRegime
-
-
 class AdmissionStateRow(BaseModel):
     """One admission-state table row."""
 
@@ -260,36 +250,6 @@ class FederationResultsRow(BaseModel):
 
 class PublicationTableBuilder:
     """Deterministic manuscript-table builders from frozen artifacts."""
-
-    def literature_boundary(self, output: Path) -> Path:
-        rows = tuple(
-            LiteratureBoundaryRow(
-                policy_id=policy,
-                information_regime=InformationRegime.BENIGN_ONLY,
-            )
-            for policy in (
-                PolicyId.REFERENCE_QUANTILE,
-                PolicyId.GLOBAL_QUANTILE,
-                PolicyId.LOCAL_QUANTILE,
-                PolicyId.SHRINKAGE,
-                PolicyId.THREE_SIGMA,
-                PolicyId.FEDCRG,
-            )
-        ) + tuple(
-            LiteratureBoundaryRow(
-                policy_id=policy,
-                information_regime=InformationRegime.SUPERVISED_DEVELOPMENT,
-            )
-            for policy in (
-                PolicyId.DEV_F1_SELECT,
-                PolicyId.SUMMARY_STATISTIC_SELECT,
-                PolicyId.SUPERVISED_F1,
-            )
-        )
-        return self._write(
-            pd.DataFrame.from_records(row.model_dump(mode="json") for row in rows),
-            output,
-        )
 
     def primary_policy_results(self, run_dirs: tuple[Path, ...], output: Path) -> Path:
         records = load_federation_results(run_dirs)
@@ -496,46 +456,40 @@ class PublicationPackageBuilder:
 
         tables = (
             self._table(
-                "Table 1 - Literature boundary",
-                lambda: self.tables.literature_boundary(
-                    table_root / "table_1_literature_boundary.csv"
-                ),
-            ),
-            self._table(
-                "Table 2 - Protocol constants",
+                "Table 1 - Protocol constants",
                 lambda: self.tables.protocol_constants(
-                    config, table_root / "table_2_protocol_constants.csv"
+                    config, table_root / "table_1_protocol_constants.csv"
                 ),
             ),
             self._optional_table(
-                "Table 3 - Dataset inventory",
+                "Table 2 - Dataset inventory",
                 prepared_manifest,
                 lambda path: self.tables.dataset_inventory(
-                    path, table_root / "table_3_dataset_inventory.csv"
+                    path, table_root / "table_2_dataset_inventory.csv"
                 ),
                 "prepared dataset manifest is unavailable",
             ),
             self._runs_table(
-                "Table 4 - Primary policy results",
+                "Table 3 - Primary policy results",
                 primary_runs,
                 lambda: self.tables.primary_policy_results(
-                    primary_runs, table_root / "table_4_primary_policy_results.csv"
+                    primary_runs, table_root / "table_3_primary_policy_results.csv"
                 ),
                 "primary policy runs are unavailable",
             ),
             self._runs_table(
-                "Table 5 - Admission states",
+                "Table 4 - Admission states",
                 fedcrg_primary,
                 lambda: self.tables.admission_states_from_runs(
-                    fedcrg_primary, table_root / "table_5_admission_states.csv"
+                    fedcrg_primary, table_root / "table_4_admission_states.csv"
                 ),
                 "FedCRG admission runs are unavailable",
             ),
             self._runs_table(
-                "Table 6 - Ablations",
+                "Table 5 - Ablations",
                 fedcrg_primary,
                 lambda: self.tables.ablations(
-                    primary_runs, table_root / "table_6_ablations.csv", config
+                    primary_runs, table_root / "table_5_ablations.csv", config
                 ),
                 "primary policy runs are unavailable",
             ),
