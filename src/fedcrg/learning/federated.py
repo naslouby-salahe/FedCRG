@@ -6,7 +6,6 @@ from __future__ import annotations
 import hashlib
 import math
 import random
-import time
 from collections.abc import Mapping, Sequence
 
 import numpy as np
@@ -17,17 +16,19 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from fedcrg.config import TrainingConfig
 from fedcrg.learning.detectors import Autoencoder, DeepSvdd, DetectorModel
-from fedcrg.runtime import cuda_device_info, resolve_compute_device
+from fedcrg.runtime import resolve_compute_device
 from fedcrg.types import (
     ByteCount,
     ClientFraction,
     ClientId,
     Correlation,
     EpochCount,
+    FeatureCount,
     LearningRate,
     Loss,
     MetricDifference,
     ModelSeed,
+    ParameterCount,
     PositiveCount,
     RngSeed,
     RoundCount,
@@ -35,6 +36,73 @@ from fedcrg.types import (
 )
 
 Frozen = ConfigDict(frozen=True)
+
+_FLOAT32_BYTES = 4
+_FLOAT64_BYTES = 8
+_INT64_BYTES = 8
+
+
+class ModelCommunicationLedger(BaseModel):
+    """Deterministic federated model-tensor communication accounting."""
+
+    model_config = Frozen
+
+    client_count: PositiveCount
+    rounds: RoundCount
+    trainable_parameters: ParameterCount
+    model_payload_bytes: ByteCount
+    federation_bytes: ByteCount
+
+
+def model_communication(
+    client_count: PositiveCount,
+    rounds: RoundCount,
+    trainable_parameters: ParameterCount,
+) -> ModelCommunicationLedger:
+    """Model tensor payload and 30-round full-federation exchange.
+
+    Each round exchanges one server-to-client broadcast copy and one
+    client-to-server upload per client, so the federation total is
+    ``2 * client_count * rounds * payload`` with a float32 payload of
+    ``4 * trainable_parameters`` bytes.
+    """
+    if client_count <= 0 or rounds <= 0 or trainable_parameters <= 0:
+        raise ValueError("Communication accounting requires positive inputs")
+    payload = trainable_parameters * _FLOAT32_BYTES
+    return ModelCommunicationLedger(
+        client_count=client_count,
+        rounds=rounds,
+        trainable_parameters=trainable_parameters,
+        model_payload_bytes=payload,
+        federation_bytes=2 * client_count * rounds * payload,
+    )
+
+
+class PreprocessingCommunicationLedger(BaseModel):
+    """Deterministic federated min/max extrema exchange accounting."""
+
+    model_config = Frozen
+
+    client_count: PositiveCount
+    feature_count: FeatureCount
+    bytes_per_client: ByteCount
+    federation_upload_bytes: ByteCount
+
+
+def preprocessing_communication(
+    client_count: PositiveCount,
+    feature_count: FeatureCount,
+) -> PreprocessingCommunicationLedger:
+    """Per-feature extrema exchange: 2 float64 values per feature."""
+    if client_count <= 0 or feature_count <= 0:
+        raise ValueError("Communication accounting requires positive inputs")
+    bytes_per_client = 2 * feature_count * _FLOAT64_BYTES
+    return PreprocessingCommunicationLedger(
+        client_count=client_count,
+        feature_count=feature_count,
+        bytes_per_client=bytes_per_client,
+        federation_upload_bytes=client_count * bytes_per_client,
+    )
 
 
 def cosine_learning_rate(
@@ -286,7 +354,6 @@ class FederatedTrainer:
         model_payload_bytes = model.trainable_tensor_bytes()
 
         for round_index in range(config.rounds):
-            started = time.monotonic()
             round_result = self._train_round(
                 server=server,
                 clients=clients,

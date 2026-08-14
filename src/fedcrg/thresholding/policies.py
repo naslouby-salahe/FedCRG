@@ -9,10 +9,9 @@ deployable threshold.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from enum import StrEnum
 
 import numpy as np
+from pydantic import BaseModel, ConfigDict
 
 from fedcrg.thresholding.readiness import (
     CalibrationReadinessState,
@@ -21,10 +20,11 @@ from fedcrg.thresholding.readiness import (
     Threshold,
 )
 from fedcrg.thresholding.metrics import band_error, confusion_matrix, f1, tpr
-from fedcrg.config import ProtocolConfig, StatisticsConfig
+from fedcrg.config import ExperimentConfig, ProtocolConfig, StatisticsConfig
 from fedcrg.types import (
     Alpha,
     AttackGroupId,
+    ByteCount,
     CandidateCount,
     ClientId,
     ClassMoments,
@@ -36,10 +36,72 @@ from fedcrg.types import (
     NonNegativeInt,
     OperatingBand,
     PolicyId,
+    PositiveCount,
     SampleCount,
-    Score,
     SupervisedClassLabel,
 )
+
+Frozen = ConfigDict(frozen=True)
+
+_FLOAT64_BYTES = 8
+_INT64_BYTES = 8
+
+
+class PolicyTrafficLedgerRow(BaseModel):
+    """Deterministic threshold-policy upload payload for one policy."""
+
+    model_config = Frozen
+
+    policy: PolicyId
+    upload_bytes_per_client: ByteCount
+
+
+def threshold_policy_communication(
+    config: ExperimentConfig,
+    client_count: PositiveCount,
+) -> tuple[PolicyTrafficLedgerRow, ...]:
+    """Threshold-policy upload payloads, separate from model-training traffic.
+
+    The ledger covers the protocol-mandated uploads of the threshold-policy
+    payload accounting section: the FedCRG reference scores, the naive
+    full-budget score upload of the global and three-sigma comparators, and
+    the summary-statistic/F1 candidate vectors. Every other policy constructs
+    its threshold from local evidence or from reference scores already
+    uploaded, so it adds no upload payload. All counts are read from the
+    resolved experiment configuration.
+    """
+    if client_count <= 0:
+        raise ValueError("Policy traffic accounting requires a positive client count")
+    split = config.dataset.split
+    full_policy_budget = (
+        split.reference_benign + split.mismatch_benign + split.calibration_benign
+    )
+    reference_payload = split.reference_benign * _FLOAT64_BYTES
+    full_budget_payload = full_policy_budget * _FLOAT64_BYTES
+    candidates = config.statistics.supervised_threshold_candidates
+    moment_payload = 2 * (_INT64_BYTES + 2 * _FLOAT64_BYTES)
+    candidate_payload = candidates * _FLOAT64_BYTES
+
+    rows = (
+        PolicyTrafficLedgerRow(policy=PolicyId.REFERENCE_QUANTILE, upload_bytes_per_client=reference_payload),
+        PolicyTrafficLedgerRow(policy=PolicyId.GLOBAL_QUANTILE, upload_bytes_per_client=full_budget_payload),
+        PolicyTrafficLedgerRow(policy=PolicyId.LOCAL_QUANTILE, upload_bytes_per_client=0),
+        PolicyTrafficLedgerRow(policy=PolicyId.READINESS_ONLY, upload_bytes_per_client=0),
+        PolicyTrafficLedgerRow(policy=PolicyId.MISMATCH_ONLY, upload_bytes_per_client=0),
+        PolicyTrafficLedgerRow(policy=PolicyId.SHRINKAGE, upload_bytes_per_client=0),
+        PolicyTrafficLedgerRow(policy=PolicyId.THREE_SIGMA, upload_bytes_per_client=full_budget_payload),
+        PolicyTrafficLedgerRow(policy=PolicyId.DEV_F1_SELECT, upload_bytes_per_client=0),
+        PolicyTrafficLedgerRow(
+            policy=PolicyId.SUMMARY_STATISTIC_SELECT,
+            upload_bytes_per_client=moment_payload + candidate_payload,
+        ),
+        PolicyTrafficLedgerRow(policy=PolicyId.SUPERVISED_F1, upload_bytes_per_client=candidate_payload),
+        PolicyTrafficLedgerRow(policy=PolicyId.ORACLE_TEST, upload_bytes_per_client=0),
+        PolicyTrafficLedgerRow(policy=PolicyId.FEDCRG, upload_bytes_per_client=reference_payload),
+    )
+    if len(rows) != len(PolicyId):
+        raise RuntimeError("Policy traffic ledger must contain exactly one row per policy")
+    return rows
 
 
 class BenignPolicyEvidence:

@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Annotated
 
 import numpy as np
-import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
 from scipy.stats import binom, gamma, lognorm, norm
 
@@ -34,7 +33,6 @@ from fedcrg.types import (
     BlockCount,
     BootstrapReplicateCount,
     CalibrationSeed,
-    ClientId,
     ConfidenceLevel,
     ContaminationDirection,
     ContaminationFraction,
@@ -45,7 +43,6 @@ from fedcrg.types import (
     Fpr,
     Fraction,
     Identifier,
-    JsonValue,
     ModelSeed,
     NonNegativeCount,
     PolicyId,

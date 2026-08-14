@@ -1,23 +1,22 @@
 {
   "goal": "FedCRG architecture simplification and full implementation (prompt.md)",
-  "cycle": 1,
-  "updated_at": "2026-08-13T00:00:00Z",
+  "cycle": 2,
+  "updated_at": "2026-08-14T12:00:00Z",
   "baseline": {
-    "pytest": "148 passed",
-    "ruff_check": "pass",
-    "ruff_format": "2 files need formatting",
-    "pyright": "4 errors"
+    "pytest": "contract 84 passed; integration/unit/regression 38 collection errors (stale imports)",
+    "ruff_check": "50 errors (F401/F841/F811/B007/B023)",
+    "ruff_format": "22 files need formatting",
+    "pyright": "0 errors on src/fedcrg",
+    "entry_point": "fedcrg.cli.app:cli is broken (cli.py is a module)"
   },
   "milestones": {
-    "m0_tracking": {"status": "in_progress", "note": "docs/FedCRG Audit Matrix.md + docs/work/ JSON state created"},
-    "m1_config": {"status": "pending", "note": "config/{study,datasets,experiments}.yaml + src/fedcrg/config.py; delete configs/"},
-    "m2_catalogue": {"status": "pending", "note": "experiment catalogue to experiments.yaml; delete experiments/definitions/"},
-    "m3_source": {"status": "pending", "note": "restructure src/fedcrg to target tree"},
-    "m4_tests": {"status": "pending", "note": "migrate tests, rewrite architecture contract tests, add primitive-leak/drift/canonical tests"},
-    "m5_reuse_tests": {"status": "pending", "note": "preprocessing/cache/publication/runtime reuse tests"},
-    "m6_outputs_results": {"status": "pending", "note": "outputs restructure + results bundles + CLI"},
-    "m7_tooling": {"status": "pending", "note": "CLI surface, Makefile, noxfile, pyproject, README"},
-    "m8_quality": {"status": "pending", "note": "full quality gate + hostile audit loop"}
+    "m0_tracking": {"status": "completed", "note": "Fresh matrix + JSON state rebuilt from current tree on 2026-08-14; stale markdown status removed"},
+    "m1_source_fixes": {"status": "in_progress", "note": "runner.py graphlib topo sort, oracle-test gap, run_id; reporting.py signature; store.py immutability; preprocessing reuse validation + locked attack-dev allocation; federated communication ledgers"},
+    "m2_cli": {"status": "pending", "note": "cli.py rewritten to target surface wired to real modules; pyproject entry point fixed"},
+    "m3_tests": {"status": "pending", "note": "tests/_fixtures.py + all integration/unit/regression tests migrated to target module layout"},
+    "m4_new_tests": {"status": "pending", "note": "preprocessing reuse (10 scenarios), cache reuse, results bundle, runtime console contract tests"},
+    "m5_tooling": {"status": "pending", "note": "Makefile, noxfile, tools/audit_repository.py, README, CI aligned to target architecture"},
+    "m6_quality": {"status": "pending", "note": "ruff format+check, pyright strict, full pytest, nox quality, CLI smoke, hostile audit loop"}
   },
-  "current_focus": "m0_tracking"
+  "current_focus": "m1_source_fixes"
 }

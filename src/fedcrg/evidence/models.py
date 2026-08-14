@@ -6,19 +6,15 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import PurePosixPath
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from fedcrg.learning.federated import TrainingResult
-from fedcrg.learning.scores import ScoreManifest
 from fedcrg.types import (
-    Alpha,
     Assurance,
     ByteCount,
     CalibrationAssignmentMode,
-    CalibrationReadinessState,
     CalibrationSeed,
     ClientId,
-    ConfidenceInterval,
     DataRole,
     DatasetId,
     DecisionReason,
@@ -31,7 +27,6 @@ from fedcrg.types import (
     Fpr,
     Fraction,
     Identifier,
-    MismatchOutcome,
     ModelSeed,
     PValue,
     PolicyId,

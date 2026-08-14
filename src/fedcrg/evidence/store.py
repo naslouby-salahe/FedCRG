@@ -6,7 +6,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shutil
 import uuid
 from pathlib import Path
 from typing import Generic, TypeVar
@@ -14,7 +13,7 @@ from typing import Generic, TypeVar
 import yaml
 from pydantic import BaseModel
 
-from fedcrg.config import ExperimentConfig
+from fedcrg.config import ExperimentConfig, ExperimentSpec
 from fedcrg.evidence.models import (
     CalibrationAssignmentManifest,
     CacheReference,
@@ -24,13 +23,11 @@ from fedcrg.evidence.models import (
     RunManifest,
     TrainingManifest,
 )
-from fedcrg.config import ExperimentSpec
 from fedcrg.types import (
     ArtifactType,
     ByteCount,
     CalibrationSeed,
     DetectorId,
-    ExperimentStatus,
     Identifier,
     JsonValue,
     ModelSeed,
@@ -132,8 +129,35 @@ class TrainingManifestStore(ModelStore):
 
 
 class RunManifestStore(ModelStore):
-    """Atomic store for run manifests."""
+    """Atomic store for run manifests.
+
+    Completed and failed runs are immutable: once a manifest is recorded as
+    COMPLETE or FAILED it cannot be overwritten by another status, so run
+    evidence cannot silently change after finalization.
+    """
+
     model = RunManifest
+
+    _TERMINAL_STATUSES = frozenset({"complete", "failed"})
+
+    def save(self, path: Path, manifest: RunManifest) -> None:
+        if path.is_file():
+            try:
+                existing = self.load(path)
+            except Exception:
+                existing = None
+            if (
+                existing is not None
+                and existing.status.value in self._TERMINAL_STATUSES
+                and existing.status is not manifest.status
+            ):
+                from fedcrg.types import ImmutableRunError
+
+                raise ImmutableRunError(
+                    f"Cannot overwrite a finalized run manifest: {path} "
+                    f"({existing.status.value} -> {manifest.status.value})"
+                )
+        super().save(path, manifest)
 
 
 class EligibilityManifestStore(ModelStore):
@@ -267,8 +291,25 @@ class RunLayout:
             directory.mkdir()
 
 
+class PreparedLayout:
+    """Reserved prepared-cache artifact names: manifests, preprocessing and
+    eligibility evidence, training manifests, model files, raw staging, and
+    calibration-split files."""
+
+    manifest_filename = "manifest.json"
+    preprocessing_filename = "preprocessing.json"
+    eligibility_filename = "eligibility.json"
+    diad_eligibility_filename = "diad_eligibility.json"
+    training_filename = "training.json"
+    model_filename = "model.pt"
+    raw_staging_directory = "_raw"
+    calibration_split_directory = "splits/seeded"
+    source_order_split_filename = "splits/source_order.json"
+
+
 class OutputsLayout:
-    """Own every reserved outputs/ path name so no module hardcodes one."""
+    """Reserved outputs/ directory tree: runs, caches, campaigns, logs,
+    monitoring, reports, environment and telemetry files."""
 
     def __init__(self, outputs_root: Path = Path("outputs")) -> None:
         self.outputs_root = outputs_root
@@ -375,11 +416,9 @@ def build_run_id(
     rho_bp = round(protocol.rho * 10_000)
     assurance_bp = round(protocol.readiness_assurance * 10_000)
     confidence_bp = round(protocol.mismatch_confidence * 10_000)
-    detector_label = (
-        "ae" if detector.id is DetectorId.AUTOENCODER else detector.id.value
-    )
+    detector_label = "ae" if detector.id is DetectorId.AUTOENCODER else detector.id.value
     prefix = (
-        f"{config.dataset.id.value}__{detector}__ms{int(model_seed)}__"
+        f"{config.dataset.id.value}__{detector_label}__ms{int(model_seed)}__"
         f"cs{int(calibration_seed)}__a{alpha_ppm}__r{rho_bp}__"
         f"ga{assurance_bp}__gb{confidence_bp}__{policy.value.lower()}"
     )

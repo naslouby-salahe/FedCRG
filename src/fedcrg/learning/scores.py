@@ -9,11 +9,10 @@ never serialized into the physical score cache.
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import shutil
 import uuid
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -22,19 +21,16 @@ import pandas as pd
 import torch
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from fedcrg.config import DatasetConfig, ExperimentConfig
+from fedcrg.config import DatasetConfig
 from fedcrg.learning.detectors import DetectorModel
 from fedcrg.runtime import resolve_compute_device
 from fedcrg.types import (
-    Alpha,
     AttackGroupId,
     BatchSize,
-    ByteCount,
     CalibrationAssignmentMode,
     CalibrationSeed,
     ClientId,
     ComputeDeviceId,
-    DataIntegrityError,
     DataRole,
     DatasetId,
     Identifier,

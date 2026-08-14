@@ -17,13 +17,19 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from fedcrg.config import ExperimentConfig, Study
-from fedcrg.evidence.models import RunManifest
+from fedcrg.evidence.models import (
+    ChecksumRecord,
+    GitEnvironment,
+    MetricRecord,
+    PreparedDatasetManifest,
+    RunManifest,
+    ThresholdRecord,
+)
 from fedcrg.evidence.store import (
     ArtifactVerifier,
     OutputsLayout,
     RunLayout,
     atomic_write_json,
-    load_json_model,
     sha256_file,
 )
 from fedcrg.experiments.analyses import (
@@ -33,14 +39,6 @@ from fedcrg.experiments.analyses import (
 )
 from fedcrg.runtime import get_logger
 from fedcrg.thresholding.metrics import FederationMetrics
-from fedcrg.evidence.models import (
-    ChecksumRecord,
-    GitEnvironment,
-    MetricRecord,
-    PreparedDatasetManifest,
-    RunManifest,
-    ThresholdRecord,
-)
 from fedcrg.types import (
     Assurance,
     CalibrationSeed,
@@ -736,11 +734,18 @@ def build_repository_report(outputs: Path, config: ExperimentConfig) -> Path:
     return output
 
 
-def build_publication(outputs: Path, config: ExperimentConfig) -> Path:
+def build_publication(
+    config: ExperimentConfig,
+    outputs_root: Path,
+    prepared_manifest: Path | None = None,
+    destination: Path | None = None,
+) -> Path:
     """Build the publication package and return its manifest."""
     package = PublicationPackageBuilder().build(
         config=config,
-        outputs_root=outputs,
+        outputs_root=outputs_root,
+        prepared_manifest=prepared_manifest,
+        destination=destination,
     )
     return package.manifest
 
@@ -828,6 +833,17 @@ class ResultsBuilder:
             return
         records: list[MetricRecord] = []
         for run_root in sorted(path for path in runs_root.iterdir() if path.is_dir()):
+            manifest_path = run_root / "manifest.json"
+            if not manifest_path.is_file():
+                continue
+            try:
+                manifest = RunManifest.model_validate_json(
+                    manifest_path.read_text(encoding="utf-8")
+                )
+            except pydantic.ValidationError:
+                continue
+            if manifest.status.value != "complete":
+                continue
             metric_path = run_root / "metrics" / "metric_record.jsonl"
             if not metric_path.is_file():
                 continue

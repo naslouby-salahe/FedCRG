@@ -8,6 +8,7 @@ from __future__ import annotations
 import shutil
 import time
 from collections.abc import Callable, Mapping
+from graphlib import TopologicalSorter
 from pathlib import Path
 
 import numpy as np
@@ -17,11 +18,9 @@ import yaml
 from pydantic import BaseModel, ConfigDict
 
 from fedcrg.config import ExperimentConfig, ExperimentSpec, Study
-from fedcrg.data.preprocessing import PrepareData
 from fedcrg.evidence.models import (
     ClientTrainingCount,
     MetricRecord,
-    PreparedDatasetManifest,
     RunManifest,
     ThresholdRecord,
     TrainingManifest,
@@ -31,6 +30,7 @@ from fedcrg.evidence.store import (
     CacheReferenceStore,
     OutputsLayout,
     PreparedDatasetManifestStore,
+    PreparedLayout,
     build_run_id,
     RunLayout,
     RunManifestStore,
@@ -48,7 +48,7 @@ from fedcrg.learning.detectors import (
     autoencoder_tensor_bytes,
     create_detector,
 )
-from fedcrg.learning.federated import FederatedTrainer, TrainingResult
+from fedcrg.learning.federated import FederatedTrainer
 from fedcrg.learning.scores import (
     CalibrationScoreViewBuilder,
     CalibrationScoreViews,
@@ -81,8 +81,6 @@ from fedcrg.thresholding.policies import (
     oracle_choice,
 )
 from fedcrg.types import (
-    ArtifactType,
-    ByteCount,
     CalibrationAssignmentMode,
     CalibrationSeed,
     CampaignId,
@@ -100,6 +98,7 @@ from fedcrg.types import (
     PreparedColumn,
     RunId,
     Sha256,
+    Threshold,
     Timestamp,
     Duration,
 )
@@ -160,49 +159,37 @@ def assert_transition(current: ExperimentStatus, target: ExperimentStatus) -> No
 class DependencyResolver:
     """Evaluate dependencies and produce a deterministic topological order."""
 
+    def __init__(self, study: Study | None = None) -> None:
+        self.study = study or Study.load()
+
     def blockers(
         self,
         experiment_id: ExperimentId,
         statuses: Mapping[ExperimentId, ExperimentStatus],
     ) -> tuple[ExperimentId, ...]:
-        study = Study.load()
-        blockers = []
-        for dependency in study.catalogue.spec(experiment_id).dependencies:
-            if statuses.get(dependency) is not ExperimentStatus.COMPLETE:
-                blockers.append(dependency)
-        return tuple(blockers)
+        return tuple(
+            dependency
+            for dependency in self.study.catalogue.spec(experiment_id).dependencies
+            if statuses.get(dependency) is not ExperimentStatus.COMPLETE
+        )
 
     def order(self, experiment_ids: tuple[ExperimentId, ...]) -> tuple[ExperimentId, ...]:
-        study = Study.load()
         requested = set(experiment_ids)
         expanded = set(requested)
         stack = list(requested)
         while stack:
             current = stack.pop()
-            for dependency in study.catalogue.spec(current).dependencies:
+            for dependency in self.study.catalogue.spec(current).dependencies:
                 if dependency not in expanded:
                     expanded.add(dependency)
                     stack.append(dependency)
-        ordered: list[ExperimentId] = []
-        remaining = set(expanded)
-        while remaining:
-            ready = sorted(
-                (
-                    item
-                    for item in remaining
-                    if all(
-                        dep in ordered
-                        for dep in study.catalogue.spec(item).dependencies
-                    )
-                ),
-                key=str,
-            )
-            if not ready:
-                raise ValueError("Experiment dependency graph contains a cycle")
-            for item in ready:
-                ordered.append(item)
-                remaining.remove(item)
-        return tuple(item for item in ordered if item in expanded)
+        sorter = TopologicalSorter(
+            {
+                experiment_id: self.study.catalogue.spec(experiment_id).dependencies
+                for experiment_id in sorted(expanded, key=str)
+            }
+        )
+        return tuple(item for item in sorter.static_order() if item in expanded)
 
 
 class ExperimentPlanner:
@@ -366,6 +353,11 @@ class RunExperiment:
         return result, layout
 
 
+def _oracle_candidate_missing(client_id: ClientId) -> Threshold:
+    """Raise when an oracle candidate threshold was not prepared by selection."""
+    raise RuntimeError(f"Oracle candidate threshold is unavailable for {client_id}")
+
+
 def feature_columns(
     frame: pd.DataFrame, expected_count: PositiveCount
 ) -> tuple[FeatureName, ...]:
@@ -433,8 +425,8 @@ class TrainDetector:
         if int(model_seed) not in config.randomness.model_seeds:
             raise ValueError(f"Model seed {int(model_seed)} is not configured")
 
-        prepared_manifest_path = prepared_root / "manifest.json"
-        preprocessing_path = prepared_root / "preprocessing.json"
+        prepared_manifest_path = prepared_root / PreparedLayout.manifest_filename
+        preprocessing_path = prepared_root / PreparedLayout.preprocessing_filename
         prepared_manifest = self.dataset_manifests.load_model(prepared_manifest_path)
         if prepared_manifest.data_spec_hash != config.data_spec_hash:
             raise ValueError("Prepared dataset data-spec hash does not match training config")
@@ -472,8 +464,8 @@ class TrainDetector:
         if config.detector is None:
             raise ValueError("Training requires a detector profile")
         model_root = OutputsLayout(config.outputs_root).model_root(config, model_seed)
-        model_path = model_root / "model.pt"
-        manifest_path = model_root / "training.json"
+        model_path = model_root / PreparedLayout.model_filename
+        manifest_path = model_root / PreparedLayout.training_filename
         if model_path.exists() or manifest_path.exists():
             self._validate_existing_cache(
                 config,
@@ -583,8 +575,8 @@ class ComputeScores:
         model_seed: ModelSeed,
         training_manifest: Path,
     ) -> Path:
-        manifest_path = prepared_root / "manifest.json"
-        preprocessing_path = prepared_root / "preprocessing.json"
+        manifest_path = prepared_root / PreparedLayout.manifest_filename
+        preprocessing_path = prepared_root / PreparedLayout.preprocessing_filename
         prepared_manifest = self.dataset_manifests.load_model(manifest_path)
         if prepared_manifest.data_spec_hash != config.data_spec_hash:
             raise ValueError("Prepared dataset data-spec hash does not match scoring config")
@@ -654,7 +646,7 @@ class ComputeScores:
             clients.append((client_id, role_inputs))
 
         role_scores = []
-        from fedcrg.learning.scores import ClientScoreSet, RoleScoreInput, RoleScores
+        from fedcrg.learning.scores import ClientScoreSet, RoleScores
 
         for client_id, inputs in clients:
             training = config.training
@@ -774,9 +766,10 @@ class EvaluatePolicies:
             recall,
             tpr,
         )
-        from fedcrg.thresholding.readiness import clopper_pearson_interval
 
         evaluations: list[PolicyEvaluation] = []
+        oracle_requested = PolicyId.ORACLE_TEST in config.policies
+        oracle_thresholds: dict[ClientId, Threshold] = {}
         for client_id in descriptor.client_ids:
             benign_test = self.score_cache.read_role(score_root, client_id, DataRole.BENIGN_TEST)
             attack_test = self.score_cache.read_role(score_root, client_id, DataRole.ATTACK_TEST)
@@ -789,6 +782,18 @@ class EvaluatePolicies:
                 attack_test_scores=attack_test.values,
                 attack_test_groups=attack_groups,
             )
+            if oracle_requested:
+                oracle_thresholds[client_id] = oracle_choice(
+                    final,
+                    (
+                        thresholds.for_client(PolicyId.GLOBAL_QUANTILE, client_id)
+                        or _oracle_candidate_missing(client_id),
+                        thresholds.for_client(PolicyId.LOCAL_QUANTILE, client_id)
+                        or _oracle_candidate_missing(client_id),
+                        benign_by_client[client_id].evaluation.decision.threshold,
+                    ),
+                    config.protocol.band,
+                )
             test_scores = np.concatenate((benign_test.values, attack_test.values))
             test_labels = np.concatenate(
                 (
@@ -805,7 +810,10 @@ class EvaluatePolicies:
             ranking_auprc = auprc(test_scores, test_labels)
 
             for policy_id in config.policies:
-                threshold = thresholds.for_client(policy_id, client_id)
+                if policy_id is PolicyId.ORACLE_TEST:
+                    threshold = oracle_thresholds[client_id]
+                else:
+                    threshold = thresholds.for_client(policy_id, client_id)
                 if threshold is None:
                     evaluations.append(
                         PolicyEvaluation(
@@ -1114,8 +1122,8 @@ class PolicyCellMaterializer:
         config: ExperimentConfig,
         caches: FrozenCacheInputs,
     ) -> None:
-        prepared_manifest_path = caches.prepared_root / "manifest.json"
-        preprocessing_path = caches.prepared_root / "preprocessing.json"
+        prepared_manifest_path = caches.prepared_root / PreparedLayout.manifest_filename
+        preprocessing_path = caches.prepared_root / PreparedLayout.preprocessing_filename
         required = (
             prepared_manifest_path,
             preprocessing_path,
@@ -1175,11 +1183,17 @@ class PolicyCellMaterializer:
         calibration_seed: CalibrationSeed,
         assignment_mode: CalibrationAssignmentMode,
     ) -> None:
-        self._copy(caches.prepared_root / "manifest.json", layout.data / "dataset_manifest.json")
-        self._copy(caches.prepared_root / "preprocessing.json", layout.data / "preprocessing.json")
+        self._copy(
+            caches.prepared_root / PreparedLayout.manifest_filename,
+            layout.data / "dataset_manifest.json",
+        )
+        self._copy(
+            caches.prepared_root / PreparedLayout.preprocessing_filename,
+            layout.data / "preprocessing.json",
+        )
         self._copy(
             caches.training_manifest,
-            layout.training / "training.json",
+            layout.training / PreparedLayout.training_filename,
         )
         self._copy(
             caches.score_root / ScoreCache.manifest_filename,

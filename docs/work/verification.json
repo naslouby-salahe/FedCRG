@@ -1,9 +1,11 @@
 {
-  "as_of": "2026-08-13T00:00:00Z",
+  "as_of": "2026-08-14T12:00:00Z",
   "verifications": [
-    {"id": "VER001", "check": "pytest full suite", "result": "pass", "detail": "148 tests collected and passed at baseline", "when": "2026-08-13T00:00:00Z"},
-    {"id": "VER002", "check": "ruff check src tests", "result": "pass", "detail": "All checks passed at baseline", "when": "2026-08-13T00:00:00Z"},
-    {"id": "VER003", "check": "ruff format --check src tests", "result": "fail", "detail": "2 files would be reformatted: analysis/policy_contrasts.py, reporting/tables.py", "when": "2026-08-13T00:00:00Z"},
-    {"id": "VER004", "check": "pyright src/fedcrg", "result": "fail", "detail": "4 errors: experiment_runner.py:70 calibration_seed int vs CalibrationSeed", "when": "2026-08-13T00:00:00Z"}
+    {"id": "VER001", "check": "pytest tests/contract", "result": "pass", "detail": "84 contract tests pass: target-architecture enforcement, primitive leakage, terminology hygiene, config drift, catalogue completeness", "when": "2026-08-14T12:00:00Z"},
+    {"id": "VER002", "check": "pytest full suite", "result": "fail", "detail": "38 collection errors in tests/integration, tests/regression, tests/unit: stale imports of pre-restructure packages", "when": "2026-08-14T12:00:00Z"},
+    {"id": "VER003", "check": "ruff check src tests", "result": "fail", "detail": "50 errors (unused imports F401, unused locals F841, redefinitions F811, B007/B023)", "when": "2026-08-14T12:00:00Z"},
+    {"id": "VER004", "check": "ruff format --check src tests", "result": "fail", "detail": "22 files would be reformatted", "when": "2026-08-14T12:00:00Z"},
+    {"id": "VER005", "check": "pyright src/fedcrg", "result": "pass", "detail": "0 errors at standard mode", "when": "2026-08-14T12:00:00Z"},
+    {"id": "VER006", "check": "fedcrg console entry point", "result": "fail", "detail": "pyproject scripts point at fedcrg.cli.app:cli which does not exist", "when": "2026-08-14T12:00:00Z"}
   ]
 }

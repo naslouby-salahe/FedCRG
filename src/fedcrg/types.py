@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
-from typing import Annotated, TypeAlias, TypeAliasType
+from typing import Annotated, TypeAliasType
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 

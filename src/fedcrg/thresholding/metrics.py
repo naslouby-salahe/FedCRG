@@ -28,7 +28,6 @@ from fedcrg.thresholding.readiness import (
 )
 from fedcrg.types import (
     Alpha,
-    Assurance,
     CalibrationReadinessState,
     ClientId,
     ConfidenceInterval,

@@ -14,17 +14,14 @@ import json
 import math
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Self
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict
 from scipy import special
 from scipy.stats import binom
 
 from fedcrg.types import (
     Alpha,
-    Identifier,
-    JsonValue,
     PlanKey,
     Assurance,
     BinomialCounts,
