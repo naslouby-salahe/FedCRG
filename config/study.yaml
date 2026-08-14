@@ -29,6 +29,21 @@ statistics:
   ranking_invariance_tolerance: 0.000000000001
   shrinkage_n0_candidates: [100, 300, 1000, 3000, 10000]
   supervised_threshold_candidates: 1000
+  split_sensitivity_percentiles: [5, 25, 50, 75, 95]
+  bootstrap_ci_percentiles: [2.5, 97.5]
+  benchmark_p95_percentile: 95
+
+synthetic:
+  lognormal_mean: 0.0
+  lognormal_sigma: 1.0
+  gamma_shape: 2.0
+  gamma_scale: 1.0
+  mixture_weight: 0.1
+  mixture_shift: 3.0
+  mixture_scale: 1.0
+  coverage_tolerance_floor: 0.005
+  coverage_tolerance_z: 4.0
+  seed_decorrelation_scale: 1000
 
 randomness:
   model_seeds: [11, 22, 33, 44, 55]

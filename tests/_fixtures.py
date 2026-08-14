@@ -16,6 +16,7 @@ from fedcrg.config import (
     RandomnessConfig,
     SplitConfig,
     StatisticsConfig,
+    SyntheticConfig,
     Study,
     TrainingConfig,
 )
@@ -104,6 +105,7 @@ def diad_pipeline_config(root: Path) -> ExperimentConfig:
         ),
         randomness=primary_randomness().model_copy(update={"model_seeds": (11,)}),
         statistics=primary_statistics(),
+        synthetic=primary_synthetic(),
         policies=(PolicyId.REFERENCE_QUANTILE, PolicyId.LOCAL_QUANTILE, PolicyId.FEDCRG),
         outputs_root=root,
         preprocessed_root=root / "preprocessed",
@@ -218,6 +220,24 @@ def primary_statistics() -> StatisticsConfig:
         ranking_invariance_tolerance=1e-12,
         shrinkage_n0_candidates=(100, 300, 1000, 3000, 10000),
         supervised_threshold_candidates=1000,
+        split_sensitivity_percentiles=(5, 25, 50, 75, 95),
+        bootstrap_ci_percentiles=(2.5, 97.5),
+        benchmark_p95_percentile=95,
+    )
+
+
+def primary_synthetic() -> SyntheticConfig:
+    return SyntheticConfig(
+        lognormal_mean=0.0,
+        lognormal_sigma=1.0,
+        gamma_shape=2.0,
+        gamma_scale=1.0,
+        mixture_weight=0.1,
+        mixture_shift=3.0,
+        mixture_scale=1.0,
+        coverage_tolerance_floor=0.005,
+        coverage_tolerance_z=4.0,
+        seed_decorrelation_scale=1000,
     )
 
 
@@ -290,6 +310,7 @@ def primary_experiment_config(
         ),
         randomness=primary_randomness(),
         statistics=primary_statistics(),
+        synthetic=primary_synthetic(),
         policies=(PolicyId.FEDCRG,),
         outputs_root=root,
         preprocessed_root=root / "preprocessed",

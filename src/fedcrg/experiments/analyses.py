@@ -10,7 +10,8 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 from scipy.stats import binom, gamma, lognorm, norm
 
-from fedcrg.config import ExperimentConfig, ExperimentSpec, ProtocolConfig, SplitConfig
+from fedcrg.config import ExperimentConfig, ExperimentSpec, ProtocolConfig, SplitConfig, SyntheticConfig
+from fedcrg.statistics import iqr
 from fedcrg.thresholding.metrics import FederationMetrics
 from fedcrg.thresholding.readiness import (
     BinomialCounts,
@@ -48,6 +49,7 @@ from fedcrg.types import (
     Metric,
     ModelSeed,
     NonNegativeCount,
+    Percentage,
     PolicyId,
     PositiveCount,
     RepetitionCount,
@@ -63,35 +65,6 @@ from fedcrg.types import (
 Frozen = ConfigDict(frozen=True)
 
 _CLIENT_ID_ADAPTER = TypeAdapter(ClientId)
-
-# Synthetic distribution shape parameters. draw_distribution() (sampling) and
-# distribution_cdf() (exact CDF) must use identical values or Monte Carlo
-# coverage silently stops matching the exact-probability comparison.
-_LOGNORMAL_MEAN = 0.0
-_LOGNORMAL_SIGMA = 1.0
-_GAMMA_SHAPE = 2.0
-_GAMMA_SCALE = 1.0
-_MIXTURE_WEIGHT = 0.1
-_MIXTURE_LOC = 3.0
-_MIXTURE_SCALE = 1.0
-
-# Contamination stress shifts the sample mean by this many standard
-# deviations in the configured direction.
-_CONTAMINATION_SHIFT = 3.0
-
-# Monte Carlo acceptance tolerance around the exact coverage probability:
-# a floor plus a multiple of the binomial standard error.
-_MIN_COVERAGE_TOLERANCE = 0.005
-_COVERAGE_TOLERANCE_Z = 4.0
-
-# Additive seed offset scale used to decorrelate PRNG streams across axis
-# values (phi, mean shift, contamination fraction) within one experiment.
-_SEED_DECORRELATION_SCALE = 1000
-
-_SPLIT_SENSITIVITY_PERCENTILES = (5, 25, 50, 75, 95)
-_IQR_PERCENTILES = (25, 75)
-_BOOTSTRAP_CI_PERCENTILES = (2.5, 97.5)
-_P95_PERCENTILE = 95
 
 
 class BenchmarkPrimitive(StrEnum):
@@ -188,11 +161,13 @@ def describe(values: tuple[Metric, ...]) -> DescriptiveSummary:
     )
 
 
-def split_sensitivity_summary(values: tuple[Metric, ...]) -> SplitSensitivitySummary:
+def split_sensitivity_summary(
+    values: tuple[Metric, ...], percentiles_config: tuple[Percentage, ...]
+) -> SplitSensitivitySummary:
     data = np.asarray(values, dtype=np.float64)
     if len(data) == 0:
         raise ValueError("Split sensitivity requires values")
-    percentiles = np.percentile(data, _SPLIT_SENSITIVITY_PERCENTILES)
+    percentiles = np.percentile(data, percentiles_config)
     return SplitSensitivitySummary(
         median=float(percentiles[2]),
         iqr=float(percentiles[3] - percentiles[1]),
@@ -207,6 +182,7 @@ def paired_model_seed_bootstrap(
     *,
     replicates: BootstrapReplicateCount,
     seed: AnalysisSeed,
+    ci_percentiles: tuple[Percentage, Percentage],
 ) -> PairedBootstrapInterval:
     left = np.asarray(method, dtype=np.float64)
     right = np.asarray(comparator, dtype=np.float64)
@@ -215,7 +191,7 @@ def paired_model_seed_bootstrap(
     rng = np.random.Generator(np.random.PCG64(int(seed)))
     indices = rng.integers(0, len(left), size=(replicates, len(left)))
     differences = np.mean(left[indices] - right[indices], axis=1)
-    lower, upper = np.percentile(differences, _BOOTSTRAP_CI_PERCENTILES)
+    lower, upper = np.percentile(differences, ci_percentiles)
     return PairedBootstrapInterval(
         observed_difference=float(np.mean(left - right)),
         lower=float(lower),
@@ -229,6 +205,7 @@ def draw_distribution(
     rng: np.random.Generator,
     distribution: SyntheticDistribution,
     size: SampleCount,
+    synthetic: SyntheticConfig,
 ) -> np.ndarray:
     if size <= 0:
         raise ValueError("Synthetic sample size must be positive")
@@ -236,31 +213,42 @@ def draw_distribution(
         case SyntheticDistribution.NORMAL:
             return rng.normal(size=size)
         case SyntheticDistribution.LOGNORMAL:
-            return rng.lognormal(mean=_LOGNORMAL_MEAN, sigma=_LOGNORMAL_SIGMA, size=size)
+            return rng.lognormal(mean=synthetic.lognormal_mean, sigma=synthetic.lognormal_sigma, size=size)
         case SyntheticDistribution.GAMMA_SHAPE_2:
-            return rng.gamma(shape=_GAMMA_SHAPE, scale=_GAMMA_SCALE, size=size)
+            return rng.gamma(shape=synthetic.gamma_shape, scale=synthetic.gamma_scale, size=size)
         case SyntheticDistribution.NORMAL_MIXTURE:
-            component = rng.random(size) < _MIXTURE_WEIGHT
+            component = rng.random(size) < synthetic.mixture_weight
             values = rng.normal(size=size)
             if num_component := int(component.sum()):
-                values[component] = rng.normal(loc=_MIXTURE_LOC, scale=_MIXTURE_SCALE, size=num_component)
+                values[component] = rng.normal(
+                    loc=synthetic.mixture_shift, scale=synthetic.mixture_scale, size=num_component
+                )
             return values
         case _:
             raise AssertionError(f"Unhandled synthetic distribution: {distribution}")
 
 
-def distribution_cdf(distribution: SyntheticDistribution, threshold: Score) -> Metric:
+def distribution_cdf(
+    distribution: SyntheticDistribution, threshold: Score, synthetic: SyntheticConfig
+) -> Metric:
     match distribution:
         case SyntheticDistribution.NORMAL:
             return float(norm.cdf(threshold))
         case SyntheticDistribution.LOGNORMAL:
-            return float(lognorm.cdf(threshold, s=_LOGNORMAL_SIGMA, scale=1.0))
+            return float(
+                lognorm.cdf(
+                    threshold,
+                    s=synthetic.lognormal_sigma,
+                    scale=float(np.exp(synthetic.lognormal_mean)),
+                )
+            )
         case SyntheticDistribution.GAMMA_SHAPE_2:
-            return float(gamma.cdf(threshold, a=_GAMMA_SHAPE, scale=_GAMMA_SCALE))
+            return float(gamma.cdf(threshold, a=synthetic.gamma_shape, scale=synthetic.gamma_scale))
         case SyntheticDistribution.NORMAL_MIXTURE:
             return float(
-                (1.0 - _MIXTURE_WEIGHT) * norm.cdf(threshold)
-                + _MIXTURE_WEIGHT * norm.cdf(threshold, loc=_MIXTURE_LOC, scale=_MIXTURE_SCALE)
+                (1.0 - synthetic.mixture_weight) * norm.cdf(threshold)
+                + synthetic.mixture_weight
+                * norm.cdf(threshold, loc=synthetic.mixture_shift, scale=synthetic.mixture_scale)
             )
         case _:
             raise AssertionError(f"Unhandled synthetic distribution: {distribution}")
@@ -282,6 +270,7 @@ def iid_readiness_validation(
     rho: Fraction,
     assurance: Assurance,
     seed: AnalysisSeed,
+    synthetic: SyntheticConfig,
 ) -> SyntheticCoverageResult:
     band = OperatingBand(
         lower=max(0.0, alpha * (1.0 - rho)),
@@ -292,14 +281,15 @@ def iid_readiness_validation(
     inside = sum(
         band.lower <= (1.0 - distribution_cdf(
             distribution,
-            _threshold(draw_distribution(rng, distribution, sample_count), plan.rank)
+            _threshold(draw_distribution(rng, distribution, sample_count, synthetic), plan.rank),
+            synthetic,
         )) <= band.upper
         for _ in range(repetitions)
     )
     empirical = inside / repetitions
     tolerance = max(
-        _MIN_COVERAGE_TOLERANCE,
-        _COVERAGE_TOLERANCE_Z
+        synthetic.coverage_tolerance_floor,
+        synthetic.coverage_tolerance_z
         * sqrt(plan.coverage_probability * (1.0 - plan.coverage_probability) / repetitions),
     )
     return SyntheticCoverageResult(
@@ -322,13 +312,16 @@ def contamination_validation(
     seed: AnalysisSeed,
     band: OperatingBand,
     assurance: Assurance,
+    synthetic: SyntheticConfig,
 ) -> SyntheticCoverageResult:
     if not 0.0 <= fraction <= 1.0:
         raise ValueError("Contamination fraction must be in [0,1]")
     plan = ReadinessPlanBuilder().build(sample_count, band, assurance)
     rng = np.random.Generator(np.random.PCG64(int(seed)))
     contamination_count = int(round(fraction * sample_count))
-    location = _CONTAMINATION_SHIFT if direction is ContaminationDirection.HIGH else -_CONTAMINATION_SHIFT
+    location = (
+        synthetic.mixture_shift if direction is ContaminationDirection.HIGH else -synthetic.mixture_shift
+    )
     inside = 0
 
     for _ in range(repetitions):
@@ -516,6 +509,7 @@ class RunSyntheticExperiments:
                 rho=config.protocol.rho,
                 assurance=config.protocol.readiness_assurance,
                 seed=int(config.randomness.synthetic_seed + sample_count),
+                synthetic=config.synthetic,
             )
             for distribution in self._distributions(spec)
             for sample_count in self._int_values(spec, ExperimentAxisId.CALIBRATION_N)
@@ -534,6 +528,7 @@ class RunSyntheticExperiments:
                 rho=config.protocol.rho,
                 assurance=config.protocol.readiness_assurance,
                 seed=int(config.randomness.synthetic_seed + int(cell.value(ExperimentAxisId.CALIBRATION_N))),
+                synthetic=config.synthetic,
             )
             for cell in spec.coupled_cells
             for distribution in self._distributions(spec)
@@ -549,7 +544,11 @@ class RunSyntheticExperiments:
                 repetitions,
                 config.protocol.band,
                 config.protocol.readiness_assurance,
-                int(config.randomness.synthetic_seed + sample_count + int(phi * _SEED_DECORRELATION_SCALE)),
+                int(
+                    config.randomness.synthetic_seed
+                    + sample_count
+                    + int(phi * config.synthetic.seed_decorrelation_scale)
+                ),
             )
             for phi in self._float_values(spec, ExperimentAxisId.PHI)
             for sample_count in self._int_values(spec, ExperimentAxisId.CALIBRATION_N)
@@ -564,7 +563,10 @@ class RunSyntheticExperiments:
                 repetitions,
                 config.protocol.band,
                 config.protocol.readiness_assurance,
-                int(config.randomness.synthetic_seed + int(shift * _SEED_DECORRELATION_SCALE)),
+                int(
+                    config.randomness.synthetic_seed
+                    + int(shift * config.synthetic.seed_decorrelation_scale)
+                ),
                 sample_count=config.dataset.split.calibration_benign,
             )
             for shift in self._float_values(spec, ExperimentAxisId.MEAN_SHIFT)
@@ -579,9 +581,13 @@ class RunSyntheticExperiments:
                 direction,
                 repetitions,
                 sample_count=config.dataset.split.calibration_benign,
-                seed=int(config.randomness.synthetic_seed + int(fraction * _SEED_DECORRELATION_SCALE)),
+                seed=int(
+                    config.randomness.synthetic_seed
+                    + int(fraction * config.synthetic.seed_decorrelation_scale)
+                ),
                 band=config.protocol.band,
                 assurance=config.protocol.readiness_assurance,
+                synthetic=config.synthetic,
             )
             for fraction in self._float_values(spec, ExperimentAxisId.FRACTION)
             for direction in self._directions(spec)
@@ -689,6 +695,7 @@ def confirmatory_contrasts(
     expected_model_seeds: tuple[ModelSeed, ...],
     bootstrap_seed: AnalysisSeed,
     bootstrap_replicates: BootstrapReplicateCount,
+    bootstrap_ci_percentiles: tuple[Percentage, Percentage],
 ) -> tuple[PolicyContrastResult, ...]:
     comparators = (
         PolicyId.GLOBAL_QUANTILE,
@@ -722,7 +729,11 @@ def confirmatory_contrasts(
 
             left, right = tuple(map(float, left_values)), tuple(map(float, right_values))
             bootstrap = paired_model_seed_bootstrap(
-                left, right, replicates=bootstrap_replicates, seed=bootstrap_seed
+                left,
+                right,
+                replicates=bootstrap_replicates,
+                seed=bootstrap_seed,
+                ci_percentiles=bootstrap_ci_percentiles,
             )
             comparator_mean = describe(right).mean
             metrics.append(
@@ -768,11 +779,10 @@ def summarize_threshold_stability(values: tuple[Metric, ...]) -> ThresholdStabil
     data = np.asarray(values, dtype=np.float64)
     if data.ndim != 1 or len(data) == 0 or not np.isfinite(data).all():
         raise ValueError("Threshold stability requires finite non-empty values")
-    percentiles = np.percentile(data, _IQR_PERCENTILES)
     return ThresholdStability(
         count=len(data),
         standard_deviation=float(np.std(data, ddof=1)) if len(data) > 1 else 0.0,
-        iqr=float(percentiles[1] - percentiles[0]),
+        iqr=iqr(data),
         minimum=float(np.min(data)),
         maximum=float(np.max(data)),
     )
@@ -817,7 +827,9 @@ class StabilityMetricId(StrEnum):
     ATTACK_BALANCED_MACRO_TPR = "attack_balanced_macro_tpr"
 
 
-def split_sensitivity(records: tuple[FederationResultRecord, ...]) -> tuple[SplitSensitivityRow, ...]:
+def split_sensitivity(
+    records: tuple[FederationResultRecord, ...], percentiles_config: tuple[Percentage, ...]
+) -> tuple[SplitSensitivityRow, ...]:
     grouped: dict[tuple[ModelSeed, PolicyId, StabilityMetricId], list[Metric]] = collections.defaultdict(list)
     for row in records:
         for metric in StabilityMetricId:
@@ -826,7 +838,7 @@ def split_sensitivity(records: tuple[FederationResultRecord, ...]) -> tuple[Spli
 
     def _row(key: tuple[ModelSeed, PolicyId, StabilityMetricId], values: list[Metric]) -> SplitSensitivityRow:
         model_seed, policy, metric = key
-        summary = split_sensitivity_summary(tuple(values))
+        summary = split_sensitivity_summary(tuple(values), percentiles_config)
         return SplitSensitivityRow(
             model_seed=model_seed,
             policy=policy,
@@ -1096,7 +1108,9 @@ class RunBenchmark:
             sample_count = self._sample_count(primitive, split)
             for _ in range(warmups):
                 run_primitive()
-            timings = _timed_repetitions(run_primitive, repetitions)
+            timings = _timed_repetitions(
+                run_primitive, repetitions, self.config.statistics.benchmark_p95_percentile
+            )
             cells.append(
                 BenchmarkCell(
                     primitive=primitive.value,
@@ -1140,7 +1154,9 @@ class TimedRepetitions(BaseModel):
     peak_rss_bytes: ByteCount
 
 
-def _timed_repetitions(primitive: Callable[[], BaseModel], repetitions: RepetitionCount) -> TimedRepetitions:
+def _timed_repetitions(
+    primitive: Callable[[], BaseModel], repetitions: RepetitionCount, p95_percentile: Percentage
+) -> TimedRepetitions:
     import resource
     import time
 
@@ -1153,6 +1169,6 @@ def _timed_repetitions(primitive: Callable[[], BaseModel], repetitions: Repetiti
     peak_rss_kilobytes = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     return TimedRepetitions(
         median_seconds=float(np.median(timings)),
-        p95_seconds=float(np.percentile(timings, _P95_PERCENTILE)),
+        p95_seconds=float(np.percentile(timings, p95_percentile)),
         peak_rss_bytes=int(peak_rss_kilobytes) * 1024,
     )

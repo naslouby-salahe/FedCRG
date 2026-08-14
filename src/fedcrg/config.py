@@ -54,6 +54,7 @@ from fedcrg.types import (
     Identifier,
     JsonValue,
     LearningRate,
+    Metric,
     MetricDifference,
     ModelSeed,
     MultiplicityProcedure,
@@ -61,8 +62,11 @@ from fedcrg.types import (
     OperatingBand,
     OptimizerEpsilon,
     OptimizerId,
+    Percentage,
     PolicyId,
     PositiveCount,
+    PositiveFloat,
+    PositiveInt,
     Probability,
     ProfileId,
     ProtocolId,
@@ -127,10 +131,28 @@ class StatisticsConfig(BaseModel):
     ranking_invariance_tolerance: Tolerance
     shrinkage_n0_candidates: tuple[SampleCount, ...]
     supervised_threshold_candidates: CandidateCount
+    split_sensitivity_percentiles: tuple[Percentage, Percentage, Percentage, Percentage, Percentage]
+    bootstrap_ci_percentiles: tuple[Percentage, Percentage]
+    benchmark_p95_percentile: Percentage
 
     @property
     def utility_margin_allowance(self) -> MetricDifference:
         return -self.utility_margin
+
+
+class SyntheticConfig(BaseModel):
+    model_config = FrozenModel
+
+    lognormal_mean: Metric
+    lognormal_sigma: PositiveFloat
+    gamma_shape: PositiveFloat
+    gamma_scale: PositiveFloat
+    mixture_weight: Probability
+    mixture_shift: PositiveFloat
+    mixture_scale: PositiveFloat
+    coverage_tolerance_floor: PositiveFloat
+    coverage_tolerance_z: PositiveFloat
+    seed_decorrelation_scale: PositiveInt
 
 
 class RandomnessConfig(BaseModel):
@@ -208,6 +230,7 @@ class StudyConfig(BaseModel):
 
     protocol: ProtocolConfig
     statistics: StatisticsConfig
+    synthetic: SyntheticConfig
     randomness: RandomnessConfig
     detector_profiles: dict[ProfileId, DetectorConfig]
     training_profiles: dict[ProfileId, TrainingConfig]
@@ -596,6 +619,7 @@ class ExperimentConfig(BaseModel):
     training: TrainingConfig | None = None
     randomness: RandomnessConfig
     statistics: StatisticsConfig
+    synthetic: SyntheticConfig
     policies: tuple[PolicyId, ...]
     outputs_root: Path = Path("outputs")
     preprocessed_root: Path = Path("data/preprocessed")
@@ -736,6 +760,7 @@ def resolve_experiment_config(
         training=training,
         randomness=randomness,
         statistics=study.statistics,
+        synthetic=study.synthetic,
         policies=spec.policies,
         outputs_root=study.paths.outputs_root,
         preprocessed_root=study.paths.preprocessed_root,

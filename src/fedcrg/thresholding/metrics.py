@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict
 from sklearn.metrics import average_precision_score, roc_auc_score
 
 from fedcrg.config import ProtocolConfig
+from fedcrg.statistics import iqr
 from fedcrg.thresholding.readiness import (
     CalibrationReadinessEvaluator,
     ClientEvaluationResult,
@@ -297,7 +298,7 @@ def aggregate_policy(
         band_violation_rate=float(np.mean([row.band_violation for row in rows])),
         mafe=float(np.mean([row.absolute_fpr_error for row in rows])),
         max_fpr=float(np.max(fprs)),
-        fpr_iqr=float(np.percentile(fprs, 75) - np.percentile(fprs, 25)),
+        fpr_iqr=iqr(fprs),
         attack_balanced_macro_tpr=_mean_defined([row.attack_balanced_tpr for row in rows]),
         macro_tpr=_mean_defined([row.tpr for row in rows]),
         worst_client_tpr=min(

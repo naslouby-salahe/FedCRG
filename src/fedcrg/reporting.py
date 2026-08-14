@@ -282,6 +282,7 @@ class PublicationTableBuilder:
             expected_model_seeds=tuple(config.randomness.model_seeds),
             bootstrap_seed=config.statistics.bootstrap_seed,
             bootstrap_replicates=config.statistics.bootstrap_replicates,
+            bootstrap_ci_percentiles=config.statistics.bootstrap_ci_percentiles,
         )
         rows = tuple(
             ContrastTableRow(
@@ -979,6 +980,7 @@ def build_repository_report(outputs_root: Path, config: ExperimentConfig) -> Pat
             expected_model_seeds=tuple(config.randomness.model_seeds),
             bootstrap_seed=config.statistics.bootstrap_seed,
             bootstrap_replicates=config.statistics.bootstrap_replicates,
+            bootstrap_ci_percentiles=config.statistics.bootstrap_ci_percentiles,
         )
         contrasts_payload = [
             {
@@ -995,7 +997,12 @@ def build_repository_report(outputs_root: Path, config: ExperimentConfig) -> Pat
     atomic_write_json(contrasts_path, contrasts_payload)
     sensitivity_path = reports_root / RepositoryReportFilename.SPLIT_SENSITIVITY.value
     pd.DataFrame.from_records(
-        [row.model_dump(mode="json") for row in split_sensitivity(primary_records)]
+        [
+            row.model_dump(mode="json")
+            for row in split_sensitivity(
+                primary_records, config.statistics.split_sensitivity_percentiles
+            )
+        ]
     ).to_csv(sensitivity_path, index=False)
 
     lines = [
