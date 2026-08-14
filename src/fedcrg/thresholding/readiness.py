@@ -128,22 +128,25 @@ def build_reference_threshold(
 ) -> ReferenceThreshold:
     if not scores_by_client:
         raise ValueError("At least one client must contribute reference scores")
-    lengths = {len(np.asarray(scores)) for scores in scores_by_client.values()}
-    if 0 in lengths:
+
+    arrays = [np.asarray(scores, dtype=np.float64) for scores in scores_by_client.values()]
+    samples_per_client = arrays[0].size
+
+    if samples_per_client == 0:
         raise ValueError("Reference score arrays must be non-empty")
-    if len(lengths) != 1:
+    if any(arr.size != samples_per_client for arr in arrays):
         raise ValueError("Each client must contribute the same number of reference scores")
-    samples_per_client = next(iter(lengths))
-    pooled = np.concatenate(
-        [np.asarray(scores, dtype=np.float64) for scores in scores_by_client.values()]
-    )
-    rank = reference_rank(len(pooled), alpha)
+
+    pooled = np.concatenate(arrays)
+    sample_count = pooled.size
+    rank = reference_rank(sample_count, alpha)
     threshold = float(np.sort(pooled, kind="stable")[rank - 1])
+
     return ReferenceThreshold(
         value=threshold,
         rank=rank,
-        sample_count=len(pooled),
-        client_count=len(scores_by_client),
+        sample_count=sample_count,
+        client_count=len(arrays),
         samples_per_client=samples_per_client,
     )
 
@@ -168,21 +171,26 @@ class ReadinessPlanBuilder:
             raise ValueError("sample_count must be positive")
         if not 0.0 < assurance < 1.0:
             raise ValueError("assurance must be in (0,1)")
-        best_rank = 1
-        best_probability = -1.0
-        for rank in range(1, sample_count + 1):
-            probability = coverage_probability(rank, sample_count, band)
-            if probability > best_probability or (
-                math.isclose(probability, best_probability, rel_tol=0.0, abs_tol=1e-15)
-                and rank > best_rank
-            ):
-                best_rank = rank
-                best_probability = probability
+
+        ranks = np.arange(1, sample_count + 1)
+        upper_shapes = sample_count + 1 - ranks
+        
+        probs = (
+            special.betainc(upper_shapes, ranks, band.upper) - 
+            special.betainc(upper_shapes, ranks, band.lower)
+        )
+
+        max_prob = np.max(probs)
+        close_mask = np.isclose(probs, max_prob, rtol=0.0, atol=1e-15)
+        best_rank = int(np.max(ranks[close_mask]))
+        best_probability = float(probs[best_rank - 1])
+
         state = (
             CalibrationReadinessState.READY
             if best_probability >= assurance
             else CalibrationReadinessState.NOT_READY
         )
+
         return ReadinessPlan(
             sample_count=sample_count,
             rank=best_rank,
@@ -274,13 +282,16 @@ class ReadinessPlanCache:
 class CalibrationReadinessEvaluator:
     def evaluate(self, scores: np.ndarray, plan: ReadinessPlan) -> CalibrationReadiness:
         values = np.asarray(scores, dtype=np.float64)
-        if values.ndim != 1 or len(values) != plan.sample_count:
+        if values.ndim != 1 or values.size != plan.sample_count:
             raise ValueError("Observed calibration size does not match the frozen readiness plan")
         if not np.isfinite(values).all():
             raise ValueError("Calibration scores must be finite")
+            
         diagnostics = continuity_diagnostics(values, plan.rank)
+        
         if plan.state is CalibrationReadinessState.NOT_READY:
             return CalibrationReadiness(plan=plan, threshold=None, diagnostics=diagnostics)
+            
         ordered = np.sort(values, kind="stable")
         threshold = float(ordered[plan.rank - 1])
         return CalibrationReadiness(plan=plan, threshold=threshold, diagnostics=diagnostics)
@@ -290,21 +301,21 @@ def continuity_diagnostics(
     scores: np.ndarray, selected_rank: PositiveCount
 ) -> ContinuityDiagnostics:
     values = np.asarray(scores, dtype=np.float64)
-    if values.ndim != 1 or len(values) == 0:
+    if values.ndim != 1 or values.size == 0:
         raise ValueError("Continuity diagnostics require a non-empty score vector")
-    ordered = np.sort(values, kind="stable")
-    if not 1 <= selected_rank <= len(ordered):
+    if not 1 <= selected_rank <= values.size:
         raise ValueError("selected_rank must lie inside the score vector")
+        
+    ordered = np.sort(values, kind="stable")
     selected = float(ordered[selected_rank - 1])
     unique = np.unique(ordered)
-    duplicate_count = int(len(ordered) - len(unique))
     positive_spacing = np.diff(unique)
-    minimum_spacing = None if len(positive_spacing) == 0 else float(np.min(positive_spacing))
+    
     return ContinuityDiagnostics(
-        unique_score_fraction=float(len(unique) / len(ordered)),
-        duplicate_count=duplicate_count,
+        unique_score_fraction=float(unique.size / values.size),
+        duplicate_count=int(values.size - unique.size),
         selected_threshold_multiplicity=int(np.count_nonzero(ordered == selected)),
-        minimum_positive_spacing=minimum_spacing,
+        minimum_positive_spacing=None if positive_spacing.size == 0 else float(np.min(positive_spacing)),
     )
 
 
@@ -344,8 +355,10 @@ def minimum_bidirectional_sample_count(
         raise ValueError("confidence must be in (0, 1)")
     if lower_band == 0.0:
         return None
+        
     tail = (1.0 - confidence) / 2.0
-    estimate = max(1, int(math.floor(math.log(tail) / math.log(1.0 - lower_band))) + 1)
+    estimate = max(1, math.ceil(math.log(tail) / math.log(1.0 - lower_band)))
+    
     while 1.0 - tail ** (1.0 / estimate) >= lower_band:
         estimate += 1
     while estimate > 1 and 1.0 - tail ** (1.0 / (estimate - 1)) < lower_band:
@@ -362,13 +375,13 @@ class ReferenceMismatchEvaluator:
         confidence: ConfidenceLevel,
     ) -> MismatchEvidence:
         values = np.asarray(scores, dtype=np.float64)
-        if values.ndim != 1 or len(values) == 0:
+        if values.ndim != 1 or values.size == 0:
             raise ValueError("Mismatch evidence requires a non-empty one-dimensional array")
         if not np.isfinite(values).all() or not math.isfinite(reference_threshold):
             raise ValueError("Mismatch scores and threshold must be finite")
 
         counts = BinomialCounts(
-            x=int(np.count_nonzero(values > reference_threshold)), n=len(values)
+            x=int(np.count_nonzero(values > reference_threshold)), n=values.size
         )
         interval = clopper_pearson_interval(counts, confidence)
         minimum = minimum_bidirectional_sample_count(band.lower, confidence)
@@ -390,7 +403,7 @@ class ReferenceMismatchEvaluator:
             interval=interval,
             outcome=outcome,
             minimum_sample_count=minimum,
-            p_low=(None if high_side_only else float(binom.cdf(counts.x, counts.n, band.lower))),
+            p_low=None if high_side_only else float(binom.cdf(counts.x, counts.n, band.lower)),
             p_high=float(binom.sf(counts.x - 1, counts.n, band.upper)),
             high_side_only=high_side_only,
         )
@@ -429,16 +442,20 @@ def bonferroni_fleet_sensitivity(
 ) -> tuple[FleetMismatchDecision, ...]:
     if not counts_by_client:
         return ()
+        
     confidence = 1.0 - familywise_alpha / len(counts_by_client)
-    decisions: list[FleetMismatchDecision] = []
+    decisions = []
+    
     for client_id in sorted(counts_by_client):
         counts = counts_by_client[client_id]
         interval = clopper_pearson_interval(counts, confidence)
+        
         outcome = MismatchOutcome.NO_MATERIAL_DIFFERENCE
         if band.lower > 0.0 and interval.upper < band.lower:
             outcome = MismatchOutcome.LOW
         elif interval.lower > band.upper:
             outcome = MismatchOutcome.HIGH
+            
         low, high = _directional_p_values(counts, band)
         decisions.append(
             FleetMismatchDecision(
@@ -455,15 +472,15 @@ def _holm_rejected(
     hypotheses: list[DirectionalHypothesis],
     alpha: Probability,
 ) -> set[tuple[ClientId, MismatchOutcome]]:
-    rejected: set[tuple[ClientId, MismatchOutcome]] = set()
     ordered = sorted(
         hypotheses,
         key=lambda item: (item.p_value, item.client_id, item.outcome.value),
     )
     total = len(ordered)
+    rejected = set()
+    
     for index, hypothesis in enumerate(ordered):
-        threshold = alpha / (total - index)
-        if hypothesis.p_value <= threshold:
+        if hypothesis.p_value <= alpha / (total - index):
             rejected.add((hypothesis.client_id, hypothesis.outcome))
         else:
             break
@@ -476,33 +493,34 @@ def holm_directional_fleet_sensitivity(
     *,
     familywise_alpha: Probability,
 ) -> tuple[FleetMismatchDecision, ...]:
-    hypotheses: list[DirectionalHypothesis] = []
-    diagnostics: dict[ClientId, tuple[PValue | None, PValue]] = {}
+    hypotheses = []
+    diagnostics = {}
+    
     for client_id in sorted(counts_by_client):
-        low, high = _directional_p_values(counts_by_client[client_id], band)
+        counts = counts_by_client[client_id]
+        low, high = _directional_p_values(counts, band)
         diagnostics[client_id] = (low, high)
+        
         if low is not None:
-            hypotheses.append(
-                DirectionalHypothesis(client_id=client_id, outcome=MismatchOutcome.LOW, p_value=low)
-            )
-        hypotheses.append(
-            DirectionalHypothesis(client_id=client_id, outcome=MismatchOutcome.HIGH, p_value=high)
-        )
+            hypotheses.append(DirectionalHypothesis(client_id=client_id, outcome=MismatchOutcome.LOW, p_value=low))
+        hypotheses.append(DirectionalHypothesis(client_id=client_id, outcome=MismatchOutcome.HIGH, p_value=high))
 
     rejected = _holm_rejected(hypotheses, familywise_alpha)
-    decisions: list[FleetMismatchDecision] = []
+    decisions = []
+    
     for client_id in sorted(counts_by_client):
         low_rejected = (client_id, MismatchOutcome.LOW) in rejected
         high_rejected = (client_id, MismatchOutcome.HIGH) in rejected
+        
         if low_rejected and high_rejected:
             raise RuntimeError(f"DIRECTION_CONTRADICTION: both directions rejected for {client_id}")
+            
         outcome = (
-            MismatchOutcome.LOW
-            if low_rejected
-            else MismatchOutcome.HIGH
-            if high_rejected
+            MismatchOutcome.LOW if low_rejected
+            else MismatchOutcome.HIGH if high_rejected
             else MismatchOutcome.NO_MATERIAL_DIFFERENCE
         )
+        
         low, high = diagnostics[client_id]
         decisions.append(
             FleetMismatchDecision(
@@ -524,45 +542,28 @@ class DeploymentDecision:
         reject_calibration_ties: bool,
     ) -> ThresholdDecision:
         tie_count = readiness.tie_count
+
         if mismatch.outcome is MismatchOutcome.INSUFFICIENT_EVIDENCE:
+            state, reason = DecisionState.MISMATCH_EVIDENCE_INSUFFICIENT, DecisionReason.INSUFFICIENT_MISMATCH_EVIDENCE
+        elif mismatch.outcome is MismatchOutcome.NO_MATERIAL_DIFFERENCE:
+            state, reason = DecisionState.REFERENCE_RETAINED, DecisionReason.NO_MATERIAL_DIFFERENCE
+        elif readiness.plan.state is CalibrationReadinessState.NOT_READY or readiness.threshold is None:
+            state, reason = DecisionState.CALIBRATION_DEFICIT, DecisionReason.CALIBRATION_NOT_READY
+        elif reject_calibration_ties and tie_count > 1:
+            state, reason = DecisionState.ASSUMPTION_VIOLATION, DecisionReason.CALIBRATION_TIE
+        else:
             return ThresholdDecision(
-                state=DecisionState.MISMATCH_EVIDENCE_INSUFFICIENT,
-                threshold=reference.value,
-                source=ThresholdSource.REFERENCE,
-                reason=DecisionReason.INSUFFICIENT_MISMATCH_EVIDENCE,
+                state=DecisionState.PERSONALIZED,
+                threshold=readiness.threshold,
+                source=ThresholdSource.LOCAL_CALIBRATION,
+                reason=DecisionReason.LOCAL_PERSONALIZATION_ADMITTED,
                 tie_count=tie_count,
             )
-        if mismatch.outcome is MismatchOutcome.NO_MATERIAL_DIFFERENCE:
-            return ThresholdDecision(
-                state=DecisionState.REFERENCE_RETAINED,
-                threshold=reference.value,
-                source=ThresholdSource.REFERENCE,
-                reason=DecisionReason.NO_MATERIAL_DIFFERENCE,
-                tie_count=tie_count,
-            )
-        if (
-            readiness.plan.state is CalibrationReadinessState.NOT_READY
-            or readiness.threshold is None
-        ):
-            return ThresholdDecision(
-                state=DecisionState.CALIBRATION_DEFICIT,
-                threshold=reference.value,
-                source=ThresholdSource.REFERENCE,
-                reason=DecisionReason.CALIBRATION_NOT_READY,
-                tie_count=tie_count,
-            )
-        if reject_calibration_ties and tie_count > 1:
-            return ThresholdDecision(
-                state=DecisionState.ASSUMPTION_VIOLATION,
-                threshold=reference.value,
-                source=ThresholdSource.REFERENCE,
-                reason=DecisionReason.CALIBRATION_TIE,
-                tie_count=tie_count,
-            )
+
         return ThresholdDecision(
-            state=DecisionState.PERSONALIZED,
-            threshold=readiness.threshold,
-            source=ThresholdSource.LOCAL_CALIBRATION,
-            reason=DecisionReason.LOCAL_PERSONALIZATION_ADMITTED,
+            state=state,
+            threshold=reference.value,
+            source=ThresholdSource.REFERENCE,
+            reason=reason,
             tie_count=tie_count,
         )

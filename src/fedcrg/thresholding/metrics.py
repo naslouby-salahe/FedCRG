@@ -57,20 +57,23 @@ def confusion_matrix(
 ) -> ConfusionMatrix:
     values = np.asarray(scores, dtype=np.float64)
     targets = np.asarray(labels, dtype=np.int64)
+    
     if values.shape != targets.shape or values.ndim != 1:
         raise ValueError("scores and labels must be aligned one-dimensional arrays")
     if not np.isfinite(values).all():
         raise ValueError("NONFINITE_SCORE")
-    predictions = values > threshold
-    positives = targets == 1
-    negatives = targets == 0
-    if np.count_nonzero(~(positives | negatives)):
+    if np.any((targets != 0) & (targets != 1)):
         raise ValueError("Labels must be binary 0/1")
+
+    predictions = values > threshold
+    idx = targets * 2 + predictions
+    counts = np.bincount(idx, minlength=4)
+
     return ConfusionMatrix(
-        tp=int(np.count_nonzero(predictions & positives)),
-        tn=int(np.count_nonzero(~predictions & negatives)),
-        fp=int(np.count_nonzero(predictions & negatives)),
-        fn=int(np.count_nonzero(~predictions & positives)),
+        tn=int(counts[0]),
+        fp=int(counts[1]),
+        fn=int(counts[2]),
+        tp=int(counts[3]),
     )
 
 
@@ -138,17 +141,19 @@ def attack_balanced_tpr(
 ) -> Tpr | None:
     values = np.asarray(scores, dtype=np.float64)
     targets = np.asarray(labels, dtype=np.int64)
-    groups_array = np.asarray(attack_groups, dtype=object)
-    groups = sorted(set(groups_array[targets == 1].astype(str)))
-    if not groups:
+    
+    pos_mask = targets == 1
+    if not np.any(pos_mask):
         return None
-    per_group: list[Tpr] = []
-    for group in groups:
-        mask = (targets == 1) & (groups_array.astype(str) == group)
-        if not np.any(mask):
-            continue
-        per_group.append(float(np.mean(values[mask] > threshold)))
-    return float(np.mean(per_group)) if per_group else None
+
+    pos_groups = np.asarray(attack_groups)[pos_mask].astype(str)
+    pos_preds = values[pos_mask] > threshold
+
+    _, inverse_indices = np.unique(pos_groups, return_inverse=True)
+    group_counts = np.bincount(inverse_indices)
+    tp_counts = np.bincount(inverse_indices, weights=pos_preds)
+
+    return float(np.mean(tp_counts / group_counts))
 
 
 def auroc(scores: np.ndarray, labels: np.ndarray) -> Fpr:
@@ -237,37 +242,44 @@ class AdmissionSummary(BaseModel):
 def summarize_admission(results: tuple[ClientEvaluationResult, ...]) -> AdmissionSummary:
     if not results:
         raise ValueError("Admission summary requires clients")
+    
     n = len(results)
+    readiness_count = 0
+    low_mismatch_count = 0
+    high_mismatch_count = 0
+    admission_count = 0
+    cal_deficit_count = 0
+    insuf_evid_count = 0
+    assump_viol_count = 0
 
-    def rate(count: NonNegativeCount) -> Fraction:
-        return count / n
+    for item in results:
+        if item.readiness.plan.state is CalibrationReadinessState.READY:
+            readiness_count += 1
+            
+        if item.mismatch.outcome is MismatchOutcome.LOW:
+            low_mismatch_count += 1
+        elif item.mismatch.outcome is MismatchOutcome.HIGH:
+            high_mismatch_count += 1
+
+        state = item.decision.state
+        if state is DecisionState.PERSONALIZED:
+            admission_count += 1
+        elif state is DecisionState.CALIBRATION_DEFICIT:
+            cal_deficit_count += 1
+        elif state is DecisionState.MISMATCH_EVIDENCE_INSUFFICIENT:
+            insuf_evid_count += 1
+        elif state is DecisionState.ASSUMPTION_VIOLATION:
+            assump_viol_count += 1
 
     return AdmissionSummary(
         client_count=n,
-        readiness_rate=rate(
-            sum(item.readiness.plan.state is CalibrationReadinessState.READY for item in results)
-        ),
-        low_mismatch_rate=rate(
-            sum(item.mismatch.outcome is MismatchOutcome.LOW for item in results)
-        ),
-        high_mismatch_rate=rate(
-            sum(item.mismatch.outcome is MismatchOutcome.HIGH for item in results)
-        ),
-        admission_rate=rate(
-            sum(item.decision.state is DecisionState.PERSONALIZED for item in results)
-        ),
-        calibration_deficit_rate=rate(
-            sum(item.decision.state is DecisionState.CALIBRATION_DEFICIT for item in results)
-        ),
-        insufficient_evidence_rate=rate(
-            sum(
-                item.decision.state is DecisionState.MISMATCH_EVIDENCE_INSUFFICIENT
-                for item in results
-            )
-        ),
-        assumption_violation_rate=rate(
-            sum(item.decision.state is DecisionState.ASSUMPTION_VIOLATION for item in results)
-        ),
+        readiness_rate=readiness_count / n,
+        low_mismatch_rate=low_mismatch_count / n,
+        high_mismatch_rate=high_mismatch_count / n,
+        admission_rate=admission_count / n,
+        calibration_deficit_rate=cal_deficit_count / n,
+        insufficient_evidence_rate=insuf_evid_count / n,
+        assumption_violation_rate=assump_viol_count / n,
     )
 
 
@@ -289,7 +301,9 @@ def aggregate_policy(
     ]
     if not rows:
         raise ValueError(f"No evaluated client metrics for {policy.value}")
-    fprs = np.asarray([row.fpr for row in rows], dtype=np.float64)
+        
+    fprs = np.fromiter((row.fpr for row in rows), dtype=np.float64, count=len(rows))
+    
     return FederationMetrics(
         policy=policy,
         client_count=len(rows),
@@ -316,13 +330,15 @@ def aggregate_policy(
 def assert_ranking_metric_invariance(
     evaluations: tuple[PolicyEvaluation, ...], tolerance: Tolerance
 ) -> None:
-    by_client: dict[ClientId, list[PolicyEvaluation]] = {}
+    by_client: dict[ClientId, tuple[list[Fpr], list[Fpr]]] = {}
+    
     for row in evaluations:
         if row.metrics is not None:
-            by_client.setdefault(row.client_id, []).append(row)
-    for client_id, rows in by_client.items():
-        auroc_values = [row.metrics.auroc for row in rows if row.metrics is not None]
-        auprc_values = [row.metrics.auprc for row in rows if row.metrics is not None]
+            auroc_list, auprc_list = by_client.setdefault(row.client_id, ([], []))
+            auroc_list.append(row.metrics.auroc)
+            auprc_list.append(row.metrics.auprc)
+            
+    for client_id, (auroc_values, auprc_values) in by_client.items():
         if auroc_values and max(auroc_values) - min(auroc_values) > tolerance:
             raise RuntimeError(f"Ranking AUROC changed across policies for {client_id}")
         if auprc_values and max(auprc_values) - min(auprc_values) > tolerance:

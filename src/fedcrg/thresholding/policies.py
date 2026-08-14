@@ -23,7 +23,6 @@ from fedcrg.types import (
     ClientId,
     ClassMoments,
     FailureCode,
-    Fpr,
     Identifier,
     InformationRegime,
     Metric,
@@ -212,11 +211,12 @@ def _finite_vector(values: np.ndarray, name: Identifier) -> np.ndarray:
 
 
 def empirical_quantile(scores: np.ndarray, alpha: Alpha) -> Threshold:
-    values = np.sort(np.asarray(scores, dtype=np.float64), kind="stable")
+    values = np.asarray(scores, dtype=np.float64)
     if values.ndim != 1 or len(values) == 0:
         raise ValueError("Quantile thresholds require a non-empty one-dimensional array")
     rank = min(len(values), int(np.ceil((len(values) + 1) * (1.0 - alpha))))
-    return float(values[rank - 1])
+    partitioned = np.partition(values, rank - 1)
+    return float(partitioned[rank - 1])
 
 
 def reference_quantile(client: BenignPolicyEvidence) -> Threshold:
@@ -252,12 +252,6 @@ def mismatch_only(client: BenignPolicyEvidence, alpha: Alpha) -> Threshold:
     return client.evaluation.reference.value
 
 
-def _estimated_fpr(scores: np.ndarray, threshold: Threshold) -> Fpr:
-    if len(scores) == 0:
-        raise ValueError("Mismatch evidence cannot be empty when tuning shrinkage")
-    return float(np.mean(np.asarray(scores, dtype=np.float64) > threshold))
-
-
 def tune_shrinkage(
     clients: tuple[BenignPolicyEvidence, ...],
     alpha: Alpha,
@@ -267,15 +261,27 @@ def tune_shrinkage(
         raise ValueError("Shrinkage tuning requires at least one candidate n0")
     best_n0 = n0_candidates[0]
     best_error = float("inf")
+
+    client_data: list[tuple[Threshold, Threshold, SampleCount, np.ndarray, SampleCount]] = []
+    for client in clients:
+        local_q = empirical_quantile(client.calibration_scores, alpha)
+        ref_v = client.evaluation.reference.value
+        n_cal = len(client.calibration_scores)
+        mismatch_sorted = np.sort(np.asarray(client.mismatch_scores, dtype=np.float64))
+        n_mismatch = len(mismatch_sorted)
+        if n_mismatch == 0:
+            raise ValueError("Mismatch evidence cannot be empty when tuning shrinkage")
+        client_data.append((local_q, ref_v, n_cal, mismatch_sorted, n_mismatch))
+
     for n0 in n0_candidates:
-        errors: list[Fpr] = []
-        for client in clients:
-            local = empirical_quantile(client.calibration_scores, alpha)
-            n_calibration = len(client.calibration_scores)
-            weight = n_calibration / (n_calibration + n0)
-            threshold = weight * local + (1.0 - weight) * client.evaluation.reference.value
-            errors.append(abs(_estimated_fpr(client.mismatch_scores, threshold) - alpha))
-        mean_error = float(np.mean(errors))
+        total_error = 0.0
+        for local_q, ref_v, n_cal, mismatch_sorted, n_mismatch in client_data:
+            weight = n_cal / (n_cal + n0)
+            threshold = weight * local_q + (1.0 - weight) * ref_v
+            false_positives = n_mismatch - np.searchsorted(mismatch_sorted, threshold, side="right")
+            total_error += abs((false_positives / n_mismatch) - alpha)
+
+        mean_error = total_error / len(client_data)
         if mean_error < best_error or (
             np.isclose(mean_error, best_error, rtol=0.0, atol=1e-15) and n0 > best_n0
         ):
@@ -293,9 +299,7 @@ def shrinkage(client: BenignPolicyEvidence, alpha: Alpha, n0: NonNegativeInt) ->
 
 def three_sigma(clients: tuple[BenignPolicyEvidence, ...]) -> Threshold:
     pooled = np.concatenate(tuple(client.full_policy_budget for client in clients))
-    mean = float(np.mean(pooled))
-    population_std = float(np.sqrt(np.mean((pooled - mean) ** 2)))
-    return mean + 3.0 * population_std
+    return float(np.mean(pooled) + 3.0 * np.std(pooled))
 
 
 def f1_at_threshold(client: SupervisedDevelopmentEvidence, threshold: Threshold) -> Metric:
