@@ -7,9 +7,9 @@ import pandas as pd
 import pytest
 from pydantic import TypeAdapter
 
-from fedcrg.data.datasets import DataIntegrityError
-from fedcrg.data.preprocessing import ClientSplits, RoleFrame, TrainOnlyPreprocessing
-from fedcrg.types import ClientId, DataRole, DatasetId
+from fedcrg.data.preprocessing import TrainOnlyPreprocessing
+from fedcrg.data.splits import ClientSplits, RoleFrame
+from fedcrg.types import ClientId, DataIntegrityError, DataRole, DatasetId
 
 _CLIENT_ID_ADAPTER = TypeAdapter(ClientId)
 C1 = _CLIENT_ID_ADAPTER.validate_python("c1")

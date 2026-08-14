@@ -1,4 +1,4 @@
-"""Contract: the remaining roadmap 14.2 normative vectors and invariance rules.
+"""Contract: DIAD water-fill normative vectors and AUROC/AUPRC invariance.
 
 Covers the DIAD water-fill development allocations and the AUROC/AUPRC
 policy-invariance rule that the unit-level suites do not lock directly.
@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from fedcrg.data.preprocessing import PrepareData
+from fedcrg.data.splits import AttackGroupAllocation, AttackGroupCount, BaseSplitBuilder
 from fedcrg.thresholding.metrics import (
     ClientMetrics,
     PolicyEvaluation,
@@ -18,12 +18,15 @@ from fedcrg.thresholding.metrics import (
     assert_ranking_metric_invariance,
 )
 from fedcrg.types import (
+    AttackGroupId,
     ClientId,
     ConfidenceInterval,
     PolicyEvaluationStatus,
     PolicyId,
 )
 from pydantic import TypeAdapter
+
+_ATTACK_GROUP_ADAPTER = TypeAdapter(AttackGroupId)
 
 
 @pytest.mark.parametrize(
@@ -34,15 +37,19 @@ from pydantic import TypeAdapter
     ],
 )
 def test_diad_waterfill_normative_vectors(capacities: list[int], expected: list[int]) -> None:
-    development = PrepareData.waterfill_allocation(
-        groups=("a", "b", "c"),
-        capacities={
-            group: capacity for group, capacity in zip(("a", "b", "c"), capacities, strict=True)
-        },
+    groups = tuple(_ATTACK_GROUP_ADAPTER.validate_python(value) for value in ("a", "b", "c"))
+    development = BaseSplitBuilder.waterfill_allocation(
+        groups=groups,
+        capacities=AttackGroupAllocation(
+            groups=tuple(
+                AttackGroupCount(group=group, count=capacity)
+                for group, capacity in zip(groups, capacities, strict=True)
+            )
+        ),
         development_budget=500,
     )
-    assert [development[group] for group in ("a", "b", "c")] == expected
-    assert sum(development.values()) == 500
+    assert [development.for_group(group) for group in groups] == expected
+    assert sum(development.for_group(group) for group in groups) == 500
 
 
 def test_ranking_metrics_are_invariant_across_policies() -> None:

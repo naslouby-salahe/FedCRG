@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 from pydantic import TypeAdapter
 
-from fedcrg.data.datasets import derive_numeric_safe_features
+from fedcrg.data.diad import ClientTrainingFrame, derive_numeric_safe_features
 from fedcrg.types import ClientId
 
 _CLIENT_ID_ADAPTER = TypeAdapter(ClientId)
@@ -27,9 +27,9 @@ def _stream_frame(rows: int = 200) -> pd.DataFrame:
     )
 
 
-def _training_frames() -> dict[ClientId, pd.DataFrame]:
+def _training_frames() -> tuple[ClientTrainingFrame, ...]:
     client = _CLIENT_ID_ADAPTER.validate_python("client-a")
-    return {client: _stream_frame()}
+    return (ClientTrainingFrame(client_id=client, frame=_stream_frame()),)
 
 
 def test_derive_numeric_safe_features_keeps_only_numeric_stream_features() -> None:
@@ -50,4 +50,4 @@ def test_derive_numeric_safe_features_is_deterministic() -> None:
 
 def test_derive_numeric_safe_features_rejects_empty_input() -> None:
     with pytest.raises(ValueError):
-        derive_numeric_safe_features({})
+        derive_numeric_safe_features(())

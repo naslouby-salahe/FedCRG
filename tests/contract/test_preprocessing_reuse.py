@@ -16,7 +16,7 @@ from pydantic import TypeAdapter
 
 from fedcrg.config import ExperimentConfig
 from fedcrg.data.datasets import ClientData, DatasetAdapter, hash_row_ids
-from fedcrg.data.preprocessing import PrepareData
+from fedcrg.data.preparation import PrepareData
 from fedcrg.evidence.models import PreparedDatasetManifest
 from fedcrg.evidence.store import PreparedLayout
 from fedcrg.types import ClientId, DataIntegrityError, DatasetId

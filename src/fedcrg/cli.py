@@ -23,7 +23,7 @@ import torch
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from fedcrg.config import Study, validate_experiment_config
-from fedcrg.data.preprocessing import PrepareData
+from fedcrg.data.preparation import PrepareData
 from fedcrg.evidence.store import OutputsLayout, PreparedLayout, sha256_file
 from fedcrg.experiments.analyses import (
     ProtocolTablePrecomputer,

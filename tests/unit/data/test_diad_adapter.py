@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fedcrg.data.datasets import DIAD_FEATURES, DiadAdapter
+from fedcrg.data.diad import DIAD_FEATURES, DiadAdapter
 from fedcrg.types import ClientId, DataIntegrityError
 from pydantic import TypeAdapter
 

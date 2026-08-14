@@ -9,7 +9,7 @@ import pandas as pd
 
 from fedcrg.config import ExperimentConfig
 from fedcrg.data.datasets import ClientData, DatasetAdapter
-from fedcrg.data.preprocessing import PrepareData
+from fedcrg.data.preparation import PrepareData
 from fedcrg.evidence.store import PreparedLayout
 from fedcrg.types import ClientId, DatasetId
 from tests._fixtures import NBAIOT_CLIENT_IDS, nbaiot_dataset_config, primary_experiment_config

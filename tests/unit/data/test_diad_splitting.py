@@ -8,7 +8,7 @@ from pydantic import TypeAdapter
 
 from fedcrg.config import DatasetConfig, ExpectedBenignCounts, SplitConfig
 from fedcrg.data.datasets import ClientData
-from fedcrg.data.preprocessing import PrepareData
+from fedcrg.data.splits import BaseSplitBuilder
 from fedcrg.types import (
     ChronologyStatus,
     ClientId,
@@ -58,7 +58,7 @@ def test_diad_waterfill_preserves_small_categories_in_final_test() -> None:
             "attack_group": ["a"] * 3 + ["b"] * 7,
         }
     )
-    result = PrepareData().split_base(
+    result = BaseSplitBuilder().build(
         ClientData(
             dataset=DatasetId.DIAD,
             client_id=_CLIENT_ID_ADAPTER.validate_python("diad_example0001"),

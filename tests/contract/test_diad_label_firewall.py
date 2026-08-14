@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fedcrg.data.datasets import DIAD_FEATURES
+from fedcrg.data.diad import DIAD_FEATURES
 
 
 def test_identity_labels_ports_and_category_are_not_model_features() -> None:

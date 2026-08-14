@@ -46,7 +46,15 @@ def test_expected_top_level_modules_exist() -> None:
 
 def test_expected_package_modules_exist() -> None:
     expected = {
-        "data": ("__init__.py", "datasets.py", "preprocessing.py"),
+        "data": (
+            "__init__.py",
+            "datasets.py",
+            "nbaiot.py",
+            "diad.py",
+            "splits.py",
+            "preprocessing.py",
+            "preparation.py",
+        ),
         "learning": ("__init__.py", "detectors.py", "federated.py", "scores.py"),
         "thresholding": ("__init__.py", "readiness.py", "policies.py", "metrics.py"),
         "experiments": ("__init__.py", "runner.py", "analyses.py"),

@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from fedcrg.data.datasets import ClientData
-from fedcrg.data.preprocessing import PrepareData
+from fedcrg.data.splits import BaseSplitBuilder
 from fedcrg.types import (
     ChronologyStatus,
     DataIntegrityError,
@@ -44,7 +44,7 @@ def _client() -> ClientData:
 
 def test_nbaiot_balanced_attack_development_allocation() -> None:
     config = nbaiot_dataset_config()
-    result = PrepareData().split_base(_client(), config, attack_split_seed=9001)
+    result = BaseSplitBuilder().build(_client(), config, attack_split_seed=9001)
     dev = result.get(DataRole.ATTACK_DEV)
     assert dev["attack_group"].value_counts().to_dict() == {"a": 2, "b": 2, "c": 2}
     test = result.get(DataRole.ATTACK_TEST)
@@ -75,4 +75,4 @@ def test_split_rejects_insufficient_benign_rows() -> None:
         chronology=ChronologyStatus.SOURCE_ORDER_ONLY,
     )
     with pytest.raises((ValueError, DataIntegrityError)):
-        PrepareData().split_base(client, config, attack_split_seed=9001)
+        BaseSplitBuilder().build(client, config, attack_split_seed=9001)

@@ -86,9 +86,6 @@ for _name in _COERCE_VALIDATORS:
     _ALLOWED_ANNOTATIONS[("config.py", _name, "value")] = "YAML/JSON input before validation"
 
 _ALLOWED_ANNOTATIONS[("config.py", "serialized_payload", "return")] = "JSON serialization output"
-_ALLOWED_ANNOTATIONS[("data/datasets.py", "hash_file", "chunk_size")] = (
-    "filesystem read chunk boundary"
-)
 _ALLOWED_ANNOTATIONS[("data/datasets.py", "hash_row_ids", "values")] = (
     "row-id collection boundary (RowId | str)"
 )
@@ -98,16 +95,13 @@ _ALLOWED_ANNOTATIONS[("data/datasets.py", "hash_seed", "text")] = (
 _ALLOWED_ANNOTATIONS[("data/datasets.py", "stable_row_id", "source")] = (
     "source-file path string (filesystem boundary)"
 )
-_ALLOWED_ANNOTATIONS[("data/datasets.py", "validate_split_disjointness", "row_id_column")] = (
+_ALLOWED_ANNOTATIONS[("data/splits.py", "validate_split_disjointness", "row_id_column")] = (
     "pandas column-name boundary"
 )
-_ALLOWED_ANNOTATIONS[("data/datasets.py", "_ensure_row_ids", "source")] = (
-    "source-file path string (filesystem boundary)"
-)
-_ALLOWED_ANNOTATIONS[("data/datasets.py", "_normalized_name", "return")] = (
+_ALLOWED_ANNOTATIONS[("data/nbaiot.py", "_normalized_name", "return")] = (
     "string normalization helper output"
 )
-_ALLOWED_ANNOTATIONS[("data/datasets.py", "_normalized_mac", "value")] = (
+_ALLOWED_ANNOTATIONS[("data/diad.py", "_normalized_mac", "value")] = (
     "raw dataset text boundary before MAC normalization"
 )
 

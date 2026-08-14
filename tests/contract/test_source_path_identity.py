@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from fedcrg.data.datasets import NBaiotAdapter
+from fedcrg.data.nbaiot import NBaiotAdapter
 from fedcrg.types import ClientId
 from pydantic import TypeAdapter
 
