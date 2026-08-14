@@ -12,27 +12,22 @@ The normative research specification is [`docs/roadmap.md`](docs/roadmap.md). Th
 ## Repository architecture
 
 ```text
-configs/                 YAML profiles: method, training, randomness, statistics,
-                         datasets, detectors, and per-experiment compositions
+config/                  YAML profiles: study, datasets, experiments catalogue
 src/fedcrg/
-  domain/                enums, identifiers, value objects, errors
-  configuration/         typed configuration resolution and validation
-  datasets/              natural-client adapters, splitting, eligibility, preprocessing
-  detectors/             autoencoder and Deep-SVDD score generators
-  federation/            deterministic client/server training and aggregation
-  scoring/               immutable score caches, calibration views, score computation
-  decision/              readiness, mismatch, threshold decision, policy evidence,
-                         policy selection, and per-policy comparators
-  evaluation/            client/federation reliability and utility metrics
+  config.py              typed configuration models and study resolution
+  types.py               constrained aliases and closed enums
+  runtime.py             structured logging, resource monitoring, CUDA guards
+  reporting.py           publication tables/figures, reports, results bundles
+  cli.py                 thin research command surface
+  data/                  natural-client adapters, splitting, eligibility, preprocessing
+  learning/              detectors (AE/Deep-SVDD), federated training, score caches
+  thresholding/          readiness, mismatch, threshold decision, policy evidence,
+                         policy selection, and per-policy comparators, metrics
+  evidence/              immutable layouts, manifests, hashes, environment evidence
   experiments/           one execution spine: runner, preflight, verification,
                          campaign, table precompute, and the S1-S6/R1-R14 catalogue
-  analysis/              statistics, contrasts, stability
-  artifacts/             immutable layouts, manifests, hashes, environment evidence
-  reporting/             publication tables/figures, reports, results bundles
-  runtime/               structured logging, resource monitoring, CUDA guards
-  cli/                   thin research command surface
 tests/                   contract, regression, unit, and integration verification
-outputs/                 generated caches, runs, experiment evidence, and reports
+outputs/                 generated caches, runs, campaign status, evidence, reports
 data/preprocessed/       deterministic prepared datasets (reused by identity)
 results/                 publication bundles per campaign
 tools/                   optional developer/release utilities only
@@ -47,10 +42,11 @@ outputs/
 ├── cache/
 │   ├── models/
 │   ├── scores/
-│   └── precomputed/
-├── experiments/<S1..S6,R1..R14>/
+│   └── analysis/        readiness-plan and mismatch-cutoff tables
 ├── runs/<immutable-run-id>/
-└── reports/{latest,publication}/
+├── campaigns/
+├── monitoring/
+└── reports/{publication,benchmark.json}/
 ```
 
 Physical detector scores are cached **once per dataset/model seed**. Calibration seeds only create deterministic R/G/C/guard views over the same frozen reservoir scores; they do not retrain or rescore the detector. Completed run directories are immutable and reference upstream caches by relative path plus SHA-256.
@@ -77,14 +73,16 @@ Representative commands:
 
 ```bash
 fedcrg doctor
-fedcrg config validate --path configs/experiments/primary/nbaiot.yaml
-fedcrg data prepare --config configs/experiments/primary/nbaiot.yaml --data-root /path/to/nbaiot
-fedcrg tables precompute-readiness --config configs/experiments/primary/nbaiot.yaml
-fedcrg train --config configs/experiments/primary/nbaiot.yaml --prepared-root <preprocessed-root> --model-seed 11
-fedcrg score --config configs/experiments/primary/nbaiot.yaml --prepared-root <preprocessed-root> --model-path ... --model-seed 11
-fedcrg experiment execute-grid --config configs/experiments/primary/nbaiot.yaml --prepared-root <preprocessed-root>
-fedcrg report build-repository --outputs outputs --config configs/experiments/primary/nbaiot.yaml
-fedcrg verify --outputs outputs
+fedcrg validate primary_nbaiot
+fedcrg preprocess nbaiot --data-root /path/to/nbaiot
+fedcrg plan primary_nbaiot
+fedcrg run primary_nbaiot --prepared-root <preprocessed-root>
+fedcrg campaign --campaign-id default --prepared-root <preprocessed-root>
+fedcrg status
+fedcrg monitor
+fedcrg report default
+fedcrg results build default
+fedcrg results verify default
 ```
 
 The high-level research application path performs a prepared-data audit and freezes statistical lookup tables before model training. Lower-level services remain available for reproducible component work, but confirmatory execution should use the audited path.
@@ -104,7 +102,7 @@ The high-level research application path performs a prepared-data audit and free
 
 The codebase implements the registered S1-S6 / R1-R14 paths and evidence contracts. That does **not** mean the locked experiments have already been executed. Dataset acquisition/source hashes, five-seed federated training, the 970,000 S1-S5 Monte-Carlo trials, S6 exact power cells, DIAD eligibility/results, Deep-SVDD runs, R13 machine-specific benchmarking, and final manuscript artifacts must be generated in the intended environment.
 
-`fedcrg verify` is expected to remain incomplete until those evidence ledgers reconcile. It must never infer or fabricate missing experiment results.
+`fedcrg results verify <campaign-id>` is expected to remain incomplete until those evidence ledgers reconcile. It must never infer or fabricate missing experiment results.
 
 ## Development rules
 

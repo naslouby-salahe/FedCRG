@@ -14,6 +14,7 @@ import shutil
 import uuid
 from collections.abc import Iterable
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 import numpy as np
@@ -46,6 +47,19 @@ from fedcrg.types import (
 )
 
 Frozen = ConfigDict(frozen=True)
+
+
+class ScoreCacheColumn(StrEnum):
+    """Reserved column names of the serialized score-cache parquet schema."""
+
+    DATASET_ID = "dataset_id"
+    CLIENT_ID = "client_id"
+    PHASE = "phase"
+    MODEL_SEED = "model_seed"
+    SCORE_FLOAT64 = "score_float64"
+    LABEL_TEST_ONLY = "label_test_only"
+    ATTACK_FAMILY_TEST_ONLY = "attack_family_test_only"
+
 
 _CALIBRATION_ROLES = (
     DataRole.REFERENCE,
@@ -562,14 +576,16 @@ class ScoreCache:
             label = None
         return pd.DataFrame(
             {
-                "dataset_id": identity.dataset.value,
-                "client_id": scores.client_id,
+                ScoreCacheColumn.DATASET_ID.value: identity.dataset.value,
+                ScoreCacheColumn.CLIENT_ID.value: scores.client_id,
                 PreparedColumn.ROW_ID.value: [row_id for row_id in scores.row_ids],
-                "phase": scores.role.value,
-                "model_seed": int(identity.model_seed),
-                "score_float64": np.asarray(scores.values, dtype=np.float64),
-                "label_test_only": pd.array([label] * len(scores.values), dtype="Int64"),
-                "attack_family_test_only": pd.array(
+                ScoreCacheColumn.PHASE.value: scores.role.value,
+                ScoreCacheColumn.MODEL_SEED.value: int(identity.model_seed),
+                ScoreCacheColumn.SCORE_FLOAT64.value: np.asarray(scores.values, dtype=np.float64),
+                ScoreCacheColumn.LABEL_TEST_ONLY.value: pd.array(
+                    [label] * len(scores.values), dtype="Int64"
+                ),
+                ScoreCacheColumn.ATTACK_FAMILY_TEST_ONLY.value: pd.array(
                     (
                         [None if group is None else group for group in groups]
                         if scores.role is DataRole.ATTACK_TEST
@@ -734,9 +750,9 @@ class ScoreCache:
         role: DataRole,
         frame: pd.DataFrame,
     ) -> RoleScores:
-        group_values = frame["attack_family_test_only"]
+        group_values = frame[ScoreCacheColumn.ATTACK_FAMILY_TEST_ONLY.value]
         groups = None
-        if group_values.notna().any():
+        if bool(group_values.notna().any()):
             groups = tuple(str(value) for value in group_values.dropna().astype(str))
             if len(groups) != len(frame):
                 raise ValueError(
@@ -744,7 +760,7 @@ class ScoreCache:
                 )
         return RoleScores(
             role=role,
-            values=frame["score_float64"].to_numpy(dtype=np.float64),
+            values=frame[ScoreCacheColumn.SCORE_FLOAT64.value].to_numpy(dtype=np.float64),
             client_id=client_id,
             row_ids=tuple(str(value) for value in frame[PreparedColumn.ROW_ID.value].astype(str)),
             attack_groups=groups,

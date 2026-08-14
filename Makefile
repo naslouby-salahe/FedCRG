@@ -8,7 +8,7 @@ PYRIGHT ?= pyright
 PYTEST ?= pytest
 NOX ?= nox
 
-CONFIG ?= configs/experiments/primary/nbaiot.yaml
+CONFIG ?= config/study.yaml
 DATASET ?= nbaiot
 CAMPAIGN ?= default
 DATA_ROOT ?= data/raw
@@ -54,31 +54,31 @@ audit: ## Re-audit the repository against the goal matrix
 	$(PYTHON) tools/audit_repository.py
 
 validate: ## Validate one resolved experiment configuration
-	$(PYTHON) -m fedcrg.cli.app config validate --config $(CONFIG)
+	$(PYTHON) -m fedcrg.cli validate primary_nbaiot --config $(CONFIG)
 
 preprocess: ## Preprocess DATASET into data/preprocessed/
-	$(PYTHON) -m fedcrg.cli.app data preprocess $(DATASET) --data-root $(DATA_ROOT)
+	$(PYTHON) -m fedcrg.cli preprocess $(DATASET) --data-root $(DATA_ROOT) --config $(CONFIG)
 
-plan: ## Plan the CONFIG experiment
-	$(PYTHON) -m fedcrg.cli.app experiment plan --config $(CONFIG)
+plan: ## Plan the primary experiment
+	$(PYTHON) -m fedcrg.cli plan primary_nbaiot --config $(CONFIG)
 
 run: ## Execute the CONFIG experiment grid from prepared data
-	$(PYTHON) -m fedcrg.cli.app experiment execute-grid --config $(CONFIG) --prepared-root $(PREPARED_ROOT)
+	$(PYTHON) -m fedcrg.cli run primary_nbaiot --prepared-root $(PREPARED_ROOT) --config $(CONFIG)
 
 campaign: ## Run campaign CAMPAIGN over the configured experiments
-	$(PYTHON) -m fedcrg.cli.app campaign run --campaign-id $(CAMPAIGN) --prepared-root $(PREPARED_ROOT) --config $(CONFIG)
+	$(PYTHON) -m fedcrg.cli campaign --campaign-id $(CAMPAIGN) --prepared-root $(PREPARED_ROOT) --config $(CONFIG)
 
 status: ## Show persistent status of campaign CAMPAIGN
-	$(PYTHON) -m fedcrg.cli.app campaign status --campaign-id $(CAMPAIGN)
+	$(PYTHON) -m fedcrg.cli status --campaign-id $(CAMPAIGN)
 
 monitor: ## Stream resource telemetry (CPU/RAM/GPU)
-	$(PYTHON) -m fedcrg.cli.app monitor
+	$(PYTHON) -m fedcrg.cli monitor
 
 results: ## Build the publication bundle for campaign CAMPAIGN
-	$(PYTHON) -m fedcrg.cli.app results build --campaign-id $(CAMPAIGN)
+	$(PYTHON) -m fedcrg.cli results build $(CAMPAIGN)
 
 verify-results: ## Verify the publication bundle for campaign CAMPAIGN
-	$(PYTHON) -m fedcrg.cli.app results verify --campaign-id $(CAMPAIGN)
+	$(PYTHON) -m fedcrg.cli results verify $(CAMPAIGN)
 
 quality: ## Complete quality gate (format, lint, typecheck, full tests)
 	$(RUFF) format --check src tests
