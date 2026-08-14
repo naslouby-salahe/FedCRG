@@ -13,6 +13,7 @@ venv/
 .env
 .idea/
 .vscode/
+.serena/
 .DS_Store
 
 # Runtime data and generated outputs
