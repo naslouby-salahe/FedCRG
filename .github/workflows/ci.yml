@@ -17,7 +17,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: uv sync --locked --no-build --no-install-project --extra dev
       - run: uv build --wheel -o dist
-      - run: uv pip install --no-build --no-deps --no-index --offline dist/*.whl
+      - run: |
+          wheel=$(ls dist/*.whl)
+          hash=$(sha256sum "$wheel" | cut -d' ' -f1)
+          echo "$wheel --hash=sha256:$hash" > dist/wheel-requirements.txt
+      - run: uv pip install --no-build --require-hashes --no-deps -r dist/wheel-requirements.txt
       - name: Format check
         run: uv run --no-sync --no-build ruff format --check src tests
       - name: Lint
