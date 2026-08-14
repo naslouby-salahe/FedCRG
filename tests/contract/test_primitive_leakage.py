@@ -41,12 +41,32 @@ _ALLOWED_ANNOTATIONS: dict[tuple[str, str, str], str] = {
     ("evidence/store.py", "atomic_write_json", "payload"): "arbitrary JSON payload boundary",
     ("evidence/store.py", "_jsonable", "value"): "JSON serialization boundary",
     ("evidence/store.py", "load_yaml_mapping", "return"): "YAML parse boundary before validation",
-    ("experiments/analyses.py", "", "parameters"): "run-config parameters parsed before validation",
     (
-        "experiments/analyses.py",
-        "RunConfigPayload",
-        "parameters",
-    ): "run-config parameters parsed before validation",
+        "evidence/store.py",
+        "run",
+        "args",
+    ): "subprocess argv boundary (git capture passes raw strings)",
+    (
+        "evidence/store.py",
+        "run",
+        "return",
+    ): "subprocess stdout boundary (git capture returns str)",
+    ("runtime.py", "log_stage", "fields"): "structured-logging kwargs boundary",
+    (
+        "reporting.py",
+        "arrow",
+        "start",
+    ): "matplotlib figure coordinate boundary",
+    (
+        "reporting.py",
+        "arrow",
+        "end",
+    ): "matplotlib figure coordinate boundary",
+    (
+        "reporting.py",
+        "arrow",
+        "label",
+    ): "matplotlib figure text boundary",
 }
 
 # Pydantic before-validators receive and return unvalidated YAML/JSON input.
@@ -87,7 +107,6 @@ _ALLOWED_ANNOTATIONS[("data/datasets.py", "_ensure_row_ids", "source")] = (
 _ALLOWED_ANNOTATIONS[("data/datasets.py", "_normalized_name", "return")] = (
     "string normalization helper output"
 )
-_ALLOWED_ANNOTATIONS[("data/datasets.py", "_normalized_name", "path")] = "filesystem path boundary"
 
 # No free-text exception: every model field must carry a meaningful constrained
 # type (Version, Description, Identifier, Sha256, ...) rather than a bare str.
@@ -210,6 +229,22 @@ def _is_click_handler(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     return False
 
 
+def _is_json_parse(value: ast.expr | None) -> bool:
+    """True when the assigned expression is json.loads(...) / yaml.safe_load(...).
+
+    This is the narrow function-local primitive boundary: the raw JSON/YAML
+    parse result is `object` only until the typed model validates it.
+    """
+    if not isinstance(value, ast.Call):
+        return False
+    function = value.func
+    if isinstance(function, ast.Attribute):
+        return function.attr in {"loads", "safe_load", "load"}
+    if isinstance(function, ast.Name):
+        return function.id in {"loads", "safe_load", "load"}
+    return False
+
+
 def _collect_annotation_violations() -> list[str]:
     violations: list[str] = []
     for path in _python_files():
@@ -232,7 +267,16 @@ def _collect_annotation_violations() -> list[str]:
                         ):
                             violations.append(f"{relative}:{node.lineno} {scope} returns {leaf}")
                 cli_input = _is_click_handler(node)
-                for arg in node.args.args:
+                parameters = [
+                    *node.args.posonlyargs,
+                    *node.args.args,
+                    *node.args.kwonlyargs,
+                ]
+                if node.args.vararg is not None:
+                    parameters.append(node.args.vararg)
+                if node.args.kwarg is not None:
+                    parameters.append(node.args.kwarg)
+                for arg in parameters:
                     if arg.annotation is None:
                         continue
                     for leaf in sorted(_annotation_leaves(arg.annotation)):
@@ -241,18 +285,27 @@ def _collect_annotation_violations() -> list[str]:
                             violations.append(
                                 f"{relative}:{node.lineno} {scope} parameter {arg.arg}: {leaf}"
                             )
+                for child in node.body:
+                    visit(child, scope, True)
                 return
             if isinstance(node, ast.ClassDef):
                 for child in node.body:
                     visit(child, node.name, in_function)
                 return
             if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-                if in_function:
-                    return
                 field = node.target.id
                 if node.annotation is None:
                     return
-                for leaf in sorted(_annotation_leaves(node.annotation)):
+                leaves = sorted(_annotation_leaves(node.annotation))
+                if in_function:
+                    # The only function-local primitive exemption is the raw
+                    # JSON/YAML parse boundary (raw: object = json.loads(...)).
+                    if leaves == ["object"] and _is_json_parse(node.value):
+                        return
+                    for leaf in leaves:
+                        violations.append(f"{relative}:{node.lineno} local {field}: {leaf}")
+                    return
+                for leaf in leaves:
                     key = (relative, owner, field)
                     if key not in _ALLOWED_ANNOTATIONS:
                         violations.append(f"{relative}:{node.lineno} field {field}: {leaf}")

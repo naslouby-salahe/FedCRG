@@ -31,6 +31,7 @@ from fedcrg.types import (
     Identifier,
     JsonValue,
     ModelSeed,
+    PathString,
     PolicyId,
     RunId,
     Sha256,
@@ -272,6 +273,26 @@ class RunLayout:
         return self.root / "reports"
 
     @property
+    def admission(self) -> Path:
+        return self.metrics / "admission.json"
+
+    @property
+    def evaluation_summary(self) -> Path:
+        return self.reports / "evaluation_summary.json"
+
+    @property
+    def dataset_manifest(self) -> Path:
+        return self.data / "dataset_manifest.json"
+
+    @property
+    def preprocessing_evidence(self) -> Path:
+        return self.data / "preprocessing.json"
+
+    @property
+    def score_manifest(self) -> Path:
+        return self.scores / "manifest.json"
+
+    @property
     def logs(self) -> Path:
         return self.root / "logs"
 
@@ -356,6 +377,14 @@ class OutputsLayout:
         return self.outputs_root / "reports"
 
     @property
+    def publication_root(self) -> Path:
+        return self.reports / "publication"
+
+    @property
+    def publication_manifest(self) -> Path:
+        return self.publication_root / "manifest.json"
+
+    @property
     def environment_file(self) -> Path:
         return self.outputs_root / "environment.json"
 
@@ -403,6 +432,81 @@ class OutputsLayout:
             / config.detector.id.value
             / f"m{int(model_seed)}"
             / config.training_spec_hash[:16]
+        )
+
+
+class ResultsBundleLayout:
+    """Reserved publication-bundle artifact names under results/<campaign-id>/."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+
+    @property
+    def manifest(self) -> Path:
+        return self.root / "manifest.json"
+
+    @property
+    def checksums(self) -> Path:
+        return self.root / "checksums.json"
+
+    @property
+    def resolved_configs(self) -> Path:
+        return self.root / "resolved_configs"
+
+    @property
+    def metrics(self) -> Path:
+        return self.root / "metrics"
+
+    @property
+    def statistics(self) -> Path:
+        return self.root / "statistics"
+
+    @property
+    def tables(self) -> Path:
+        return self.root / "tables"
+
+    @property
+    def figures(self) -> Path:
+        return self.root / "figures"
+
+    @property
+    def reports(self) -> Path:
+        return self.root / "reports"
+
+    @property
+    def provenance(self) -> Path:
+        return self.root / "provenance"
+
+    @property
+    def primary_nbaiot_config(self) -> Path:
+        return self.resolved_configs / "primary_nbaiot.json"
+
+    @property
+    def metric_records(self) -> Path:
+        return self.metrics / "metric_records.json"
+
+    @property
+    def readiness_plans(self) -> Path:
+        return self.statistics / "readiness_plans.json"
+
+    @property
+    def mismatch_cutoffs(self) -> Path:
+        return self.statistics / "mismatch_cutoffs.json"
+
+    @property
+    def provenance_json(self) -> Path:
+        return self.provenance / "provenance.json"
+
+    @property
+    def required_directories(self) -> tuple[Identifier, ...]:
+        return (
+            "metrics",
+            "statistics",
+            "tables",
+            "figures",
+            "reports",
+            "provenance",
+            "resolved_configs",
         )
 
 
@@ -472,7 +576,7 @@ class ArtifactVerifier:
             ArtifactType.PREPROCESSING_MANIFEST: layout.data / "preprocessing.json",
             ArtifactType.TRAINING_MANIFEST: layout.training / "training.json",
             ArtifactType.MODEL: layout.model_reference,
-            ArtifactType.SCORE_MANIFEST: layout.scores / "manifest.json",
+            ArtifactType.SCORE_MANIFEST: layout.score_manifest,
             ArtifactType.THRESHOLD_RECORDS: layout.threshold_records,
             ArtifactType.METRICS: layout.metric_records,
             ArtifactType.VERIFICATION: layout.verification / "hashes.json",
@@ -498,8 +602,8 @@ class ArtifactVerifier:
         return tuple(required)
 
     def record(self, layout: RunLayout, definition: ExperimentSpec) -> VerificationResult:
-        missing: list[str] = []
-        mismatched: list[str] = []
+        missing: list[PathString] = []
+        mismatched: list[PathString] = []
         hashes: list[FileHashRecord] = []
         for path in self.required_files(layout, definition):
             relative = path.relative_to(layout.root).as_posix()

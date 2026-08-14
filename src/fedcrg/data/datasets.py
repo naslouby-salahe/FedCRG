@@ -1,5 +1,5 @@
 """Dataset adapters, discovery, split construction, eligibility evaluation,
-and the DIAD R14 training-schema-only feature contract.
+and the DIAD training-schema-derived feature contract.
 
 All split and calibration-role construction is deterministic: stable row ids
 from dataset/client/source/index, seeded permutation for calibration roles,
@@ -13,7 +13,6 @@ import re
 from enum import StrEnum
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
-from math import floor
 from pathlib import Path
 from typing import cast
 
@@ -25,7 +24,6 @@ from fedcrg.config import DatasetConfig
 from fedcrg.types import (
     AttackGroupId,
     CalibrationAssignmentMode,
-    CalibrationReadinessState,
     CalibrationSeed,
     ChronologyStatus,
     ClientId,
@@ -47,13 +45,14 @@ from fedcrg.types import (
     RowId,
     SampleCount,
     Sha256,
-    SyntheticDistribution,
 )
 
 Frozen = ConfigDict(frozen=True)
 
+
 class DiadFeature(StrEnum):
     """Frozen 86-feature DIAD training-schema contract."""
+
     INTER_ARRIVAL_TIME = "inter_arrival_time"
     TIME_SINCE_PREVIOUSLY_DISPLAYED_FRAME = "time_since_previously_displayed_frame"
     L4_TCP = "l4_tcp"
@@ -174,6 +173,7 @@ class DatasetDiscovery:
 
 class ClientData(BaseModel):
     """Benign and attack frames for one discovered client."""
+
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     dataset: DatasetId
@@ -185,6 +185,7 @@ class ClientData(BaseModel):
 
 class DatasetAdapter(ABC):
     """Discover clients and load per-client source frames."""
+
     def __init__(self, root: Path) -> None:
         self.root = root.expanduser().resolve()
 
@@ -265,6 +266,7 @@ def attack_rng(
 
 class RoleFrame(BaseModel):
     """One role-labeled frame before split assignment."""
+
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     role: DataRole
@@ -273,6 +275,7 @@ class RoleFrame(BaseModel):
 
 class ClientSplits(BaseModel):
     """Immutable per-client split frames for every role."""
+
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     client_id: ClientId
@@ -293,6 +296,7 @@ class ClientSplits(BaseModel):
 
 class RolePositions(BaseModel):
     """One role's assigned row positions and their hash."""
+
     model_config = Frozen
 
     role: DataRole
@@ -302,6 +306,7 @@ class RolePositions(BaseModel):
 
 class CalibrationRoleAssignment(BaseModel):
     """Seeded calibration-role assignment for one client."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -334,7 +339,7 @@ def validate_split_disjointness(
     row_id_column: PreparedColumn = PreparedColumn.ROW_ID,
 ) -> None:
     """Reject any row-id overlap across split roles."""
-    seen: set[str] = set()
+    seen: set[RowId] = set()
     for role in DataRole:
         frame = splits.try_get(role)
         if frame is None:
@@ -358,8 +363,7 @@ def _ensure_row_ids(
     result = frame.copy()
     if PreparedColumn.ROW_ID.value not in result.columns:
         result[PreparedColumn.ROW_ID.value] = [
-            stable_row_id(dataset, client_id, source, int(index))
-            for index in range(len(result))
+            stable_row_id(dataset, client_id, source, int(index)) for index in range(len(result))
         ]
     return result
 
@@ -445,7 +449,7 @@ _NBAIOT_DEVICES = {
 }
 
 
-def _normalized_name(path: object) -> str:
+def _normalized_name(path: Path) -> str:
     return re.sub(r"[^a-z0-9]", "", str(path).lower())
 
 
@@ -560,9 +564,7 @@ class NBaiotAdapter(DatasetAdapter):
             if attack_group is not None:
                 numeric[PreparedColumn.ATTACK_GROUP.value] = attack_group
             numeric[PreparedColumn.SOURCE_FILE.value] = source
-            numeric[PreparedColumn.SOURCE_ROW_INDEX.value] = np.arange(
-                len(numeric), dtype=np.int64
-            )
+            numeric[PreparedColumn.SOURCE_ROW_INDEX.value] = np.arange(len(numeric), dtype=np.int64)
             frames.append(numeric)
         return pd.concat(frames, ignore_index=True)
 
@@ -590,11 +592,7 @@ class DiadAdapter(DatasetAdapter):
 
     def discover_clients(self) -> tuple[ClientId, ...]:
         directories = DatasetDiscovery.directories(self.root)
-        clients = tuple(
-            str(path.name)
-            for path in directories
-            if re.match(r"^c\d+$", path.name)
-        )
+        clients = tuple(str(path.name) for path in directories if re.match(r"^c\d+$", path.name))
         if not clients:
             raise DataIntegrityError("DIAD root contains no client directories")
         return clients
@@ -608,6 +606,7 @@ class DiadAdapter(DatasetAdapter):
 
 class EligibilityRecord(BaseModel):
     """Eligibility audit outcome for one client."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -622,6 +621,7 @@ class EligibilityRecord(BaseModel):
 
 class EligibilityManifest(BaseModel):
     """Frozen eligibility audit across all discovered clients."""
+
     model_config = Frozen
 
     dataset_id: DatasetId
@@ -651,7 +651,7 @@ class ClientEligibilityEvaluator:
             return DIAD_FEATURES
         if config.feature_contract is DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE:
             if not config.feature_names:
-                raise ValueError("R14 DIAD feature contract is not frozen")
+                raise ValueError("The training-schema-derived DIAD feature contract is not frozen")
             return config.feature_names
         raise ValueError(f"Unsupported DIAD feature contract: {config.feature_contract.value}")
 
@@ -710,13 +710,13 @@ class ClientEligibilityEvaluator:
         )
 
     @staticmethod
-    def attack_development_capacity(data: ClientData, reserve_per_group: PositiveCount) -> SampleCount:
+    def attack_development_capacity(
+        data: ClientData, reserve_per_group: PositiveCount
+    ) -> SampleCount:
         if data.attack.empty or PreparedColumn.ATTACK_GROUP.value not in data.attack.columns:
             return 0
         counts = data.attack[PreparedColumn.ATTACK_GROUP.value].astype(str).value_counts()
-        return int(
-            sum(max(0, int(count) - min(reserve_per_group, int(count))) for count in counts)
-        )
+        return int(sum(max(0, int(count) - min(reserve_per_group, int(count))) for count in counts))
 
 
 _EXCLUDED_EXACT = {
@@ -746,6 +746,7 @@ _EXCLUDED_NAME_MARKERS = (
 
 class ClientTrainingRowHash(BaseModel):
     """Stable hash of one client's training row-id sequence."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -754,6 +755,7 @@ class ClientTrainingRowHash(BaseModel):
 
 class NumericSafeFeatureContract(BaseModel):
     """Frozen training-schema-only feature derivation result."""
+
     model_config = Frozen
 
     features: tuple[FeatureName, ...]
@@ -776,12 +778,12 @@ def _is_forbidden_name(column: FeatureName) -> bool:
 def derive_numeric_safe_features(
     training_frames: dict[ClientId, pd.DataFrame],
 ) -> NumericSafeFeatureContract:
-    """Freeze the R14 feature list using eligible clients' training rows only."""
+    """Freeze the training-schema-derived feature list from eligible training rows."""
 
     if not training_frames:
-        raise ValueError("R14 requires eligible-client training frames")
+        raise ValueError("The derived feature contract requires eligible-client training frames")
     common = set.intersection(*(set(frame.columns) for frame in training_frames.values()))
-    selected: list[str] = []
+    selected: list[FeatureName] = []
     for column in sorted(common):
         if _is_forbidden_name(column):
             continue
@@ -789,7 +791,7 @@ def derive_numeric_safe_features(
             continue
         selected.append(column)
     if not selected:
-        raise ValueError("R14 derived an empty feature contract")
+        raise ValueError("The derived feature contract is empty")
     input_dim = len(selected)
     hidden = (
         max(1, int(0.75 * input_dim)),

@@ -166,7 +166,7 @@ def attack_balanced_tpr(
     groups = sorted(set(groups_array[targets == 1].astype(str)))
     if not groups:
         return None
-    per_group: list[float] = []
+    per_group: list[Tpr] = []
     for group in groups:
         mask = (targets == 1) & (groups_array.astype(str) == group)
         if not np.any(mask):
@@ -276,7 +276,7 @@ def summarize_admission(results: tuple[ClientEvaluationResult, ...]) -> Admissio
         raise ValueError("Admission summary requires clients")
     n = len(results)
 
-    def rate(count: int) -> float:
+    def rate(count: NonNegativeCount) -> Fraction:
         return count / n
 
     return AdmissionSummary(

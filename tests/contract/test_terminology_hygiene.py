@@ -71,6 +71,18 @@ def test_no_implementation_tracking_phase_numbers() -> None:
     assert not violations, "Implementation phase numbers remain:\n" + "\n".join(violations)
 
 
+def test_no_manuscript_shorthand_in_production_source() -> None:
+    """Manuscript registration labels (R14, S5) are not implementation names."""
+    pattern = re.compile(r"\bR\d+\b|\bS[1-9]\d*\b")
+    violations: list[str] = []
+    for path in _python_files():
+        relative = path.relative_to(SRC).as_posix()
+        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if pattern.search(line):
+                violations.append(f"{relative}:{line_number}: {line.strip()}")
+    assert not violations, "Manuscript shorthand remains:\n" + "\n".join(violations)
+
+
 def test_comments_are_rationale_not_narration() -> None:
     violations: list[str] = []
     for path in _python_files():

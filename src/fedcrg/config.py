@@ -6,7 +6,7 @@ Three YAML documents are the single source of truth:
                               profiles, and the policy registry;
 - ``config/datasets.yaml``    dataset contracts (identity, feature contract,
                               eligibility, role sizing, seeds);
-- ``config/experiments.yaml`` the locked S1-S6 / R1-R14 experiment catalogue.
+- ``config/experiments.yaml`` the locked experiment catalogue.
 
 There is no inheritance graph and no deep-merge machinery. Python executes
 typed ``ExperimentSpec`` values resolved from these documents and never
@@ -640,15 +640,18 @@ class ExperimentConfig(BaseModel):
                 )
         if self.id is ExperimentId.DIAD_FEATURE_SENSITIVITY:
             if self.dataset.id is not DatasetId.DIAD:
-                raise ValueError("R14 requires DIAD")
+                raise ValueError("The training-schema-derived feature experiment requires DIAD")
             if (
                 self.dataset.feature_contract
                 is not DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE
             ):
-                raise ValueError("R14 requires a frozen training-schema-derived feature contract")
+                raise ValueError(
+                    "The feature experiment requires a frozen training-schema-derived feature contract"
+                )
         elif self.dataset.feature_contract is DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE:
             raise ValueError(
-                "The training-schema-derived DIAD feature contract is exclusive to R14"
+                "The training-schema-derived DIAD feature contract is exclusive to the "
+                "feature-sensitivity experiment"
             )
         return self
 

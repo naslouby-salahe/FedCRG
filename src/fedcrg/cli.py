@@ -54,6 +54,7 @@ from fedcrg.types import (
     DatasetId,
     Duration,
     ExperimentId,
+    ExperimentStatus,
     ExperimentType,
     Identifier,
     ModelSeed,
@@ -65,6 +66,8 @@ from fedcrg.types import (
     Sha256,
     Version,
 )
+
+from fedcrg.evidence.store import RunLayout
 
 _STUDY_CONFIG = Path("config/study.yaml")
 _PREPROCESSED_ROOT = Path("data/preprocessed")
@@ -156,6 +159,17 @@ class CampaignPayload(BaseModel):
     current_experiment: ExperimentId | None
     elapsed_seconds: Duration
     results_path: PathString | None
+
+
+class RunStatusCounts(BaseModel):
+    """Aggregated run-status counters (structural counters, not configuration)."""
+
+    model_config = ConfigDict()
+
+    total: NonNegativeCount = 0
+    completed: NonNegativeCount = 0
+    failed: NonNegativeCount = 0
+    running: NonNegativeCount = 0
 
 
 class ExperimentStatusRow(BaseModel):
@@ -474,39 +488,36 @@ def campaign(
 def status(experiment_id: str | None, outputs: Path, campaign_id: str) -> None:
     """Show run status for one experiment (or all experiments)."""
     layout = OutputsLayout(outputs)
-    counts: dict[ExperimentId, dict[str, int]] = {}
+    counts: dict[ExperimentId, RunStatusCounts] = {}
     runs_root = layout.runs
     if runs_root.is_dir():
         for run_dir in runs_root.iterdir():
-            manifest_path = run_dir / "manifest.json"
-            if not manifest_path.is_file():
+            run_layout = RunLayout(run_dir)
+            if not run_layout.manifest.is_file():
                 continue
             try:
                 from fedcrg.evidence.models import RunManifest
 
                 manifest = RunManifest.model_validate_json(
-                    manifest_path.read_text(encoding="utf-8")
+                    run_layout.manifest.read_text(encoding="utf-8")
                 )
             except Exception:
                 continue
-            row = counts.setdefault(
-                manifest.experiment_id,
-                {"total": 0, "completed": 0, "failed": 0, "running": 0},
-            )
-            row["total"] += 1
-            if manifest.status.value == "complete":
-                row["completed"] += 1
-            elif manifest.status.value == "failed":
-                row["failed"] += 1
+            counter = counts.setdefault(manifest.experiment_id, RunStatusCounts())
+            counter.total += 1
+            if manifest.status is ExperimentStatus.COMPLETE:
+                counter.completed += 1
+            elif manifest.status is ExperimentStatus.FAILED:
+                counter.failed += 1
             else:
-                row["running"] += 1
+                counter.running += 1
     rows = tuple(
         ExperimentStatusRow(
             experiment=experiment,
-            total=values["total"],
-            completed=values["completed"],
-            failed=values["failed"],
-            running=values["running"],
+            total=values.total,
+            completed=values.completed,
+            failed=values.failed,
+            running=values.running,
         )
         for experiment, values in sorted(counts.items(), key=lambda item: item[0].value)
         if experiment_id is None or experiment.value == experiment_id

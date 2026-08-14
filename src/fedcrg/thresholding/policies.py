@@ -9,6 +9,7 @@ deployable threshold.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict
@@ -33,12 +34,15 @@ from fedcrg.types import (
     Identifier,
     InformationRegime,
     Metric,
+    NonNegativeCount,
     NonNegativeInt,
     OperatingBand,
     PolicyId,
     PositiveCount,
     SampleCount,
+    Score,
     SupervisedClassLabel,
+    Tpr,
 )
 
 Frozen = ConfigDict(frozen=True)
@@ -307,7 +311,7 @@ def tune_shrinkage(
     best_n0 = n0_candidates[0]
     best_error = float("inf")
     for n0 in n0_candidates:
-        errors: list[float] = []
+        errors: list[Fpr] = []
         for client in clients:
             local = empirical_quantile(client.calibration_scores, alpha)
             n_calibration = len(client.calibration_scores)
@@ -367,9 +371,9 @@ def _pooled_moments(
     clients: tuple[SupervisedDevelopmentEvidence, ...],
     label: SupervisedClassLabel,
 ) -> ClassMoments:
-    counts: list[int] = []
-    means: list[float] = []
-    variances: list[float] = []
+    counts: list[NonNegativeCount] = []
+    means: list[Score] = []
+    variances = []
     for client in clients:
         values = client.scores[client.labels == label]
         counts.append(len(values))
@@ -424,13 +428,23 @@ def supervised_global_f1(
     return float(candidates[int(np.flatnonzero(scores == best)[0])])
 
 
+@dataclass(frozen=True, slots=True)
+class _OracleCandidate:
+    """One candidate threshold ranked by band error then development TPR."""
+
+    band_error: Metric
+    tpr_rank: Tpr | None
+    order: NonNegativeInt
+    threshold: Threshold
+
+
 def oracle_choice(
     client: FinalTestEvidence,
     candidates: tuple[Threshold, Threshold, Threshold],
     band: OperatingBand,
 ) -> Threshold:
     """Oracle threshold choice from final-test evidence."""
-    ranked: list[tuple[float, float, int, float]] = []
+    ranked: list[_OracleCandidate] = []
     benign_labels = np.zeros(len(client.benign_test_scores), dtype=np.int64)
     attack_labels = np.ones(len(client.attack_test_scores), dtype=np.int64)
     for order, threshold in enumerate(candidates):
@@ -438,9 +452,23 @@ def oracle_choice(
         attack_cm = confusion_matrix(client.attack_test_scores, attack_labels, threshold)
         client_fpr = benign_cm.fp / (benign_cm.fp + benign_cm.tn)
         client_tpr = tpr(attack_cm)
-        tpr_rank = -1.0 if client_tpr is None else client_tpr
-        ranked.append((band_error(client_fpr, band), -tpr_rank, order, threshold))
-    return min(ranked)[3]
+        ranked.append(
+            _OracleCandidate(
+                band_error=band_error(client_fpr, band),
+                tpr_rank=client_tpr,
+                order=order,
+                threshold=threshold,
+            )
+        )
+    best = min(
+        ranked,
+        key=lambda candidate: (
+            candidate.band_error,
+            -(candidate.tpr_rank if candidate.tpr_rank is not None else 1.0),
+            candidate.order,
+        ),
+    )
+    return best.threshold
 
 
 SUPERVISED_POLICIES = frozenset(

@@ -28,6 +28,7 @@ from fedcrg.evidence.models import (
 from fedcrg.evidence.store import (
     ArtifactVerifier,
     OutputsLayout,
+    ResultsBundleLayout,
     RunLayout,
     atomic_write_json,
     sha256_file,
@@ -78,7 +79,7 @@ _LOGGER = get_logger(__name__)
 
 
 def _run_manifest(run_dir: Path) -> RunManifest | None:
-    manifest_path = run_dir / "manifest.json"
+    manifest_path = RunLayout(run_dir).manifest
     if not manifest_path.is_file():
         return None
     try:
@@ -93,7 +94,7 @@ def _completed_runs(outputs_root: Path) -> tuple[Path, ...]:
         return ()
     rows: list[Path] = []
     for path in sorted(p for p in runs_root.iterdir() if p.is_dir()):
-        manifest_path = path / "manifest.json"
+        manifest_path = RunLayout(path).manifest
         if manifest_path.is_file():
             try:
                 manifest = RunManifest.model_validate_json(
@@ -399,7 +400,7 @@ class PublicationTableBuilder:
     def federation_results(self, run_dirs: tuple[Path, ...], output: Path) -> Path:
         rows: list[FederationResultsRow] = []
         for run_dir in run_dirs:
-            metrics = run_dir / "metrics" / "federation.json"
+            metrics = RunLayout(run_dir).federation_metrics
             if metrics.exists():
                 federation = FederationMetrics.model_validate_json(
                     metrics.read_text(encoding="utf-8")
@@ -473,7 +474,7 @@ class PublicationPackageBuilder:
         prepared_manifest: Path | None = None,
         destination: Path | None = None,
     ) -> PublicationPackage:
-        destination = destination or outputs_root / "reports" / "publication"
+        destination = destination or OutputsLayout(outputs_root).publication_root
         table_root = destination / "tables"
         figure_root = destination / "figures"
         table_root.mkdir(parents=True, exist_ok=True)
@@ -520,7 +521,7 @@ class PublicationPackageBuilder:
                 lambda: self.tables.primary_policy_results(
                     primary_runs, table_root / "table_4_primary_policy_results.csv"
                 ),
-                "R1 policy runs are unavailable",
+                "primary policy runs are unavailable",
             ),
             self._runs_table(
                 "Table 5 - Admission states",
@@ -547,7 +548,7 @@ class PublicationPackageBuilder:
                 ),
             ),
         )
-        manifest_path = destination / "manifest.json"
+        manifest_path = destination / OutputsLayout(outputs_root).publication_manifest.name
         atomic_write_json(
             manifest_path,
             {
@@ -703,7 +704,7 @@ def build_repository_report(outputs: Path, config: ExperimentConfig) -> Path:
             bootstrap_seed=config.statistics.bootstrap_seed,
             bootstrap_replicates=config.statistics.bootstrap_replicates,
         )
-        contrasts_payload: object = [
+        contrasts_payload = [
             {
                 "comparator": item.comparator.value,
                 "metrics": [metric.model_dump(mode="json") for metric in item.metrics],
@@ -754,17 +755,6 @@ def build_publication(
     return package.manifest
 
 
-_REQUIRED_BUNDLE_DIRECTORIES = (
-    "resolved_configs",
-    "metrics",
-    "statistics",
-    "tables",
-    "figures",
-    "reports",
-    "provenance",
-)
-
-
 class ResultsManifest(BaseModel):
     """Frozen results-bundle manifest."""
 
@@ -801,25 +791,26 @@ class ResultsBuilder:
         results_root: Path,
     ) -> Path:
         destination = results_root / str(campaign_id)
+        layout = ResultsBundleLayout(destination)
         if destination.exists():
             raise FileExistsError(f"Results bundle already exists and is immutable: {destination}")
-        for directory in _REQUIRED_BUNDLE_DIRECTORIES:
+        for directory in layout.required_directories:
             (destination / directory).mkdir(parents=True, exist_ok=True)
 
         study = Study.load()
         config = study.resolve(ExperimentId.PRIMARY_NBAIOT)
-        self._write_resolved_configs(config, destination / "resolved_configs")
-        self._copy_metrics(outputs_root, destination / "metrics")
-        self._copy_statistics(outputs_root, destination / "statistics")
-        self._write_reports(outputs_root, destination / "reports", config)
-        self._write_provenance(outputs_root, destination / "provenance")
-        self._copy_tables_and_figures(outputs_root, destination)
+        self._write_resolved_configs(config, layout)
+        self._copy_metrics(outputs_root, layout)
+        self._copy_statistics(outputs_root, layout)
+        self._write_reports(outputs_root, layout)
+        self._write_provenance(outputs_root, layout)
+        self._copy_tables_and_figures(outputs_root, layout)
 
         # The manifest itself must be covered by the checksum ledger, so it is
         # written before the ledger is computed (checksums.json is the only
         # file excluded from its own ledger).
         complete = self._evidence_complete(outputs_root)
-        checksums = self._checksums(destination)
+        checksums = self._checksums(layout)
         manifest = self._manifest(
             campaign_id,
             outputs_root,
@@ -829,9 +820,9 @@ class ResultsBuilder:
             complete,
             file_count=len(checksums) + 1,
         )
-        atomic_write_json(destination / "manifest.json", manifest)
-        checksums = self._checksums(destination)
-        atomic_write_json(destination / "checksums.json", checksums)
+        atomic_write_json(layout.manifest, manifest)
+        checksums = self._checksums(layout)
+        atomic_write_json(layout.checksums, checksums)
         return destination
 
     @staticmethod
@@ -869,9 +860,9 @@ class ResultsBuilder:
         return True
 
     @staticmethod
-    def _write_resolved_configs(config: ExperimentConfig, destination: Path) -> None:
+    def _write_resolved_configs(config: ExperimentConfig, layout: ResultsBundleLayout) -> None:
         atomic_write_json(
-            destination / "primary_nbaiot.json",
+            layout.primary_nbaiot_config,
             {
                 "config_hash": config.config_hash,
                 "data_spec_hash": config.data_spec_hash,
@@ -880,13 +871,14 @@ class ResultsBuilder:
         )
 
     @staticmethod
-    def _copy_metrics(outputs_root: Path, destination: Path) -> None:
+    def _copy_metrics(outputs_root: Path, layout: ResultsBundleLayout) -> None:
         runs_root = OutputsLayout(outputs_root).runs
         if not runs_root.exists():
             return
         records: list[MetricRecord] = []
         for run_root in sorted(path for path in runs_root.iterdir() if path.is_dir()):
-            manifest_path = run_root / "manifest.json"
+            run_layout = RunLayout(run_root)
+            manifest_path = run_layout.manifest
             if not manifest_path.is_file():
                 continue
             try:
@@ -897,7 +889,7 @@ class ResultsBuilder:
                 continue
             if manifest.status.value != "complete":
                 continue
-            metric_path = run_root / "metrics" / "metric_record.jsonl"
+            metric_path = run_layout.metric_records
             if not metric_path.is_file():
                 continue
             for line in metric_path.read_text(encoding="utf-8").splitlines():
@@ -906,29 +898,28 @@ class ResultsBuilder:
                 except pydantic.ValidationError:
                     continue
         atomic_write_json(
-            destination / "metric_records.json",
+            layout.metric_records,
             {"records": [record.model_dump(mode="json") for record in records]},
         )
 
     @staticmethod
-    def _copy_statistics(outputs_root: Path, destination: Path) -> None:
-        analysis_root = OutputsLayout(outputs_root).cache_analysis
-        if not analysis_root.exists():
-            return
-        for name in ("readiness_plans.json", "mismatch_cutoffs.json"):
-            source = analysis_root / name
+    def _copy_statistics(outputs_root: Path, layout: ResultsBundleLayout) -> None:
+        outputs = OutputsLayout(outputs_root)
+        for source, target in (
+            (outputs.readiness_plans_file, layout.readiness_plans),
+            (outputs.mismatch_cutoffs_file, layout.mismatch_cutoffs),
+        ):
             if source.is_file():
-                (destination / name).write_bytes(source.read_bytes())
+                target.write_bytes(source.read_bytes())
 
-    def _write_reports(
-        self, outputs_root: Path, destination: Path, config: ExperimentConfig
-    ) -> None:
+    def _write_reports(self, outputs_root: Path, layout: ResultsBundleLayout) -> None:
+        config = Study.load().resolve(ExperimentId.PRIMARY_NBAIOT)
         report = build_repository_report(outputs_root, config)
         if report.is_file():
-            (destination / report.name).write_bytes(report.read_bytes())
+            (layout.reports / report.name).write_bytes(report.read_bytes())
 
     @staticmethod
-    def _write_provenance(outputs_root: Path, destination: Path) -> None:
+    def _write_provenance(outputs_root: Path, layout: ResultsBundleLayout) -> None:
         environment: GitEnvironment | None = None
         environment_path = OutputsLayout(outputs_root).environment_file
         if environment_path.is_file():
@@ -936,7 +927,7 @@ class ResultsBuilder:
                 environment_path.read_text(encoding="utf-8")
             )
         atomic_write_json(
-            destination / "provenance.json",
+            layout.provenance_json,
             {
                 "environment": (
                     environment.model_dump(mode="json") if environment is not None else None
@@ -947,13 +938,13 @@ class ResultsBuilder:
         )
 
     @staticmethod
-    def _copy_tables_and_figures(outputs_root: Path, destination: Path) -> None:
+    def _copy_tables_and_figures(outputs_root: Path, layout: ResultsBundleLayout) -> None:
         publication_root = outputs_root / "reports" / "publication"
         if not publication_root.exists():
             return
         for source_dir, target_dir in (
-            ("tables", destination / "tables"),
-            ("figures", destination / "figures"),
+            ("tables", layout.tables),
+            ("figures", layout.figures),
         ):
             source = publication_root / source_dir
             if not source.exists():
@@ -963,10 +954,11 @@ class ResultsBuilder:
                     (target_dir / path.name).write_bytes(path.read_bytes())
 
     @staticmethod
-    def _checksums(root: Path) -> tuple[ChecksumRecord, ...]:
+    def _checksums(layout: ResultsBundleLayout) -> tuple[ChecksumRecord, ...]:
+        root = layout.root
         records: list[ChecksumRecord] = []
         for path in sorted(root.rglob("*")):
-            if path.is_file() and path.name != "checksums.json":
+            if path.is_file() and path.name != layout.checksums.name:
                 records.append(
                     ChecksumRecord(
                         relative_path=path.relative_to(root).as_posix(),
@@ -1011,16 +1003,17 @@ class ResultsVerifier:
         outputs_root: Path,
     ) -> ResultsVerification:
         destination = results_root / str(campaign_id)
+        layout = ResultsBundleLayout(destination)
         problems: list[Identifier] = []
         if not destination.exists():
             return ResultsVerification(False, (f"results bundle does not exist: {destination}",))
-        for directory in _REQUIRED_BUNDLE_DIRECTORIES:
+        for directory in layout.required_directories:
             if not (destination / directory).is_dir():
                 problems.append(f"missing required bundle directory: {directory}")
-        manifest_path = destination / "manifest.json"
+        manifest_path = layout.manifest
         if not manifest_path.is_file():
             problems.append("missing bundle manifest.json")
-        checksums_path = destination / "checksums.json"
+        checksums_path = layout.checksums
         if not checksums_path.is_file():
             problems.append("missing bundle checksums.json")
         else:
@@ -1029,7 +1022,7 @@ class ResultsVerifier:
                 for entry in json.loads(checksums_path.read_text(encoding="utf-8"))
             )
             for path in sorted(destination.rglob("*")):
-                if path.is_file() and path.name != "checksums.json":
+                if path.is_file() and path.name != layout.checksums.name:
                     relative = path.relative_to(destination).as_posix()
                     expected = next(
                         (record.sha256 for record in checksums if record.relative_path == relative),

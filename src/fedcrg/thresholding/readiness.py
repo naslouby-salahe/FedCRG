@@ -523,7 +523,7 @@ def holm_directional_fleet_sensitivity(
 ) -> tuple[FleetMismatchDecision, ...]:
     """Holm-Bonferroni directional fleet sensitivity."""
     hypotheses: list[DirectionalHypothesis] = []
-    diagnostics: dict[ClientId, tuple[float | None, float]] = {}
+    diagnostics: dict[ClientId, tuple[PValue | None, PValue]] = {}
     for client_id in sorted(counts_by_client):
         low, high = _directional_p_values(counts_by_client[client_id], band)
         diagnostics[client_id] = (low, high)

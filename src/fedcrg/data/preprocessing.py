@@ -67,6 +67,7 @@ from fedcrg.types import (
     FeatureName,
     NonNegativeCount,
     PositiveCount,
+    Position,
     PreparedColumn,
     RngSeed,
     Score,
@@ -98,6 +99,7 @@ def model_feature_columns(frame: pd.DataFrame, expected: PositiveCount) -> tuple
 
 class ClientPreprocessingParameters(BaseModel):
     """Frozen per-client preprocessing parameterization."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -107,6 +109,7 @@ class ClientPreprocessingParameters(BaseModel):
 
 class PreprocessingModel(BaseModel):
     """Frozen train-only preprocessing model."""
+
     model_config = Frozen
 
     dataset: DatasetId
@@ -155,6 +158,7 @@ class PreprocessingModel(BaseModel):
 
 class ClientPreprocessingStatistics(BaseModel):
     """Frozen per-client preprocessing statistics."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -184,9 +188,7 @@ class TrainOnlyPreprocessing:
             finite_rate = np.isfinite(values).mean(axis=0)
             failing = [columns[index] for index, rate in enumerate(finite_rate) if rate < 0.99]
             if failing:
-                raise DataIntegrityError(
-                    "DIAD_FEATURE_FINITE_RATE_FAIL: " + ", ".join(failing[:5])
-                )
+                raise DataIntegrityError("DIAD_FEATURE_FINITE_RATE_FAIL: " + ", ".join(failing[:5]))
         return columns
 
     def client_statistics(
@@ -275,7 +277,9 @@ class PrepareData:
         )
 
     @staticmethod
-    def adapter(dataset: DatasetId, root: Path, expected_feature_count: FeatureCount) -> DatasetAdapter:
+    def adapter(
+        dataset: DatasetId, root: Path, expected_feature_count: FeatureCount
+    ) -> DatasetAdapter:
         if dataset is DatasetId.NBAIOT:
             return NBaiotAdapter(root, expected_feature_count)
         raise ValueError(f"No filesystem adapter for {dataset.value}")
@@ -295,9 +299,7 @@ class PrepareData:
             / f"{config.data_spec_hash[:16]}-{source_identity_hash[:16]}"
         )
 
-    def cache_root(
-        self, config: ExperimentConfig, manifest: PreparedDatasetManifest
-    ) -> Path:
+    def cache_root(self, config: ExperimentConfig, manifest: PreparedDatasetManifest) -> Path:
         """Resolve the cache directory that holds one prepared manifest."""
         return self.prepared_root(config, self._source_identity_hash(manifest.source_files))
 
@@ -329,9 +331,7 @@ class PrepareData:
             try:
                 return self._reuse_existing(final_root, config, sources, data_root)
             except DataIntegrityError as exc:
-                _LOGGER.warning(
-                    "prepared cache invalid (%s); rebuilding %s", exc, final_root
-                )
+                _LOGGER.warning("prepared cache invalid (%s); rebuilding %s", exc, final_root)
                 shutil.rmtree(final_root, ignore_errors=True)
         return self._materialize(
             config,
@@ -442,7 +442,9 @@ class PrepareData:
                     preprocessing,
                     include_source_order_assignment,
                 )
-                atomic_write_json(staging_root / PreparedLayout.preprocessing_filename, preprocessing)
+                atomic_write_json(
+                    staging_root / PreparedLayout.preprocessing_filename, preprocessing
+                )
                 self._write_dataset_manifest(
                     staging_root,
                     config,
@@ -528,7 +530,12 @@ class PrepareData:
 
     @staticmethod
     def _validate_nbaiot_count(config: ExperimentConfig, data: ClientData) -> None:
-        if len(data.benign) < config.dataset.split.reservoir_size + config.dataset.split.train_benign + config.dataset.split.min_benign_test:
+        if (
+            len(data.benign)
+            < config.dataset.split.reservoir_size
+            + config.dataset.split.train_benign
+            + config.dataset.split.min_benign_test
+        ):
             raise DataIntegrityError(
                 f"{FailureCode.NBAIOT_ATTACK_BUDGET_FAIL.value}: benign evidence is insufficient"
             )
@@ -545,9 +552,7 @@ class PrepareData:
         split = config.split
         benign = data.benign.reset_index(drop=True)
         if len(benign) < split.train_benign + split.reservoir_size + split.min_benign_test:
-            raise DataIntegrityError(
-                f"Benign evidence is insufficient for {data.client_id}"
-            )
+            raise DataIntegrityError(f"Benign evidence is insufficient for {data.client_id}")
         train = benign.iloc[: split.train_benign].copy()
         reservoir = benign.iloc[
             split.train_benign : split.train_benign + split.reservoir_size
@@ -561,7 +566,9 @@ class PrepareData:
         if PreparedColumn.ATTACK_GROUP.value not in attack.columns:
             raise DataIntegrityError(f"Attack frame lacks attack_group for {data.client_id}")
         group_values = attack[PreparedColumn.ATTACK_GROUP.value].astype(str)
-        groups = tuple(sorted(_ATTACK_GROUP_ADAPTER.validate_python(value) for value in set(group_values)))
+        groups = tuple(
+            sorted(_ATTACK_GROUP_ADAPTER.validate_python(value) for value in set(group_values))
+        )
         group_counts: dict[AttackGroupId, NonNegativeCount] = {
             _ATTACK_GROUP_ADAPTER.validate_python(str(group)): int(count)
             for group, count in group_values.value_counts().items()
@@ -573,7 +580,7 @@ class PrepareData:
             split.attack_dev,
             split.min_attack_test_per_group,
         )
-        dev_rows: list[int] = []
+        dev_rows: list[Position] = []
         for group in groups:
             members = sorted(
                 index for index in range(len(attack)) if group_values.iloc[index] == group
@@ -581,9 +588,7 @@ class PrepareData:
             rng = attack_rng(data.dataset, data.client_id, group, attack_split_seed)
             chosen = tuple(
                 int(index)
-                for index in rng.choice(
-                    len(members), size=development[group], replace=False
-                )
+                for index in rng.choice(len(members), size=development[group], replace=False)
             )
             dev_rows.extend(members[index] for index in chosen)
         dev_index = set(dev_rows)
@@ -609,13 +614,16 @@ class PrepareData:
                 ]
         splits = ClientSplits(
             client_id=data.client_id,
-            roles=tuple(RoleFrame(role=role, frame=frame) for role, frame in (
-                (DataRole.TRAIN, train),
-                (DataRole.RESERVOIR, reservoir),
-                (DataRole.BENIGN_TEST, benign_test),
-                (DataRole.ATTACK_DEV, attack_dev),
-                (DataRole.ATTACK_TEST, attack_test),
-            )),
+            roles=tuple(
+                RoleFrame(role=role, frame=frame)
+                for role, frame in (
+                    (DataRole.TRAIN, train),
+                    (DataRole.RESERVOIR, reservoir),
+                    (DataRole.BENIGN_TEST, benign_test),
+                    (DataRole.ATTACK_DEV, attack_dev),
+                    (DataRole.ATTACK_TEST, attack_test),
+                )
+            ),
         )
         validate_split_disjointness(splits)
         return splits
@@ -634,9 +642,7 @@ class PrepareData:
                 group: max(0, int(count) - min(reserve_per_group, int(count)))
                 for group, count in group_counts.items()
             }
-            return PrepareData.waterfill_allocation(
-                groups, capacities, development_budget
-            )
+            return PrepareData.waterfill_allocation(groups, capacities, development_budget)
         return PrepareData._nbaiot_balanced_allocation(
             groups, group_counts, development_budget, reserve_per_group
         )
@@ -690,14 +696,10 @@ class PrepareData:
         """
         if not groups:
             raise DataIntegrityError("Attack development allocation requires groups")
-        development: dict[AttackGroupId, NonNegativeCount] = {
-            group: int(0) for group in groups
-        }
+        development: dict[AttackGroupId, NonNegativeCount] = {group: 0 for group in groups}
         for _ in range(int(development_budget)):
             eligible = [
-                group
-                for group in groups
-                if int(development[group]) < int(capacities[group])
+                group for group in groups if int(development[group]) < int(capacities[group])
             ]
             if not eligible:
                 raise DataIntegrityError(
@@ -705,9 +707,7 @@ class PrepareData:
                     "attack development capacity is exhausted before the budget is met"
                 )
             minimum = min(int(development[group]) for group in eligible)
-            chosen = next(
-                group for group in eligible if int(development[group]) == minimum
-            )
+            chosen = next(group for group in eligible if int(development[group]) == minimum)
             development[chosen] = int(development[chosen]) + 1
         for group in groups:
             if not 0 <= int(development[group]) <= int(capacities[group]):
@@ -849,7 +849,9 @@ class PrepareData:
                 mode=CalibrationAssignmentMode.SEEDED_PERMUTATION,
                 clients=tuple(clients),
             )
-            relative = PurePosixPath(f"{PreparedLayout.calibration_split_directory}/c{int(seed)}.json")
+            relative = PurePosixPath(
+                f"{PreparedLayout.calibration_split_directory}/c{int(seed)}.json"
+            )
             path = root / relative
             self.calibration_assignment_manifests.save(path, manifest)
             references.append(

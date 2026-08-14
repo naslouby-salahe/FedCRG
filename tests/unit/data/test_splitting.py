@@ -10,6 +10,7 @@ from fedcrg.data.datasets import ClientData
 from fedcrg.data.preprocessing import PrepareData
 from fedcrg.types import (
     ChronologyStatus,
+    DataIntegrityError,
     DataRole,
     DatasetId,
 )
@@ -73,5 +74,5 @@ def test_split_rejects_insufficient_benign_rows() -> None:
         attack=_client().attack,
         chronology=ChronologyStatus.SOURCE_ORDER_ONLY,
     )
-    with pytest.raises(Exception):
+    with pytest.raises((ValueError, DataIntegrityError)):
         PrepareData().split_base(client, config, attack_split_seed=9001)

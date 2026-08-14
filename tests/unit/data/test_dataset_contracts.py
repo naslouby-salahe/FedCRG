@@ -28,9 +28,7 @@ from fedcrg.types import (
 )
 
 _CLIENT_ID_ADAPTER = TypeAdapter(ClientId)
-_NBAIOT_CLIENT_IDS = tuple(
-    _CLIENT_ID_ADAPTER.validate_python(value) for value in _NBAIOT_DEVICES
-)
+_NBAIOT_CLIENT_IDS = tuple(_CLIENT_ID_ADAPTER.validate_python(value) for value in _NBAIOT_DEVICES)
 
 
 def test_nbaiot_adapter_maps_exact_nine_clients_and_preserves_provenance(
@@ -122,12 +120,8 @@ def _diad_client(
     malicious_rows: int = 1100,
     malicious_groups: tuple[tuple[str, int], ...] = (("a", 550), ("b", 550)),
 ) -> ClientData:
-    benign = pd.DataFrame(
-        {feature: [1.0] * benign_rows for feature in DIAD_FEATURES}
-    )
-    malicious = pd.DataFrame(
-        {feature: [2.0] * malicious_rows for feature in DIAD_FEATURES}
-    )
+    benign = pd.DataFrame({feature: [1.0] * benign_rows for feature in DIAD_FEATURES})
+    malicious = pd.DataFrame({feature: [2.0] * malicious_rows for feature in DIAD_FEATURES})
     rows = []
     for group, count in malicious_groups:
         rows.extend([group] * count)
@@ -149,12 +143,8 @@ def test_diad_eligibility_accepts_healthy_client() -> None:
 
 
 def test_diad_eligibility_rejects_missing_feature() -> None:
-    benign = pd.DataFrame(
-        {feature: [1.0] * 8000 for feature in DIAD_FEATURES[1:]}
-    )
-    malicious = pd.DataFrame(
-        {feature: [2.0] * 1100 for feature in DIAD_FEATURES}
-    )
+    benign = pd.DataFrame({feature: [1.0] * 8000 for feature in DIAD_FEATURES[1:]})
+    malicious = pd.DataFrame({feature: [2.0] * 1100 for feature in DIAD_FEATURES})
     malicious["attack_group"] = ["a"] * 550 + ["b"] * 550
     client = ClientData(
         dataset=DatasetId.DIAD,
@@ -169,13 +159,9 @@ def test_diad_eligibility_rejects_missing_feature() -> None:
 
 
 def test_diad_eligibility_rejects_nonfinite_training_rows() -> None:
-    benign = pd.DataFrame(
-        {feature: [1.0] * 8000 for feature in DIAD_FEATURES}
-    )
+    benign = pd.DataFrame({feature: [1.0] * 8000 for feature in DIAD_FEATURES})
     benign.loc[0:1, DIAD_FEATURES[5]] = np.nan
-    malicious = pd.DataFrame(
-        {feature: [2.0] * 1100 for feature in DIAD_FEATURES}
-    )
+    malicious = pd.DataFrame({feature: [2.0] * 1100 for feature in DIAD_FEATURES})
     malicious["attack_group"] = ["a"] * 550 + ["b"] * 550
     client = ClientData(
         dataset=DatasetId.DIAD,

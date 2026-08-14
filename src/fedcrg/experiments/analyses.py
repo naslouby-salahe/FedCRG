@@ -10,11 +10,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from math import sqrt
 from pathlib import Path
-
-from typing import Annotated
+from enum import StrEnum
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, TypeAdapter
 from scipy.stats import binom, gamma, lognorm, norm
 
 from fedcrg.config import ExperimentConfig, ExperimentSpec, ProtocolConfig
@@ -51,6 +50,7 @@ from fedcrg.types import (
     Fpr,
     Fraction,
     Identifier,
+    Metric,
     ModelSeed,
     NonNegativeCount,
     PolicyId,
@@ -66,8 +66,6 @@ from fedcrg.types import (
 )
 
 Frozen = ConfigDict(frozen=True)
-
-Metric = Annotated[float, Field()]
 
 _CLIENT_ID_ADAPTER = TypeAdapter(ClientId)
 
@@ -254,7 +252,7 @@ def iid_readiness_validation(
     repetitions: RepetitionCount,
     *,
     alpha: Alpha,
-    rho: float,
+    rho: Fraction,
     assurance: Assurance,
     seed: AnalysisSeed,
 ) -> SyntheticCoverageResult:
@@ -333,8 +331,8 @@ def exact_mismatch_power(
     """Exact mismatch-declaration probability from binomial tails."""
     if sample_count <= 0 or not 0.0 <= true_fpr <= 1.0:
         raise ValueError("Mismatch power requires n>0 and true_fpr in [0,1]")
-    low_counts: list[int] = []
-    high_counts: list[int] = []
+    low_counts: list[NonNegativeCount] = []
+    high_counts: list[NonNegativeCount] = []
     for exceedances in range(sample_count + 1):
         interval = clopper_pearson_interval(BinomialCounts(exceedances, sample_count), confidence)
         if interval.upper < band.lower:
@@ -613,11 +611,11 @@ class FederationResultRecord(BaseModel):
 
 
 class RunConfigPayload(BaseModel):
-    """Run-configuration envelope carrying the parameters object."""
+    """Run-configuration envelope; parameters validate into the typed section."""
 
     model_config = Frozen
 
-    parameters: object
+    parameters: RunConfigParameters
 
 
 class RunConfigDataset(BaseModel):
@@ -639,29 +637,24 @@ class RunConfigParameters(BaseModel):
 def load_federation_results(run_dirs: tuple[Path, ...]) -> tuple[FederationResultRecord, ...]:
     """Load completed federation records from run directories."""
     from fedcrg.evidence.models import RunManifest
-    from fedcrg.evidence.store import load_json_model
+    from fedcrg.evidence.store import RunLayout, load_json_model
 
     rows: list[FederationResultRecord] = []
     for run_dir in run_dirs:
-        manifest_path = run_dir / "manifest.json"
-        federation_path = run_dir / "metrics" / "federation.json"
-        config_path = run_dir / "run_config.json"
+        layout = RunLayout(run_dir)
         if (
-            not manifest_path.is_file()
-            or not federation_path.is_file()
-            or not config_path.is_file()
+            not layout.manifest.is_file()
+            or not layout.federation_metrics.is_file()
+            or not layout.run_config.is_file()
         ):
             continue
         try:
-            manifest = RunManifest.model_validate_json(manifest_path.read_text(encoding="utf-8"))
-            federation = load_json_model(federation_path, FederationMetrics)
+            manifest = RunManifest.model_validate_json(layout.manifest.read_text(encoding="utf-8"))
+            federation = load_json_model(layout.federation_metrics, FederationMetrics)
             config_payload = RunConfigPayload.model_validate_json(
-                config_path.read_text(encoding="utf-8")
+                layout.run_config.read_text(encoding="utf-8")
             )
-            if not isinstance(config_payload.parameters, dict):
-                raise ValueError("run_config parameters must be a mapping")
-            parameters = RunConfigParameters.model_validate(config_payload.parameters)
-            dataset_id = parameters.dataset.id
+            dataset_id = config_payload.parameters.dataset.id
         except Exception:
             continue
         if manifest.status.value != "complete":
@@ -847,21 +840,29 @@ class SplitSensitivityRow(BaseModel):
     calibration_split_count: PositiveCount
 
 
+class StabilityMetricId(StrEnum):
+    """Closed set of federation-level stability metrics summarized over splits."""
+
+    MEBE = "mebe"
+    HIGH_EXCESS = "high_excess"
+    ATTACK_BALANCED_MACRO_TPR = "attack_balanced_macro_tpr"
+
+
 def split_sensitivity(
     records: tuple[FederationResultRecord, ...],
 ) -> tuple[SplitSensitivityRow, ...]:
     """Summarize repeated role permutations without treating them as independent subjects."""
-    grouped: dict[tuple[ModelSeed, PolicyId, str], list[float]] = {}
+    grouped: dict[tuple[ModelSeed, PolicyId, StabilityMetricId], list[Metric]] = {}
     for row in records:
-        for metric in ("mebe", "high_excess", "attack_balanced_macro_tpr"):
-            value = getattr(row, metric)
+        for metric in StabilityMetricId:
+            value = getattr(row, metric.value)
             if value is None:
                 continue
             grouped.setdefault((row.model_seed, row.policy, metric), []).append(float(value))
     rows: list[SplitSensitivityRow] = []
     for (model_seed, policy, metric), values in sorted(
         grouped.items(),
-        key=lambda item: (int(item[0][0]), item[0][1].value, item[0][2]),
+        key=lambda item: (int(item[0][0]), item[0][1].value, item[0][2].value),
     ):
         summary = split_sensitivity_summary(tuple(values))
         rows.append(
@@ -981,9 +982,15 @@ class ProtocolTablePrecomputer:
     def _readiness_cells(
         self, config: ExperimentConfig, spec: ExperimentSpec
     ) -> tuple[tuple[SampleCount, ProtocolConfig], ...]:
-        cells: dict[tuple[int, float, float, float], ProtocolConfig] = {}
+        cells: dict[tuple[SampleCount, Alpha, Fraction, Assurance], ProtocolConfig] = {}
 
-        def add(sample_count: int, *, alpha: float, rho: float, assurance: float) -> None:
+        def add(
+            sample_count: SampleCount,
+            *,
+            alpha: Alpha,
+            rho: Fraction,
+            assurance: Assurance,
+        ) -> None:
             protocol = ProtocolConfig(
                 id=config.protocol.id,
                 version=config.protocol.version,
@@ -1043,8 +1050,8 @@ class ProtocolTablePrecomputer:
         band: OperatingBand,
         confidence: ConfidenceLevel,
     ) -> MismatchCutoffCell:
-        lows: list[int] = []
-        highs: list[int] = []
+        lows: list[NonNegativeCount] = []
+        highs: list[NonNegativeCount] = []
         for exceedances in range(sample_count + 1):
             interval = clopper_pearson_interval(
                 BinomialCounts(exceedances, sample_count), confidence
@@ -1075,7 +1082,7 @@ class BenchmarkCell(BaseModel):
 
 
 class BenchmarkReport(BaseModel):
-    """Environment pin and timed primitive cells (R13)."""
+    """Environment pin and timed primitive cells."""
 
     model_config = Frozen
 
@@ -1085,7 +1092,7 @@ class BenchmarkReport(BaseModel):
 
 
 class RunBenchmark:
-    """Measure the locked runtime primitives on one CPU thread (R13).
+    """Measure the locked runtime primitives on one CPU thread.
 
     The process is pinned to a single CPU when the operating system allows
     it, warmed up, and then timed for the configured repetition count. Wall

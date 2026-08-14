@@ -87,6 +87,7 @@ from fedcrg.types import (
     CalibrationSeed,
     CampaignId,
     CampaignStage,
+    AttackGroupId,
     ClientId,
     DataRole,
     ExperimentId,
@@ -100,6 +101,7 @@ from fedcrg.types import (
     PositiveCount,
     PreparedColumn,
     RunId,
+    RowId,
     Sha256,
     Threshold,
     Timestamp,
@@ -631,11 +633,23 @@ class ComputeScores:
             return score_root
 
         clients: list[
-            tuple[ClientId, list[tuple[DataRole, np.ndarray, tuple[str, ...], tuple[str, ...]]]]
+            tuple[
+                ClientId,
+                list[
+                    tuple[
+                        DataRole,
+                        np.ndarray,
+                        tuple[AttackGroupId, ...],
+                        tuple[RowId, ...],
+                    ]
+                ],
+            ]
         ] = []
         for client_manifest in prepared_manifest.clients:
             client_id = client_manifest.client_id
-            role_inputs: list[tuple[DataRole, np.ndarray, tuple[str, ...], tuple[str, ...]]] = []
+            role_inputs: list[
+                tuple[DataRole, np.ndarray, tuple[AttackGroupId, ...], tuple[RowId, ...]]
+            ] = []
             for role in _BASE_SCORE_ROLES:
                 role_manifest = client_manifest.role(role)
                 path = prepared_root / role_manifest.relative_path
@@ -1051,7 +1065,7 @@ class EvaluatePolicies:
         if federation is not None:
             atomic_write_json(layout.federation_metrics, federation)
         atomic_write_json(
-            layout.metrics / "admission.json",
+            layout.admission,
             summarize_admission(bundle.protocol_results),
         )
         return decisions, metrics
@@ -1131,7 +1145,7 @@ class PolicyCellMaterializer:
             bundle,
         )
         atomic_write_json(
-            layout.reports / "evaluation_summary.json",
+            layout.evaluation_summary,
             {
                 "calibration_seed": int(calibration_seed),
                 "calibration_assignment": assignment_mode.value,
@@ -1209,11 +1223,11 @@ class PolicyCellMaterializer:
     ) -> None:
         self._copy(
             caches.prepared_root / PreparedLayout.manifest_filename,
-            layout.data / "dataset_manifest.json",
+            layout.dataset_manifest,
         )
         self._copy(
             caches.prepared_root / PreparedLayout.preprocessing_filename,
-            layout.data / "preprocessing.json",
+            layout.preprocessing_evidence,
         )
         self._copy(
             caches.training_manifest,
@@ -1221,7 +1235,7 @@ class PolicyCellMaterializer:
         )
         self._copy(
             caches.score_root / ScoreCache.manifest_filename,
-            layout.scores / "manifest.json",
+            layout.score_manifest,
         )
 
     def _write_cache_references(
@@ -1309,7 +1323,7 @@ class FederationCellMaterializer:
         for policy in selected:
 
             def materialize_policy(
-                _plan: object, run_layout: RunLayout, policy: PolicyId = policy
+                _plan: ExperimentPlan, run_layout: RunLayout, policy: PolicyId = policy
             ) -> FederationMetrics | None:
                 return self.policy_cells.materialize_analysis(
                     config,
