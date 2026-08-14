@@ -192,6 +192,7 @@ experiments:
     detector: nbaiot_deep_svdd
     training: nbaiot_deep_svdd
     model_seeds: [11, 22, 33]
+    calibration_seeds: [1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009]
     policies: [global_quantile, local_quantile, shrinkage, readiness_only, fedcrg]
     workload: {detector_trainings: 3}
     dependencies: [primary_nbaiot]

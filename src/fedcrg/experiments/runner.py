@@ -1528,6 +1528,7 @@ class CampaignExecutor:
         work_items: tuple[CampaignWorkItem, ...],
         *,
         outputs_root: Path,
+        results_root: Path | None = None,
     ) -> CampaignStatus:
         from datetime import UTC, datetime
 
@@ -1564,6 +1565,9 @@ class CampaignExecutor:
                 rows.append(_completed_row(item.experiment_id, now))
             except Exception as exc:
                 rows.append(_failed_row(item.experiment_id, str(exc), now))
+        results_path: Identifier | None = None
+        if results_root is not None:
+            results_path = self._build_results(campaign_id, outputs_root, results_root)
         final_status = CampaignStatus(
             campaign_id=campaign_id,
             created_at=now,
@@ -1573,10 +1577,24 @@ class CampaignExecutor:
                 CampaignStage.DONE if not any(r.failed for r in rows) else CampaignStage.FAILED
             ),
             experiments=tuple(rows),
+            results_path=results_path,
             elapsed_seconds=time.monotonic() - started,
         )
         self.status_store.save(final_status)
         return final_status
+
+    @staticmethod
+    def _build_results(
+        campaign_id: CampaignId,
+        outputs_root: Path,
+        results_root: Path,
+    ) -> Identifier:
+        from fedcrg.reporting import build_results_bundle
+
+        destination = results_root / str(campaign_id)
+        if destination.exists():
+            return destination.as_posix()
+        return build_results_bundle(campaign_id, outputs_root, results_root).as_posix()
 
 
 def _completed_row(

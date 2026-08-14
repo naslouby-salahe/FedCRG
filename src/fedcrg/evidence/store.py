@@ -360,7 +360,7 @@ class OutputsLayout:
 
     @property
     def benchmark_report(self) -> Path:
-        return self.reports / "latest" / "benchmark.json"
+        return self.reports / "benchmark.json"
 
     @property
     def readiness_plans_file(self) -> Path:

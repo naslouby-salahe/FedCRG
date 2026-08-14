@@ -7,21 +7,26 @@ locked experiment catalogue; no kernel hardcodes a protocol constant.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from math import sqrt
 from pathlib import Path
 
 from typing import Annotated
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 from scipy.stats import binom, gamma, lognorm, norm
 
 from fedcrg.config import ExperimentConfig, ExperimentSpec, ProtocolConfig
 from fedcrg.thresholding.metrics import FederationMetrics
 from fedcrg.thresholding.readiness import (
     BinomialCounts,
+    CalibrationReadinessEvaluator,
+    DeploymentDecision,
     OperatingBand,
     ReadinessPlanBuilder,
+    ReferenceMismatchEvaluator,
+    build_reference_threshold,
     clopper_pearson_interval,
     familywise_readiness_assurance,
     minimum_bidirectional_sample_count,
@@ -32,12 +37,15 @@ from fedcrg.types import (
     Assurance,
     BlockCount,
     BootstrapReplicateCount,
+    ByteCount,
     CalibrationSeed,
+    ClientId,
     ConfidenceLevel,
     ContaminationDirection,
     ContaminationFraction,
     DatasetId,
     DecisionState,
+    Duration,
     ExperimentAxisId,
     ExperimentId,
     Fpr,
@@ -54,11 +62,14 @@ from fedcrg.types import (
     SyntheticDistribution,
     Tpr,
     TrueFpr,
+    WarmupCount,
 )
 
 Frozen = ConfigDict(frozen=True)
 
 Metric = Annotated[float, Field()]
+
+_CLIENT_ID_ADAPTER = TypeAdapter(ClientId)
 
 
 class SyntheticCoverageResult(BaseModel):
@@ -908,30 +919,35 @@ class ProtocolTablePrecomputer:
             )
         cache.save()
 
-        mismatch_counts = tuple(
-            int(value) for value in spec.axis(ExperimentAxisId.MISMATCH_N).values
-        )
-        mismatch_rows = tuple(
-            self._mismatch_cutoffs(
-                sample_count,
-                config.protocol.band,
-                config.protocol.mismatch_confidence,
+        if self._has_axis(spec, ExperimentAxisId.MISMATCH_N):
+            mismatch_counts = tuple(
+                int(value) for value in spec.axis(ExperimentAxisId.MISMATCH_N).values
             )
-            for sample_count in mismatch_counts
-        )
-        atomic_write_json(
-            mismatch_path,
-            {
-                "band": config.protocol.band,
-                "confidence": config.protocol.mismatch_confidence,
-                "minimum_bidirectional_sample_count": minimum_bidirectional_sample_count(
-                    config.protocol.band.lower,
+            mismatch_rows = tuple(
+                self._mismatch_cutoffs(
+                    sample_count,
+                    config.protocol.band,
                     config.protocol.mismatch_confidence,
-                ),
-                "cells": mismatch_rows,
-            },
-        )
+                )
+                for sample_count in mismatch_counts
+            )
+            atomic_write_json(
+                mismatch_path,
+                {
+                    "band": config.protocol.band,
+                    "confidence": config.protocol.mismatch_confidence,
+                    "minimum_bidirectional_sample_count": minimum_bidirectional_sample_count(
+                        config.protocol.band.lower,
+                        config.protocol.mismatch_confidence,
+                    ),
+                    "cells": mismatch_rows,
+                },
+            )
         return readiness_path, mismatch_path
+
+    @staticmethod
+    def _has_axis(spec: ExperimentSpec, axis_id: ExperimentAxisId) -> bool:
+        return any(item.id is axis_id for item in spec.axes)
 
     def _readiness_cells(
         self, config: ExperimentConfig, spec: ExperimentSpec
@@ -958,20 +974,22 @@ class ProtocolTablePrecomputer:
             rho=config.protocol.rho,
             assurance=config.protocol.readiness_assurance,
         )
-        for value in spec.axis(ExperimentAxisId.CALIBRATION_N).values:
-            add(
-                int(value),
-                alpha=config.protocol.alpha,
-                rho=config.protocol.rho,
-                assurance=config.protocol.readiness_assurance,
-            )
-        for value in spec.axis(ExperimentAxisId.READINESS_ASSURANCE).values:
-            add(
-                primary_n,
-                alpha=config.protocol.alpha,
-                rho=config.protocol.rho,
-                assurance=float(value),
-            )
+        if self._has_axis(spec, ExperimentAxisId.CALIBRATION_N):
+            for value in spec.axis(ExperimentAxisId.CALIBRATION_N).values:
+                add(
+                    int(value),
+                    alpha=config.protocol.alpha,
+                    rho=config.protocol.rho,
+                    assurance=config.protocol.readiness_assurance,
+                )
+        if self._has_axis(spec, ExperimentAxisId.READINESS_ASSURANCE):
+            for value in spec.axis(ExperimentAxisId.READINESS_ASSURANCE).values:
+                add(
+                    primary_n,
+                    alpha=config.protocol.alpha,
+                    rho=config.protocol.rho,
+                    assurance=float(value),
+                )
         add(
             primary_n,
             alpha=config.protocol.alpha,
@@ -1009,6 +1027,193 @@ class ProtocolTablePrecomputer:
             low_max_exceedances=max(lows) if lows else None,
             high_min_exceedances=min(highs) if highs else None,
         )
+
+
+class BenchmarkCell(BaseModel):
+    """One timed primitive cell of the computational benchmark."""
+
+    model_config = Frozen
+
+    primitive: Identifier
+    sample_count: SampleCount
+    warmups: WarmupCount
+    repetitions: RepetitionCount
+    median_seconds: Duration
+    p95_seconds: Duration
+    peak_rss_bytes: ByteCount
+
+
+class BenchmarkReport(BaseModel):
+    """Environment pin and timed primitive cells (R13)."""
+
+    model_config = Frozen
+
+    experiment_id: ExperimentId
+    environment: Identifier
+    cells: tuple[BenchmarkCell, ...]
+
+
+class RunBenchmark:
+    """Measure the locked runtime primitives on one CPU thread (R13).
+
+    The process is pinned to a single CPU when the operating system allows
+    it, warmed up, and then timed for the configured repetition count. Wall
+    time is measured with ``time.perf_counter`` and peak resident memory with
+    ``resource.getrusage``; medians and 95th percentiles are reported.
+    """
+
+    def __init__(self, spec: ExperimentSpec, config: ExperimentConfig) -> None:
+        self.spec = spec
+        self.config = config
+
+    def _warmups(self) -> WarmupCount:
+        return int(self.spec.axis(ExperimentAxisId.WARMUPS).values[0])
+
+    def _repetitions(self) -> RepetitionCount:
+        return int(self.spec.axis(ExperimentAxisId.REPETITIONS).values[0])
+
+    def _environment_pin(self) -> Identifier:
+        import platform
+        import sys
+
+        import numpy as np
+        import scipy
+
+        return (
+            f"{platform.system()}_{platform.processor()}_python{sys.version.split()[0]}_"
+            f"numpy{np.__version__}_scipy{scipy.__version__}"
+        )
+
+    @staticmethod
+    def _pin_single_cpu() -> None:
+        try:
+            import os
+
+            os.sched_setaffinity(0, {0})
+        except (AttributeError, OSError):
+            pass
+
+    def run(self, output: Path) -> Path:
+        self._pin_single_cpu()
+        warmups = self._warmups()
+        repetitions = self._repetitions()
+        split = self.config.dataset.split
+        client_count = self.config.dataset.expected_clients or self.config.dataset.minimum_clients
+        rng = np.random.default_rng(int(self.config.randomness.synthetic_seed))
+        reference_scores = {
+            _CLIENT_ID_ADAPTER.validate_python(f"c{index:02d}"): rng.normal(
+                size=split.reference_benign
+            )
+            for index in range(client_count)
+        }
+        calibration_scores = rng.normal(size=split.calibration_benign)
+        mismatch_scores = rng.normal(size=split.mismatch_benign)
+
+        plan = ReadinessPlanBuilder().build(
+            split.calibration_benign, self.config.protocol.band, self.config.protocol.readiness_assurance
+        )
+        readiness_evaluator = CalibrationReadinessEvaluator()
+        mismatch_evaluator = ReferenceMismatchEvaluator()
+        decision_engine = DeploymentDecision()
+        reference = build_reference_threshold(reference_scores, self.config.protocol.alpha)
+        readiness = readiness_evaluator.evaluate(calibration_scores, plan)
+        mismatch = mismatch_evaluator.evaluate(
+            mismatch_scores, reference.value, self.config.protocol.band, self.config.protocol.mismatch_confidence
+        )
+
+        primitives = (
+            (
+                "reference_construction",
+                lambda: build_reference_threshold(reference_scores, self.config.protocol.alpha),
+            ),
+            (
+                "readiness_order_statistic",
+                lambda: readiness_evaluator.evaluate(calibration_scores, plan),
+            ),
+            (
+                "mismatch_evidence",
+                lambda: mismatch_evaluator.evaluate(
+                    mismatch_scores,
+                    reference.value,
+                    self.config.protocol.band,
+                    self.config.protocol.mismatch_confidence,
+                ),
+            ),
+            (
+                "deployment_decision",
+                lambda: decision_engine.decide(
+                    reference, readiness, mismatch, self.config.protocol.reject_calibration_ties
+                ),
+            ),
+        )
+
+        cells: list[BenchmarkCell] = []
+        for name, primitive in primitives:
+            sample_count = self._sample_count(name, split)
+            for _ in range(warmups):
+                primitive()
+            timings = _timed_repetitions(primitive, repetitions)
+            cells.append(
+                BenchmarkCell(
+                    primitive=name,
+                    sample_count=sample_count,
+                    warmups=warmups,
+                    repetitions=repetitions,
+                    median_seconds=timings.median_seconds,
+                    p95_seconds=timings.p95_seconds,
+                    peak_rss_bytes=timings.peak_rss_bytes,
+                )
+            )
+        report = BenchmarkReport(
+            experiment_id=self.spec.id,
+            environment=self._environment_pin(),
+            cells=tuple(cells),
+        )
+        from fedcrg.evidence.store import atomic_write_json
+
+        atomic_write_json(output, report)
+        return output
+
+    @staticmethod
+    def _sample_count(name: Identifier, split) -> SampleCount:
+        mapping = {
+            "reference_construction": split.reference_benign,
+            "readiness_order_statistic": split.calibration_benign,
+            "mismatch_evidence": split.mismatch_benign,
+            "deployment_decision": split.calibration_benign,
+        }
+        return int(mapping[name])
+
+
+class TimedRepetitions(BaseModel):
+    """Wall-time percentiles and peak RSS of one timed primitive."""
+
+    model_config = Frozen
+
+    median_seconds: Duration
+    p95_seconds: Duration
+    peak_rss_bytes: ByteCount
+
+
+def _timed_repetitions(
+    primitive: Callable[[], BaseModel],
+    repetitions: RepetitionCount,
+) -> TimedRepetitions:
+    import resource
+    import time
+
+    timings: list[Duration] = []
+    for _ in range(repetitions):
+        started = time.perf_counter()
+        primitive()
+        timings.append(time.perf_counter() - started)
+    values = np.asarray(timings, dtype=np.float64)
+    peak_rss_kilobytes = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return TimedRepetitions(
+        median_seconds=float(np.median(values)),
+        p95_seconds=float(np.percentile(values, 95)),
+        peak_rss_bytes=int(peak_rss_kilobytes) * 1024,
+    )
 
 
 

@@ -55,6 +55,7 @@ _COERCE_VALIDATORS = (
     "_coerce_datasets",
     "_coerce_required_evidence",
     "_coerce_root",
+    "_coerce_calibration_seeds",
 )
 for _name in _COERCE_VALIDATORS:
     _ALLOWED_ANNOTATIONS[("config.py", _name, "return")] = "YAML/JSON input before validation"

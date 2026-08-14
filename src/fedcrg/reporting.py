@@ -51,6 +51,7 @@ from fedcrg.types import (
     DetectorId,
     DatasetId,
     ExperimentId,
+    ExperimentType,
     FailureCode,
     Fraction,
     Identifier,
@@ -811,9 +812,46 @@ class ResultsBuilder:
 
         checksums = self._checksums(destination)
         atomic_write_json(destination / "checksums.json", checksums)
-        manifest = self._manifest(campaign_id, outputs_root, destination, config, checksums)
+        complete = self._evidence_complete(outputs_root)
+        manifest = self._manifest(
+            campaign_id, outputs_root, destination, config, checksums, complete
+        )
         atomic_write_json(destination / "manifest.json", manifest)
         return destination
+
+    @staticmethod
+    def _evidence_complete(outputs_root: Path) -> bool:
+        """True when every registered real-data experiment cell has a completed run.
+
+        The bundle manifest must never claim completeness for missing evidence:
+        a partial programme stays explicitly incomplete until every
+        (model seed, calibration seed, policy) cell of every real-data
+        experiment exists as a completed run directory.
+        """
+        study = Study.load()
+        runs = _completed_runs(outputs_root)
+        for spec in study.catalogue.all():
+            if spec.category is ExperimentType.SYNTHETIC:
+                continue
+            if spec.id is ExperimentId.COMPUTATIONAL_BENCHMARK:
+                continue
+            config = study.resolve(spec.id)
+            expected = (
+                len(config.randomness.model_seeds)
+                * len(config.dataset.calibration_seeds)
+                * len(config.policies)
+            )
+            if expected == 0:
+                continue
+            observed = sum(
+                1
+                for path in runs
+                if (manifest := _run_manifest(path)) is not None
+                and manifest.experiment_id is spec.id
+            )
+            if observed != expected:
+                return False
+        return True
 
     @staticmethod
     def _write_resolved_configs(config: ExperimentConfig, destination: Path) -> None:
@@ -929,11 +967,12 @@ class ResultsBuilder:
         destination: Path,
         config: ExperimentConfig,
         checksums: tuple[ChecksumRecord, ...],
+        complete: bool,
     ) -> ResultsManifest:
         detector = config.detector
         return ResultsManifest(
             campaign_id=campaign_id,
-            complete=True,
+            complete=complete,
             config_hash=config.config_hash,
             dataset_id=config.dataset.id,
             detector_id=detector.id if detector is not None else None,

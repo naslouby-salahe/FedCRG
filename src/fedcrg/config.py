@@ -29,6 +29,7 @@ from pydantic import (
     ConfigDict,
     Field,
     RootModel,
+    TypeAdapter,
     ValidationInfo,
     field_validator,
     model_validator,
@@ -91,6 +92,8 @@ from fedcrg.types import (
 )
 
 FrozenModel = ConfigDict(frozen=True, extra="forbid", use_enum_values=False)
+
+_CALIBRATION_SEED_ADAPTER = TypeAdapter(CalibrationSeed)
 
 def _sha256_json(payload: object) -> Sha256:
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode(
@@ -469,6 +472,7 @@ class ExperimentSpec(BaseModel):
     detector: ProfileId | None = None
     training: ProfileId | None = None
     model_seeds: tuple[ModelSeed, ...] = ()
+    calibration_seeds: tuple[CalibrationSeed, ...] = ()
     policies: tuple[PolicyId, ...] = ()
     axes: tuple[ParameterAxis, ...] = ()
     coupled_cells: tuple[ParameterCell, ...] = ()
@@ -477,6 +481,13 @@ class ExperimentSpec(BaseModel):
     workload: WorkloadExpectation = WorkloadExpectation()
     confirmatory: bool = False
     description: Description = ""
+
+    @field_validator("calibration_seeds", mode="before")
+    @classmethod
+    def _coerce_calibration_seeds(cls, value: object) -> object:
+        if isinstance(value, list):
+            return [_CALIBRATION_SEED_ADAPTER.validate_python(item) for item in value]
+        return value
 
     @field_validator("axes", mode="before")
     @classmethod
@@ -514,6 +525,8 @@ class ExperimentSpec(BaseModel):
             raise ValueError(f"Experiment {self.id.value} cannot depend on itself")
         if len(set(self.policies)) != len(self.policies):
             raise ValueError(f"Duplicate policy in {self.id.value}")
+        if len(set(self.calibration_seeds)) != len(self.calibration_seeds):
+            raise ValueError(f"Duplicate calibration seed in {self.id.value}")
         datasets = self.datasets or ((self.dataset,) if self.dataset else ())
         synthetic_only = bool(datasets) and all(item is DatasetId.SYNTHETIC for item in datasets)
         if synthetic_only and self.detector is not None:
@@ -703,6 +716,8 @@ def resolve_experiment_config(
     if chosen is None:
         raise ConfigurationError(f"Experiment {spec.id.value} declares no dataset")
     dataset = datasets.contract(chosen)
+    if spec.calibration_seeds:
+        dataset = dataset.model_copy(update={"calibration_seeds": spec.calibration_seeds})
     detector = study.detector_profile(spec.detector) if spec.detector else None
     training = study.training_profile(spec.training) if spec.training else None
     randomness = study.randomness

@@ -95,7 +95,7 @@ Correlation = Annotated[float, Field(ge=-1.0, le=1.0)]
 
 Version = Annotated[
     str,
-    StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$"),
+    StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9._+-]*$"),
 ]
 
 Description = Annotated[str, StringConstraints(min_length=0, max_length=512)]
@@ -131,6 +131,22 @@ Identifier = Annotated[
         max_length=128,
         strip_whitespace=True,
         pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$",
+    ),
+]
+PathString = Annotated[
+    str,
+    StringConstraints(
+        min_length=1,
+        max_length=512,
+        strip_whitespace=True,
+    ),
+]
+DeviceName = Annotated[
+    str,
+    StringConstraints(
+        min_length=1,
+        max_length=128,
+        strip_whitespace=True,
     ),
 ]
 ClientId = Identifier
