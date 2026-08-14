@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fedcrg.artifacts.paths import RunLayout
-from fedcrg.domain.identifiers import RunId
+from fedcrg.evidence.store import RunLayout
+from fedcrg.types import RunId
 
 
 def test_run_layout_has_single_evidence_namespace(tmp_path: Path) -> None:
-    run_id = RunId(
+    run_id: RunId = (
         "nbaiot__ae__ms11__cs1000__a10000__r5000__ga9500__gb9500__fedcrg__cfg0123456789ab"
     )
     layout = RunLayout.for_run(tmp_path, run_id)
 
-    assert layout.root == tmp_path / "runs" / run_id.value
+    assert layout.root == tmp_path / "runs" / run_id
     assert layout.manifest == layout.root / "manifest.json"
     assert layout.resolved_config == layout.root / "resolved_config.yaml"
     assert layout.environment == layout.root / "environment.json"
@@ -34,23 +34,25 @@ def test_top_level_outputs_are_reserved_by_responsibility(tmp_path: Path) -> Non
         "monitoring",
         "cache",
         "runs",
-        "experiments",
+        "campaigns",
         "reports",
     }
-    # This is deliberately a vocabulary contract rather than a directory-existence
-    # assertion: generated folders do not need to exist in a clean checkout.
+    # Vocabulary contract rather than a directory-existence assertion: generated
+    # folders do not need to exist in a clean checkout.
     documented = {
         "logs",
         "monitoring",
         "cache",
         "runs",
-        "experiments",
+        "campaigns",
         "reports",
     }
     assert documented == expected
 
 
 def test_preprocessed_root_is_repository_owned(tmp_path: Path) -> None:
-    from fedcrg.configuration.experiment_config import ExperimentConfig
+    from fedcrg.config import ExperimentConfig
 
-    assert ExperimentConfig.model_fields["preprocessed_root"].default == Path("data/preprocessed")
+    assert ExperimentConfig.model_fields["preprocessed_root"].default == Path(
+        "data/preprocessed"
+    )

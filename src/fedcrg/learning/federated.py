@@ -43,6 +43,7 @@ def cosine_learning_rate(
     initial: LearningRate,
     final: LearningRate,
 ) -> LearningRate:
+    """Cosine learning-rate schedule between locked endpoints."""
     if rounds <= 0 or not 0 <= round_index < rounds:
         raise ValueError("round_index must be inside the configured training horizon")
     if rounds == 1:
@@ -58,6 +59,7 @@ def epoch_seed(
     round_index: RoundCount,
     epoch: EpochCount,
 ) -> RngSeed:
+    """Deterministic per-epoch RNG seed."""
     text = f"fedcrg|training|{model_seed}|{client_id}|{round_index}|{epoch}"
     digest = hashlib.sha256(text.encode("utf-8")).digest()
     return int.from_bytes(digest[:8], "big", signed=False) & 0x7FFFFFFFFFFFFFFF
@@ -67,6 +69,7 @@ StateDict = dict[str, torch.Tensor]
 
 
 def equal_client_mean(models: Sequence[DetectorModel]) -> StateDict:
+    """Equal-weight mean of client model parameters."""
     if not models:
         raise ValueError("At least one client model is required")
     states = [model.state_dict() for model in models]
@@ -94,6 +97,7 @@ def equal_client_mean(models: Sequence[DetectorModel]) -> StateDict:
 
 
 class ClientRoundResult(BaseModel):
+    """One client's local-round training outcome."""
     model_config = Frozen
 
     client_id: ClientId
@@ -104,6 +108,7 @@ class ClientRoundResult(BaseModel):
 
 
 class RoundResult(BaseModel):
+    """One federated round's aggregate outcome."""
     model_config = Frozen
 
     round_index: RoundCount
@@ -120,6 +125,7 @@ class RoundResult(BaseModel):
 
 
 class TrainingResult(BaseModel):
+    """Frozen federated-training evidence for one model seed."""
     model_config = Frozen
 
     model_seed: ModelSeed
@@ -238,6 +244,7 @@ class ClientSampler:
 
 
 class FederatedServer:
+    """Deterministic federated training orchestration."""
     def __init__(self, initial_model: DetectorModel) -> None:
         self.model = initial_model.clone()
 

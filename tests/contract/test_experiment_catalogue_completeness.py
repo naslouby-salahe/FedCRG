@@ -1,6 +1,6 @@
-from fedcrg.domain.enums import ExperimentId
-from fedcrg.experiments.experiment_definition import all_experiment_definitions
+from fedcrg.config import Study
+from fedcrg.types import ExperimentId
 
 
 def test_all_experiment_ids_are_registered() -> None:
-    assert {item.id for item in all_experiment_definitions()} == set(ExperimentId)
+    assert {item.id for item in Study.load().catalogue.all()} == set(ExperimentId)

@@ -65,6 +65,7 @@ Metric = Annotated[float, Field()]
 
 
 class SyntheticCoverageResult(BaseModel):
+    """Exact and empirical coverage for one synthetic condition."""
     model_config = Frozen
 
     experiment: ExperimentId
@@ -77,6 +78,7 @@ class SyntheticCoverageResult(BaseModel):
 
 
 class MismatchPowerResult(BaseModel):
+    """Exact mismatch-declaration probability for one cell."""
     model_config = Frozen
 
     sample_count: SampleCount
@@ -85,6 +87,7 @@ class MismatchPowerResult(BaseModel):
 
 
 class RobustnessCell(BaseModel):
+    """One stress-axis coverage cell."""
     model_config = Frozen
 
     axis: ExperimentAxisId
@@ -97,6 +100,7 @@ SyntheticCell = SyntheticCoverageResult | RobustnessCell | MismatchPowerResult
 
 
 class SyntheticExperimentEnvelope(BaseModel):
+    """Locked ledger and cells of one synthetic experiment."""
     model_config = Frozen
 
     experiment_id: ExperimentId
@@ -108,6 +112,7 @@ class SyntheticExperimentEnvelope(BaseModel):
 
 
 class PairedBootstrapInterval(BaseModel):
+    """Bootstrap interval over paired model-seed indices."""
     model_config = Frozen
 
     observed_difference: Metric
@@ -118,6 +123,7 @@ class PairedBootstrapInterval(BaseModel):
 
 
 class DescriptiveSummary(BaseModel):
+    """Descriptive statistics of one value vector."""
     model_config = Frozen
 
     values: tuple[Metric, ...]
@@ -129,6 +135,7 @@ class DescriptiveSummary(BaseModel):
 
 
 class SplitSensitivitySummary(BaseModel):
+    """Percentile summary of repeated calibration splits."""
     model_config = Frozen
 
     median: Metric
@@ -138,6 +145,7 @@ class SplitSensitivitySummary(BaseModel):
 
 
 def describe(values: tuple[Metric, ...]) -> DescriptiveSummary:
+    """Descriptive statistics of one finite non-empty vector."""
     data = np.asarray(values, dtype=np.float64)
     if data.ndim != 1 or len(data) == 0 or not np.isfinite(data).all():
         raise ValueError("Summary values must be finite and non-empty")
@@ -152,6 +160,7 @@ def describe(values: tuple[Metric, ...]) -> DescriptiveSummary:
 
 
 def split_sensitivity_summary(values: tuple[Metric, ...]) -> SplitSensitivitySummary:
+    """Percentile summary of one split-sensitivity vector."""
     data = np.asarray(values, dtype=np.float64)
     if len(data) == 0:
         raise ValueError("Split sensitivity requires values")
@@ -193,6 +202,7 @@ def draw_distribution(
     distribution: SyntheticDistribution,
     size: SampleCount,
 ) -> np.ndarray:
+    """Draw one synthetic sample from a locked distribution."""
     if size <= 0:
         raise ValueError("Synthetic sample size must be positive")
     if distribution is SyntheticDistribution.NORMAL:
@@ -210,6 +220,7 @@ def draw_distribution(
 
 
 def distribution_cdf(distribution: SyntheticDistribution, threshold: Score) -> Metric:
+    """CDF of one synthetic distribution at a threshold."""
     if distribution is SyntheticDistribution.NORMAL:
         return float(norm.cdf(threshold))
     if distribution is SyntheticDistribution.LOGNORMAL:
@@ -232,6 +243,7 @@ def iid_readiness_validation(
     assurance: Assurance,
     seed: AnalysisSeed,
 ) -> SyntheticCoverageResult:
+    """Empirical readiness coverage for IID synthetic scores."""
     band = OperatingBand(
         lower=max(0.0, alpha * (1.0 - rho)),
         upper=min(1.0, alpha * (1.0 + rho)),
@@ -267,11 +279,13 @@ def contamination_validation(
     *,
     sample_count: SampleCount,
     seed: AnalysisSeed,
+    band: OperatingBand,
+    assurance: Assurance,
 ) -> SyntheticCoverageResult:
+    """Empirical readiness coverage under score contamination."""
     if not 0.0 <= fraction <= 1.0:
         raise ValueError("Contamination fraction must be in [0,1]")
-    band = OperatingBand(lower=0.005, upper=0.015)
-    plan = ReadinessPlanBuilder().build(sample_count, band, 0.95)
+    plan = ReadinessPlanBuilder().build(sample_count, band, assurance)
     rng = np.random.Generator(np.random.PCG64(int(seed)))
     inside = 0
     contamination_count = int(round(fraction * sample_count))
@@ -295,14 +309,21 @@ def contamination_validation(
     )
 
 
-def exact_mismatch_power(sample_count: SampleCount, true_fpr: TrueFpr) -> MismatchPowerResult:
+def exact_mismatch_power(
+    sample_count: SampleCount,
+    true_fpr: TrueFpr,
+    band: OperatingBand,
+    confidence: ConfidenceLevel,
+) -> MismatchPowerResult:
+    """Exact mismatch-declaration probability from binomial tails."""
     if sample_count <= 0 or not 0.0 <= true_fpr <= 1.0:
         raise ValueError("Mismatch power requires n>0 and true_fpr in [0,1]")
-    band = OperatingBand(lower=0.005, upper=0.015)
     low_counts: list[int] = []
     high_counts: list[int] = []
     for exceedances in range(sample_count + 1):
-        interval = clopper_pearson_interval(BinomialCounts(exceedances, sample_count), 0.95)
+        interval = clopper_pearson_interval(
+            BinomialCounts(exceedances, sample_count), confidence
+        )
         if interval.upper < band.lower:
             low_counts.append(exceedances)
         elif interval.lower > band.upper:
@@ -329,6 +350,7 @@ def temporal_dependence_stress(
     assurance: Assurance,
     seed: AnalysisSeed,
 ) -> RobustnessCell:
+    """Readiness coverage under AR(1) temporal dependence."""
     if not -1.0 < phi < 1.0:
         raise ValueError("AR(1) phi must be strictly inside (-1,1)")
     plan = ReadinessPlanBuilder().build(sample_count, band, assurance)
@@ -357,8 +379,9 @@ def calibration_shift_stress(
     band: OperatingBand,
     assurance: Assurance,
     seed: AnalysisSeed,
-    sample_count: SampleCount = 2000,
+    sample_count: SampleCount,
 ) -> RobustnessCell:
+    """Readiness coverage under a calibration mean shift."""
     plan = ReadinessPlanBuilder().build(sample_count, band, assurance)
     rng = np.random.Generator(np.random.PCG64(int(seed)))
     inside = 0
@@ -514,6 +537,7 @@ class RunSyntheticExperiments:
                 config.protocol.band,
                 config.protocol.readiness_assurance,
                 int(config.randomness.synthetic_seed + int(shift * 1000)),
+                sample_count=config.dataset.split.calibration_benign,
             )
             for shift in self._float_values(spec, ExperimentAxisId.MEAN_SHIFT)
         )
@@ -528,6 +552,8 @@ class RunSyntheticExperiments:
                 repetitions,
                 sample_count=config.dataset.split.calibration_benign,
                 seed=int(config.randomness.synthetic_seed + int(fraction * 1000)),
+                band=config.protocol.band,
+                assurance=config.protocol.readiness_assurance,
             )
             for fraction in self._float_values(spec, ExperimentAxisId.FRACTION)
             for direction in self._directions(spec)
@@ -536,7 +562,12 @@ class RunSyntheticExperiments:
 
     def _run_s6(self, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path:
         cells = tuple(
-            exact_mismatch_power(sample_count, true_fpr)
+            exact_mismatch_power(
+                sample_count,
+                true_fpr,
+                band=config.protocol.band,
+                confidence=config.protocol.mismatch_confidence,
+            )
             for sample_count in self._int_values(spec, ExperimentAxisId.MISMATCH_N)
             for true_fpr in self._float_values(spec, ExperimentAxisId.TRUE_FPR)
         )
@@ -544,6 +575,7 @@ class RunSyntheticExperiments:
 
 
 class FederationResultRecord(BaseModel):
+    """One completed run's federation-endpoint record."""
     model_config = Frozen
 
     run_id: RunId
@@ -559,24 +591,28 @@ class FederationResultRecord(BaseModel):
 
 
 class RunConfigPayload(BaseModel):
+    """Run-configuration envelope carrying the parameters object."""
     model_config = Frozen
 
     parameters: object
 
 
 class RunConfigDataset(BaseModel):
+    """Dataset identity embedded in a run-config payload."""
     model_config = Frozen
 
     id: DatasetId
 
 
 class RunConfigParameters(BaseModel):
+    """Parameters section of a run-config payload."""
     model_config = Frozen
 
     dataset: RunConfigDataset
 
 
 def load_federation_results(run_dirs: tuple[Path, ...]) -> tuple[FederationResultRecord, ...]:
+    """Load completed federation records from run directories."""
     from fedcrg.evidence.models import RunManifest
     from fedcrg.evidence.store import load_json_model
 
@@ -618,16 +654,8 @@ def load_federation_results(run_dirs: tuple[Path, ...]) -> tuple[FederationResul
     return tuple(rows)
 
 
-def json_load(path: Path) -> dict[str, JsonValue]:
-    import json
-
-    raw: object = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(raw, dict):
-        raise ValueError(f"Expected a JSON object: {path}")
-    return {str(key): value for key, value in raw.items()}
-
-
 class ContrastMetricResult(BaseModel):
+    """One confirmatory contrast metric result."""
     model_config = Frozen
 
     metric: Identifier
@@ -638,6 +666,7 @@ class ContrastMetricResult(BaseModel):
 
 
 class PolicyContrastResult(BaseModel):
+    """All contrast metrics against one comparator policy."""
     model_config = Frozen
 
     comparator: PolicyId
@@ -710,6 +739,7 @@ def confirmatory_contrasts(
 
 
 class ThresholdStability(BaseModel):
+    """Stability summary of one threshold vector."""
     model_config = Frozen
 
     count: PositiveCount
@@ -720,6 +750,7 @@ class ThresholdStability(BaseModel):
 
 
 class StateFrequency(BaseModel):
+    """Observed frequency of one decision state."""
     model_config = Frozen
 
     state: DecisionState
@@ -727,6 +758,7 @@ class StateFrequency(BaseModel):
 
 
 class StateStability(BaseModel):
+    """Transition and state-frequency summary."""
     model_config = Frozen
 
     count: PositiveCount
@@ -736,6 +768,7 @@ class StateStability(BaseModel):
 
 
 def summarize_threshold_stability(values: tuple[Metric, ...]) -> ThresholdStability:
+    """Stability statistics of one threshold vector."""
     data = np.asarray(values, dtype=np.float64)
     if data.ndim != 1 or len(data) == 0 or not np.isfinite(data).all():
         raise ValueError("Threshold stability requires finite non-empty values")
@@ -749,6 +782,7 @@ def summarize_threshold_stability(values: tuple[Metric, ...]) -> ThresholdStabil
 
 
 def summarize_state_stability(states: tuple[DecisionState, ...]) -> StateStability:
+    """Transition and frequency summary of one state sequence."""
     if not states:
         raise ValueError("State stability requires at least one state")
     transitions = sum(left is not right for left, right in zip(states[:-1], states[1:], strict=True))
@@ -766,6 +800,7 @@ def summarize_state_stability(states: tuple[DecisionState, ...]) -> StateStabili
 
 
 class SplitSensitivityRow(BaseModel):
+    """Percentile summary for one model/policy/metric group."""
     model_config = Frozen
 
     model_seed: ModelSeed
@@ -808,7 +843,8 @@ def split_sensitivity(records: tuple[FederationResultRecord, ...]) -> tuple[Spli
     return tuple(rows)
 
 
-def source_order_blocks(scores: np.ndarray, block_count: BlockCount = 5) -> tuple[np.ndarray, ...]:
+def source_order_blocks(scores: np.ndarray, block_count: BlockCount) -> tuple[np.ndarray, ...]:
+    """Split one score vector into ordered source blocks."""
     values = np.asarray(scores, dtype=np.float64)
     if block_count <= 0 or len(values) < block_count:
         raise ValueError("Source-order block analysis needs at least one row per block")
@@ -823,6 +859,7 @@ def contaminate_benign_scores(
     fraction: ContaminationFraction,
     seed: AnalysisSeed,
 ) -> np.ndarray:
+    """Inject attack-development scores into benign scores."""
     values = np.asarray(benign, dtype=np.float64).copy()
     attacks = np.asarray(attack_dev, dtype=np.float64)
     if not 0.0 <= fraction <= 1.0:
@@ -840,6 +877,7 @@ def contaminate_benign_scores(
 
 
 class MismatchCutoffCell(BaseModel):
+    """Exact low/high exceedance cutoffs for one sample count."""
     model_config = Frozen
 
     sample_count: SampleCount
@@ -856,13 +894,14 @@ class ProtocolTablePrecomputer:
         spec: ExperimentSpec,
         root: Path | None = None,
     ) -> tuple[Path, Path]:
-        from fedcrg.evidence.store import atomic_write_json
+        from fedcrg.evidence.store import OutputsLayout, atomic_write_json
         from fedcrg.thresholding.readiness import ReadinessPlanCache
 
-        target_root = root or config.outputs_root / "cache" / "analysis"
+        target_root = root or OutputsLayout(config.outputs_root).cache_analysis
         target_root.mkdir(parents=True, exist_ok=True)
-        readiness_path = target_root / "readiness_plans.json"
-        mismatch_path = target_root / "mismatch_cutoffs.json"
+        layout = OutputsLayout(config.outputs_root)
+        readiness_path = layout.readiness_plans_file
+        mismatch_path = layout.mismatch_cutoffs_file
         cache = ReadinessPlanCache(readiness_path)
         for sample_count, protocol in self._readiness_cells(config, spec):
             cache.precompute(

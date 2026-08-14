@@ -3,16 +3,15 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from fedcrg.domain.enums import CalibrationReadinessState, MismatchOutcome
-from fedcrg.domain.values import OperatingBand
-from fedcrg.decision.mismatch_detection import (
+from fedcrg.thresholding.readiness import (
     ReferenceMismatchEvaluator,
+    ReadinessPlanBuilder,
     minimum_bidirectional_sample_count,
+    reference_rank,
 )
-from fedcrg.decision.calibration_readiness import ReadinessPlanBuilder
-from fedcrg.decision.reference_threshold import reference_rank
+from fedcrg.types import CalibrationReadinessState, MismatchOutcome, OperatingBand
 
-BAND = OperatingBand(0.005, 0.015)
+BAND = OperatingBand(lower=0.005, upper=0.015)
 
 
 @pytest.mark.parametrize(

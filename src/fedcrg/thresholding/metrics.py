@@ -9,7 +9,7 @@ composition that produces one ``ClientEvaluationResult`` per client.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Iterable, Mapping
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict
@@ -23,7 +23,7 @@ from fedcrg.thresholding.readiness import (
     ReadinessPlanCache,
     ReferenceMismatchEvaluator,
     ReferenceThreshold,
-    ThresholdDecisionEngine,
+    DeploymentDecision,
     build_reference_threshold,
 )
 from fedcrg.types import (
@@ -36,7 +36,9 @@ from fedcrg.types import (
     ExceedanceCount,
     Fpr,
     Fraction,
+    Metric,
     MismatchOutcome,
+    NonNegativeCount,
     OperatingBand,
     PolicyEvaluationStatus,
     PolicyId,
@@ -49,8 +51,11 @@ from fedcrg.types import (
 
 Frozen = ConfigDict(frozen=True)
 
+ReferenceEstimator = Callable[[Mapping[ClientId, np.ndarray], ProtocolConfig], ReferenceThreshold]
+
 
 class ConfusionMatrix(BaseModel):
+    """Four-cell confusion matrix over one threshold."""
     model_config = Frozen
 
     tp: ExceedanceCount
@@ -60,6 +65,7 @@ class ConfusionMatrix(BaseModel):
 
 
 def confusion_matrix(scores: np.ndarray, labels: np.ndarray, threshold: Threshold) -> ConfusionMatrix:
+    """Build a confusion matrix for one threshold."""
     values = np.asarray(scores, dtype=np.float64)
     targets = np.asarray(labels, dtype=np.int64)
     if values.shape != targets.shape or values.ndim != 1:
@@ -79,27 +85,32 @@ def confusion_matrix(scores: np.ndarray, labels: np.ndarray, threshold: Threshol
     )
 
 
-def _ratio(numerator: int, denominator: int) -> float | None:
+def _ratio(numerator: NonNegativeCount, denominator: NonNegativeCount) -> Fraction | None:
     return float(numerator / denominator) if denominator else None
 
 
 def fpr(cm: ConfusionMatrix) -> Fpr | None:
+    """False-positive rate from a confusion matrix."""
     return _ratio(cm.fp, cm.fp + cm.tn)
 
 
 def tpr(cm: ConfusionMatrix) -> Tpr | None:
+    """True-positive rate from a confusion matrix."""
     return _ratio(cm.tp, cm.tp + cm.fn)
 
 
 def precision(cm: ConfusionMatrix) -> Fpr | None:
+    """Precision from a confusion matrix."""
     return _ratio(cm.tp, cm.tp + cm.fp)
 
 
 def recall(cm: ConfusionMatrix) -> Tpr | None:
+    """Recall from a confusion matrix."""
     return tpr(cm)
 
 
-def f1(cm: ConfusionMatrix) -> Fpr | None:
+def f1(cm: ConfusionMatrix) -> Metric | None:
+    """F1 score from a confusion matrix."""
     p = precision(cm)
     r = recall(cm)
     if p is None or r is None or p + r == 0.0:
@@ -108,6 +119,7 @@ def f1(cm: ConfusionMatrix) -> Fpr | None:
 
 
 def balanced_accuracy(cm: ConfusionMatrix) -> Fpr | None:
+    """Balanced accuracy from a confusion matrix."""
     sensitivity = tpr(cm)
     specificity = _ratio(cm.tn, cm.tn + cm.fp)
     if sensitivity is None or specificity is None:
@@ -116,6 +128,7 @@ def balanced_accuracy(cm: ConfusionMatrix) -> Fpr | None:
 
 
 def band_error(fpr_value: Fpr, band: OperatingBand) -> Fraction:
+    """Signed distance of one FPR to the operating band."""
     if fpr_value < band.lower:
         return band.lower - fpr_value
     if fpr_value > band.upper:
@@ -124,14 +137,17 @@ def band_error(fpr_value: Fpr, band: OperatingBand) -> Fraction:
 
 
 def high_excess(fpr_value: Fpr, band: OperatingBand) -> Fraction:
+    """FPR excess above the operating-band upper edge."""
     return max(0.0, fpr_value - band.upper)
 
 
 def band_violation(fpr_value: Fpr, band: OperatingBand) -> Fraction:
+    """Whether one FPR falls outside the operating band."""
     return float(not band.contains(fpr_value))
 
 
 def absolute_fpr_error(fpr_value: Fpr, alpha: Alpha) -> Fraction:
+    """Absolute FPR deviation from the target alpha."""
     return abs(fpr_value - alpha)
 
 
@@ -141,6 +157,7 @@ def attack_balanced_tpr(
     attack_groups: np.ndarray,
     threshold: Threshold,
 ) -> Tpr | None:
+    """Macro TPR over attack groups at one threshold."""
     values = np.asarray(scores, dtype=np.float64)
     targets = np.asarray(labels, dtype=np.int64)
     groups_array = np.asarray(attack_groups, dtype=object)
@@ -157,14 +174,17 @@ def attack_balanced_tpr(
 
 
 def auroc(scores: np.ndarray, labels: np.ndarray) -> Fpr:
+    """Area under the ROC curve."""
     return float(roc_auc_score(labels, scores))
 
 
 def auprc(scores: np.ndarray, labels: np.ndarray) -> Fpr:
+    """Area under the precision-recall curve."""
     return float(average_precision_score(labels, scores))
 
 
 class ClientMetrics(BaseModel):
+    """Frozen evaluation metrics for one client/policy."""
     model_config = Frozen
 
     benign_n: PositiveCount
@@ -190,6 +210,7 @@ class ClientMetrics(BaseModel):
 
 
 class PolicyEvaluation(BaseModel):
+    """One client/policy evaluation outcome."""
     model_config = Frozen
 
     client_id: ClientId
@@ -200,6 +221,7 @@ class PolicyEvaluation(BaseModel):
 
 
 class FederationMetrics(BaseModel):
+    """Frozen federation-level reliability and utility metrics."""
     model_config = Frozen
 
     policy: PolicyId
@@ -218,15 +240,17 @@ class FederationMetrics(BaseModel):
 
 
 class EvaluationBundle(BaseModel):
+    """All client, federation, and protocol results of one cell."""
     model_config = Frozen
 
     clients: tuple[PolicyEvaluation, ...]
     federations: tuple[FederationMetrics, ...]
     protocol_results: tuple[ClientEvaluationResult, ...]
-    shrinkage_n0: int | None
+    shrinkage_n0: PositiveCount | None
 
 
 class AdmissionSummary(BaseModel):
+    """Composition of reference, readiness, mismatch, and decision."""
     model_config = Frozen
 
     client_count: PositiveCount
@@ -240,6 +264,7 @@ class AdmissionSummary(BaseModel):
 
 
 def summarize_admission(results: tuple[ClientEvaluationResult, ...]) -> AdmissionSummary:
+    """Summarize protocol results into an admission document."""
     if not results:
         raise ValueError("Admission summary requires clients")
     n = len(results)
@@ -276,7 +301,7 @@ def summarize_admission(results: tuple[ClientEvaluationResult, ...]) -> Admissio
     )
 
 
-def _mean_defined(values: list[float | None]) -> float | None:
+def _mean_defined(values: Iterable[Metric | None]) -> Metric | None:
     defined = [value for value in values if value is not None]
     return float(np.mean(defined)) if defined else None
 
@@ -285,6 +310,7 @@ def aggregate_policy(
     policy: PolicyId,
     evaluations: tuple[PolicyEvaluation, ...],
 ) -> FederationMetrics:
+    """Federation-level metrics for one policy across clients."""
     rows = [
         row.metrics
         for row in evaluations
@@ -321,6 +347,7 @@ def aggregate_policy(
 def assert_ranking_metric_invariance(
     evaluations: tuple[PolicyEvaluation, ...], tolerance: Tolerance
 ) -> None:
+    """Verify AUROC/AUPRC invariance across policies."""
     by_client: dict[ClientId, list[PolicyEvaluation]] = {}
     for row in evaluations:
         if row.metrics is not None:
@@ -339,15 +366,15 @@ class ClientEvaluation:
 
     def __init__(
         self,
-        reference_estimator: object | None = None,
+        reference_estimator: ReferenceEstimator | None = None,
         readiness_evaluator: CalibrationReadinessEvaluator | None = None,
         mismatch_evaluator: ReferenceMismatchEvaluator | None = None,
-        decision_engine: ThresholdDecisionEngine | None = None,
+        decision_engine: DeploymentDecision | None = None,
         readiness_cache: ReadinessPlanCache | None = None,
     ) -> None:
         self.readiness_evaluator = readiness_evaluator or CalibrationReadinessEvaluator()
         self.mismatch_evaluator = mismatch_evaluator or ReferenceMismatchEvaluator()
-        self.decision_engine = decision_engine or ThresholdDecisionEngine()
+        self.decision_engine = decision_engine or DeploymentDecision()
         self.readiness_cache = readiness_cache or ReadinessPlanCache()
 
     def estimate_reference(

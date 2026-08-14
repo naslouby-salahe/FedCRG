@@ -1,4 +1,4 @@
-from fedcrg.domain.enums import DataRole, DecisionState, ExperimentStatus, PolicyId
+from fedcrg.types import DataRole, DecisionState, ExperimentStatus, PolicyId
 
 
 def test_closed_domains_have_no_duplicate_values() -> None:

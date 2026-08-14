@@ -1,6 +1,0 @@
-id: deep_svdd
-hidden_dims: [64]
-embedding_dim: 32
-activation: tanh
-bias: false
-center_mode: equal_mean_of_client_initial_embeddings

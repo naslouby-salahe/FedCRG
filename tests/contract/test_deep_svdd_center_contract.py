@@ -2,16 +2,13 @@ from __future__ import annotations
 
 import torch
 
-from fedcrg.configuration.detector_config import DeepSvddConfig
-from fedcrg.detectors.deep_svdd import DeepSvdd
+from fedcrg.config import DeepSvddConfig
+from fedcrg.learning.detectors import DeepSvdd
 
 
 def _model() -> DeepSvdd:
     torch.manual_seed(11)
-    return DeepSvdd(
-        115,
-        DeepSvddConfig(hidden_dims=(64,), embedding_dim=32),
-    )
+    return DeepSvdd(115, DeepSvddConfig(hidden_dims=(64,), embedding_dim=32))
 
 
 def test_center_is_equal_mean_of_client_initial_mean_embeddings() -> None:

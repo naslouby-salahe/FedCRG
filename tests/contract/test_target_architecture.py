@@ -1,4 +1,4 @@
-"""Contract tests for the target repository architecture (goal §4, §5, §30).
+"""Contract tests for the target repository architecture.
 
 These tests define the target tree and forbid the obsolete architecture from
 returning. They are the enforcement contract for the restructure.

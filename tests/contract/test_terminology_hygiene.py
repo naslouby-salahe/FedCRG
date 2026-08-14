@@ -1,4 +1,4 @@
-"""Terminology and comment hygiene contract (goal §3, §6, §37).
+"""Terminology and comment hygiene contract.
 
 Production source must not reference the roadmap, the audit matrix, this
 implementation goal, migration, legacy, compatibility, or old architecture.

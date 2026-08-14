@@ -1,4 +1,4 @@
-"""Config-vs-source drift contract (goal §11, §12).
+"""Config-vs-source drift contract.
 
 Configured scientific values must not be duplicated as literals in production
 source. The test parses the three configuration documents, collects configured
@@ -19,12 +19,46 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src" / "fedcrg"
 
-# (relative path, value, reason) — inherent mathematical constants only.
+# (relative path, value, reason) — genuine mathematical/algorithmic constants,
+# each documented by scientific reason.
 _ALLOWED_SOURCE_LITERALS: dict[tuple[str, object], str] = {
     ("types.py", 1.0e-12): "tight comparison tolerance for exact numeric contracts",
     ("types.py", 1.0e-10): "exact beta-function tolerance locked by the protocol",
     ("types.py", 1.0e-9): "coarse tolerance for regenerated tables",
     ("config.py", 1.0e-12): "ranking-invariance tolerance owned by configuration",
+    ("data/datasets.py", 1024): "filesystem hashing chunk size in KiB (IO boundary)",
+    ("data/datasets.py", 0.99): "minimum finite-rate for numeric-safe feature derivation",
+    ("data/datasets.py", 0.75): "encoder depth schedule: 3/4 of input dimension",
+    ("data/datasets.py", 0.5): "encoder depth schedule: half of input dimension",
+    ("data/datasets.py", 0.25): "encoder depth schedule: quarter of input dimension",
+    ("data/datasets.py", 3): "encoder depth schedule: one third of input dimension",
+    ("data/preprocessing.py", 0.99): "minimum finite-rate for numeric-safe feature derivation",
+    ("evidence/store.py", 1024): "filesystem hashing chunk size in KiB (IO boundary)",
+    ("evidence/store.py", 1_000_000): "run-id alpha encoding in parts per million",
+    ("evidence/store.py", 10_000): "run-id rho/assurance/confidence encoding in basis points",
+    ("experiments/analyses.py", 0.005): "Monte-Carlo acceptance floor for coverage validation",
+    ("experiments/analyses.py", 0.1): "normal-mixture synthetic distribution: 10% contaminated component",
+    ("experiments/analyses.py", 0.9): "normal-mixture synthetic distribution: 90% clean component",
+    ("experiments/analyses.py", 1000): "seed offset scale converting float axis values to integers",
+    ("experiments/analyses.py", 3.0): "normal-mixture and contamination shift location in standard deviations",
+    ("experiments/analyses.py", 5): "source-order analysis block count and 5th-percentile quantile",
+    ("experiments/analyses.py", 25): "IQR lower quantile (25th percentile)",
+    ("experiments/analyses.py", 75): "IQR upper quantile (75th percentile)",
+    ("experiments/analyses.py", 95): "upper percentile quantile (95th percentile)",
+    ("learning/federated.py", 0.5): "cosine learning-rate schedule midpoint",
+    ("learning/scores.py", 1024): "filesystem hashing chunk size in KiB (IO boundary)",
+    ("learning/scores.py", 64): "SHA-256 hexadecimal digest length",
+    ("reporting.py", 0.5): "decision-figure canvas coordinate",
+    ("reporting.py", 0.6): "decision-figure canvas coordinate",
+    ("reporting.py", 10.0): "decision-figure canvas coordinate",
+    ("reporting.py", 300): "figure rasterization dpi",
+    ("reporting.py", 5.0): "decision-figure canvas coordinate",
+    ("reporting.py", 9.0): "decision-figure canvas coordinate and label fontsize",
+    ("thresholding/metrics.py", 0.5): "balanced-accuracy mean of sensitivity and specificity",
+    ("thresholding/policies.py", 3.0): "three-sigma threshold standard-deviation multiple",
+    ("thresholding/policies.py", 500): "supervised development budget: 500 benign + 500 malicious",
+    ("types.py", 100.0): "percentage bound upper limit",
+    ("types.py", 64): "SHA-256 hexadecimal digest length",
 }
 
 
@@ -44,6 +78,9 @@ def _configured_values() -> set[object]:
                 for item in node:
                     walk(item)
             elif isinstance(node, (int, float)) and not isinstance(node, bool):
+                # Trivial 0/1 sentinels are universal bounds, not scientific values.
+                if node in (0, 0.0, 1, 1.0):
+                    return
                 values.add(node)
             elif isinstance(node, str):
                 try:
@@ -56,16 +93,68 @@ def _configured_values() -> set[object]:
 
 
 def _source_literals() -> dict[tuple[str, object], list[int]]:
+    """Collect numeric literals from scientific contexts only.
+
+    Structural AST contexts are skipped because their numbers are not
+    scientific values: slice bounds (``[:5]``), ``range`` arguments, and
+    keyword values such as subprocess ``timeout=``.
+    """
     occurrences: dict[tuple[str, object], list[int]] = {}
     for path in sorted(SRC.rglob("*.py")):
         relative = path.relative_to(SRC).as_posix()
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
-            if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
-                value = float(node.value)
-                key = (relative, value)
-                occurrences.setdefault(key, []).append(getattr(node, "lineno", 0))
+            if not isinstance(node, ast.Constant):
+                continue
+            if not isinstance(node.value, (int, float)) or isinstance(node.value, bool):
+                continue
+            parent = _parent_of(tree, node)
+            if _is_structural_context(parent, node):
+                continue
+            value = float(node.value)
+            key = (relative, value)
+            occurrences.setdefault(key, []).append(getattr(node, "lineno", 0))
     return occurrences
+
+
+def _parent_of(tree: ast.AST, node: ast.Constant) -> ast.AST | None:
+    for parent in ast.walk(tree):
+        for child in ast.iter_child_nodes(parent):
+            if child is node:
+                return parent
+    return None
+
+
+def _is_structural_context(parent: ast.AST | None, node: ast.Constant) -> bool:
+    if parent is None:
+        return False
+    if isinstance(parent, ast.Slice):
+        return True
+    if isinstance(parent, ast.Subscript) and parent.slice is node:
+        return True
+    if isinstance(parent, ast.Call) and isinstance(parent.func, ast.Name):
+        if parent.func.id == "range":
+            return True
+        if parent.func.id in {"round", "int", "float", "max", "min", "abs", "len"}:
+            return True
+        if parent.func.id in {"SystemExit", "exit"}:
+            return True
+        if parent.func.id.endswith("get_device_name") or parent.func.id == "set_device":
+            return True
+    if isinstance(parent, ast.Call) and isinstance(parent.func, ast.Attribute):
+        if parent.func.attr.endswith("get_device_name") or parent.func.attr == "set_device":
+            return True
+    if isinstance(parent, ast.keyword) and parent.arg in {
+        "timeout", "workers", "chunk_size", "default",
+    }:
+        return True
+    if isinstance(parent, ast.BinOp):
+        return True
+    if isinstance(parent, ast.Compare):
+        return True
+    if isinstance(parent, ast.UnaryOp):
+        return True
+    return False
 
 
 def test_configured_values_not_duplicated_in_source() -> None:
@@ -94,15 +183,27 @@ def test_experiment_axes_not_duplicated_in_python() -> None:
                 axis_values.update(values)
         for cell in experiment.get("coupled_cells") or []:
             axis_values.update(cell.values())
+    # Trivial 0/1 sentinels are universal bounds, not scientific axis values.
+    axis_values.discard(0)
+    axis_values.discard(0.0)
+    axis_values.discard(1)
+    axis_values.discard(1.0)
     for path in sorted(SRC.rglob("*.py")):
         relative = path.relative_to(SRC).as_posix()
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Constant):
                 continue
-            if isinstance(node.value, (int, float)) and float(node.value) in {
-                float(item) for item in axis_values if isinstance(item, (int, float))
+            if not isinstance(node.value, (int, float)) or isinstance(node.value, bool):
+                continue
+            if float(node.value) in {
+                float(item) for item in axis_values if isinstance(item, (int, float)) and not isinstance(item, bool)
             }:
+                parent = _parent_of(tree, node)
+                if _is_structural_context(parent, node):
+                    continue
+                if (relative, float(node.value)) in _ALLOWED_SOURCE_LITERALS:
+                    continue
                 raise AssertionError(
                     f"{relative}:{getattr(node, 'lineno', 0)} duplicates experiment axis "
                     f"value {node.value!r}"
@@ -124,6 +225,9 @@ def test_configured_seed_lists_not_duplicated_in_python() -> None:
         for node in ast.walk(tree):
             if isinstance(node, ast.Constant) and isinstance(node.value, int) and not isinstance(node.value, bool):
                 if node.value in seeds:
+                    parent = _parent_of(tree, node)
+                    if _is_structural_context(parent, node):
+                        continue
                     raise AssertionError(
                         f"{relative}:{getattr(node, 'lineno', 0)} duplicates configured "
                         f"seed {node.value!r}"

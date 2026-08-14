@@ -1,4 +1,4 @@
-"""No-hidden-scientific-defaults contract (goal §13).
+"""No-hidden-scientific-defaults contract.
 
 Scientific configuration values must not silently appear because Python
 supplied a default: function argument defaults, dataclass defaults, Pydantic

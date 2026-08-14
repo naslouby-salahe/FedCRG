@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
-from typing import Annotated, TypeAlias
+from typing import Annotated, TypeAlias, TypeAliasType
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
@@ -77,6 +77,7 @@ Spacing = NonNegativeFloat
 Threshold = Annotated[float, Field()]
 Score = Annotated[float, Field()]
 Fraction = Probability
+ProtocolConstantValue = Fraction | Assurance | PositiveCount | LearningRate | ClientFraction
 ContaminationFraction = Probability
 TrueFpr = Probability
 
@@ -99,7 +100,8 @@ Version = Annotated[
 
 Description = Annotated[str, StringConstraints(min_length=0, max_length=512)]
 
-JsonValue = (
+JsonValue = TypeAliasType(
+    "JsonValue",
     str
     | int
     | float
@@ -107,7 +109,7 @@ JsonValue = (
     | None
     | tuple["JsonValue", ...]
     | list["JsonValue"]
-    | dict[str, "JsonValue"]
+    | dict[str, "JsonValue"],
 )
 
 LogLevel = Annotated[
@@ -152,6 +154,44 @@ CampaignId = Annotated[
         pattern=r"^[a-z0-9][a-z0-9._-]*$",
     ),
 ]
+
+
+class CampaignStage(StrEnum):
+    """Closed domain of campaign execution stages."""
+    PENDING = "pending"
+    RUNNING = "running"
+    DONE = "done"
+    FAILED = "failed"
+
+
+class InformationRegime(StrEnum):
+    """Closed domain of policy information regimes."""
+    BENIGN_ONLY = "benign_only"
+    SUPERVISED_DEVELOPMENT = "supervised_development"
+    FINAL_TEST_ORACLE = "final_test_oracle"
+
+
+class PreparedColumn(StrEnum):
+    """Frozen prepared-data column names owned by the pipeline."""
+    ROW_ID = "row_id"
+    ROLE = "role"
+    LABEL = "label"
+    ATTACK_GROUP = "attack_group"
+    SOURCE_FILE = "source_file"
+    SOURCE_ROW_INDEX = "source_row_index"
+    CAPTURE_TIME = "capture_time"
+
+
+class DecisionSource(StrEnum):
+    """Closed domain of threshold-selection sources."""
+    REFERENCE = "reference"
+    LOCAL = "local"
+    ORACLE = "oracle"
+    UNDEFINED = "undefined"
+
+
+Metric = Annotated[float, Field()]
+
 PlanKey = Annotated[
     str,
     StringConstraints(
@@ -241,24 +281,29 @@ class ClassMoments:
     std: Spacing
 
 class ProtocolId(StrEnum):
+    """Closed domain of protocol identities."""
     FEDCRG = "fedcrg"
 
 class DatasetId(StrEnum):
+    """Closed domain of dataset identities."""
     NBAIOT = "nbaiot"
     DIAD = "diad"
     SYNTHETIC = "synthetic"
 
 class DatasetFeatureContractId(StrEnum):
+    """Closed domain of frozen feature contracts."""
     NBAIOT_LOCKED_115 = "nbaiot_locked_115"
     DIAD_LOCKED_86 = "diad_locked_86"
     DIAD_TRAINING_NUMERIC_SAFE = "diad_training_numeric_safe"
     SYNTHETIC = "synthetic"
 
 class DetectorId(StrEnum):
+    """Closed domain of detector identities."""
     AUTOENCODER = "autoencoder"
     DEEP_SVDD = "deep_svdd"
 
 class DataRole(StrEnum):
+    """Closed domain of benign evidence roles."""
     TRAIN = "train"
     RESERVOIR = "reservoir"
     REFERENCE = "reference"
@@ -270,20 +315,24 @@ class DataRole(StrEnum):
     ATTACK_TEST = "attack_test"
 
 class CalibrationAssignmentMode(StrEnum):
+    """Closed domain of calibration role assignment modes."""
     SEEDED_PERMUTATION = "seeded_permutation"
     SOURCE_ORDER = "source_order"
 
 class CalibrationReadinessState(StrEnum):
+    """Closed domain of calibration readiness states."""
     READY = "READY"
     NOT_READY = "NOT_READY"
 
 class MismatchOutcome(StrEnum):
+    """Closed domain of reference-mismatch evidence outcomes."""
     LOW = "LOW_MISMATCH"
     HIGH = "HIGH_MISMATCH"
     NO_MATERIAL_DIFFERENCE = "NO_MATERIAL_MISMATCH_DEMONSTRATED"
     INSUFFICIENT_EVIDENCE = "GATE_B_INSUFFICIENT"
 
 class DecisionState(StrEnum):
+    """Closed domain of deployment decision states."""
     REFERENCE_RETAINED = "NO_MATERIAL_MISMATCH_DEMONSTRATED"
     PERSONALIZED = "LOCAL_PERSONALIZE"
     CALIBRATION_DEFICIT = "CALIBRATION_DEFICIT"
@@ -291,10 +340,12 @@ class DecisionState(StrEnum):
     ASSUMPTION_VIOLATION = "CALIBRATION_ASSUMPTION_VIOLATION"
 
 class ThresholdSource(StrEnum):
+    """Closed domain of threshold origins."""
     REFERENCE = "reference"
     LOCAL_CALIBRATION = "local_calibration"
 
 class DecisionReason(StrEnum):
+    """Closed domain of decision reason codes."""
     NO_MATERIAL_DIFFERENCE = "NO_MATERIAL_MISMATCH_DEMONSTRATED"
     LOCAL_PERSONALIZATION_ADMITTED = "local_personalization_admitted"
     CALIBRATION_NOT_READY = "calibration_not_ready"
@@ -302,6 +353,7 @@ class DecisionReason(StrEnum):
     CALIBRATION_TIE = "calibration_tie"
 
 class FailureCode(StrEnum):
+    """Closed domain of serialized failure codes."""
     DATASET_COUNT_MISMATCH = "DATASET_COUNT_MISMATCH"
     NBAIOT_ATTACK_BUDGET_FAIL = "NBAIOT_ATTACK_BUDGET_FAIL"
     DIAD_DEVICE_COUNT_SOURCE_MISMATCH = "DIAD_DEVICE_COUNT_SOURCE_MISMATCH"
@@ -331,30 +383,38 @@ class FailureCode(StrEnum):
     NONDETERMINISTIC_PARITY_FAIL = "NONDETERMINISTIC_PARITY_FAIL"
 
 class EligibilityStatus(StrEnum):
+    """Closed domain of client eligibility outcomes."""
     ELIGIBLE = "eligible"
     EXCLUDED = "excluded"
 
 class ActivationId(StrEnum):
+    """Closed domain of detector activation functions."""
     TANH = "tanh"
 
 class ComputeDeviceId(StrEnum):
+    """Closed domain of compute device identifiers."""
     CPU = "cpu"
     CUDA = "cuda"
 
 class DeepSvddCenterMode(StrEnum):
+    """Closed domain of Deep-SVDD center initialization modes."""
     EQUAL_MEAN_OF_CLIENT_INITIAL_EMBEDDINGS = "equal_mean_of_client_initial_embeddings"
 
 class ChronologyStatus(StrEnum):
+    """Closed domain of source chronology guarantees."""
     VERIFIED = "verified"
     SOURCE_ORDER_ONLY = "source_order_only"
 
 class AggregationId(StrEnum):
+    """Closed domain of federated aggregation rules."""
     EQUAL_CLIENT_MEAN = "equal_client_mean"
 
 class OptimizerId(StrEnum):
+    """Closed domain of optimizer identities."""
     ADAM = "adam"
 
 class PolicyId(StrEnum):
+    """Closed domain of threshold-comparator policy identities."""
     REFERENCE_QUANTILE = "reference_quantile"
     GLOBAL_QUANTILE = "global_quantile"
     LOCAL_QUANTILE = "local_quantile"
@@ -369,6 +429,7 @@ class PolicyId(StrEnum):
     FEDCRG = "fedcrg"
 
 class CampaignStatusValue(StrEnum):
+    """Closed domain of campaign status values."""
     PENDING = "pending"
     RUNNING = "running"
     COMPLETE = "complete"
@@ -377,10 +438,12 @@ class CampaignStatusValue(StrEnum):
     SKIPPED = "skipped"
 
 class PolicyEvaluationStatus(StrEnum):
+    """Closed domain of policy evaluation outcomes."""
     EVALUATED = "evaluated"
     UNDEFINED = "undefined"
 
 class ExperimentId(StrEnum):
+    """Closed domain of the pre-registered experiment catalogue."""
     READINESS_THEOREM = "readiness_theorem"
     TARGET_FPR_SYNTHETIC = "target_fpr_synthetic"
     TEMPORAL_DEPENDENCE = "temporal_dependence"
@@ -403,6 +466,7 @@ class ExperimentId(StrEnum):
     DIAD_FEATURE_SENSITIVITY = "diad_feature_sensitivity"
 
 class ExperimentAxisId(StrEnum):
+    """Closed domain of experiment independent axes."""
     DISTRIBUTION = "distribution"
     CALIBRATION_N = "calibration_n"
     REPETITIONS = "repetitions"
@@ -421,21 +485,25 @@ class ExperimentAxisId(StrEnum):
     WARMUPS = "warmups"
 
 class SyntheticDistribution(StrEnum):
+    """Closed domain of synthetic evidence distributions."""
     NORMAL = "normal"
     LOGNORMAL = "lognormal"
     GAMMA_SHAPE_2 = "gamma2"
     NORMAL_MIXTURE = "normal_mixture"
 
 class ContaminationDirection(StrEnum):
+    """Closed domain of contamination shift directions."""
     HIGH = "high"
     LOW = "low"
 
 class MultiplicityProcedure(StrEnum):
+    """Closed domain of fleet-level multiplicity procedures."""
     BONFERRONI_READINESS = "bonferroni_readiness"
     BONFERRONI_MISMATCH = "bonferroni_mismatch"
     HOLM_DIRECTIONAL = "holm_directional"
 
 class ExperimentType(StrEnum):
+    """Closed domain of experiment categories."""
     SYNTHETIC = "synthetic"
     PRIMARY = "primary"
     SENSITIVITY = "sensitivity"
@@ -444,6 +512,7 @@ class ExperimentType(StrEnum):
     BENCHMARK = "benchmark"
 
 class ExperimentStatus(StrEnum):
+    """Closed domain of experiment lifecycle states."""
     PENDING = "pending"
     VALIDATING = "validating"
     READY = "ready"
@@ -455,6 +524,7 @@ class ExperimentStatus(StrEnum):
     INVALID = "invalid"
 
 class ArtifactType(StrEnum):
+    """Closed domain of persisted artifact kinds."""
     RESOLVED_CONFIG = "resolved_config"
     DATASET_MANIFEST = "dataset_manifest"
     ELIGIBILITY_MANIFEST = "eligibility_manifest"

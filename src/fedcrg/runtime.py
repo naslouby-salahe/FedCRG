@@ -59,11 +59,13 @@ def configure_logging(logs_root: Path | None = None, level: LogLevel | None = No
 
 
 def get_logger(name: Identifier) -> logging.Logger:
+    """Module logger under the FedCRG hierarchy."""
     return logging.getLogger(name)
 
 
 @contextmanager
 def log_stage(logger: logging.Logger, message: Identifier, **fields: object) -> Generator[None]:
+    """Emit one structured stage transition."""
     suffix = " ".join(f"{key}={value}" for key, value in fields.items())
     logger.info("start %s %s", message, suffix)
     started = time.monotonic()
@@ -78,12 +80,14 @@ def log_stage(logger: logging.Logger, message: Identifier, **fields: object) -> 
 
 @dataclass(frozen=True, slots=True)
 class CudaDeviceInfo:
+    """CUDA device identity and capacity pin."""
     available: bool
     device_name: Identifier | None = None
     vram_capacity_bytes: ByteCount | None = None
 
 
 def cuda_device_info() -> CudaDeviceInfo:
+    """Probe the active CUDA device."""
     if not torch.cuda.is_available():
         return CudaDeviceInfo(available=False)
     index = torch.cuda.current_device()
@@ -106,6 +110,7 @@ def resolve_compute_device(device: ComputeDeviceId) -> torch.device:
 
 
 def log_device_capabilities(logger: logging.Logger) -> None:
+    """Log the active CUDA device capabilities."""
     info = cuda_device_info()
     if not info.available:
         logger.info("cuda unavailable device=cpu")
@@ -118,6 +123,7 @@ def log_device_capabilities(logger: logging.Logger) -> None:
 
 
 def log_peak_vram(logger: logging.Logger) -> None:
+    """Log the observed peak VRAM allocation."""
     if not torch.cuda.is_available():
         return
     index = torch.cuda.current_device()
@@ -129,6 +135,7 @@ def log_peak_vram(logger: logging.Logger) -> None:
 
 @dataclass(frozen=True, slots=True)
 class CudaTelemetry:
+    """Frozen CUDA resource telemetry sample."""
     available: bool
     device_count: NonNegativeCount = 0
     device_name: Identifier | None = None
@@ -140,6 +147,7 @@ class CudaTelemetry:
 
 @dataclass(frozen=True, slots=True)
 class ResourceSample:
+    """Frozen resource telemetry sample."""
     timestamp: Timestamp
     process_ram_bytes: ByteCount
     available_system_ram_bytes: ByteCount
@@ -221,6 +229,7 @@ def _telemetry_text(sample: ResourceSample) -> Identifier:
 
 
 def render_telemetry(sample: ResourceSample) -> Identifier:
+    """Render one resource telemetry line."""
     return _telemetry_text(sample)
 
 
@@ -232,6 +241,7 @@ def render_campaign_status(
     current_experiment: Identifier | None,
     elapsed_seconds: Duration,
 ) -> None:
+    """Render campaign progress for the terminal."""
     console = Console()
     table = Table(title=f"campaign {campaign_id}")
     table.add_column("status")
@@ -255,6 +265,7 @@ def render_cache_status(
     target: Identifier,
     detail: Identifier | None = None,
 ) -> None:
+    """Render cache reuse status for the terminal."""
     console = Console()
     hit_text = "hit" if hit else "miss"
     suffix = f" ({detail})" if detail else ""

@@ -1,17 +1,6 @@
 from __future__ import annotations
 
-import pandas as pd
-
-from fedcrg.datasets.diad import DIAD_FEATURES, DiadAdapter
-
-
-def test_binary_anomaly_label_and_attack_category_are_distinct_contracts() -> None:
-    frame = pd.DataFrame(columns=["device_mac", "label", "attack_category", *DIAD_FEATURES])
-    anomaly = DiadAdapter._anomaly_label_column(frame)
-    category = DiadAdapter._attack_category_column(frame, anomaly)
-    assert anomaly == "label"
-    assert category == "attack_category"
-    assert anomaly != category
+from fedcrg.data.datasets import DIAD_FEATURES
 
 
 def test_identity_labels_ports_and_category_are_not_model_features() -> None:
@@ -28,3 +17,21 @@ def test_identity_labels_ports_and_category_are_not_model_features() -> None:
     }
     assert forbidden.isdisjoint(DIAD_FEATURES)
     assert len(DIAD_FEATURES) == 86
+
+
+def test_feature_contract_is_frozen() -> None:
+    assert DIAD_FEATURES[:11] == (
+        "inter_arrival_time",
+        "time_since_previously_displayed_frame",
+        "l4_tcp",
+        "l4_udp",
+        "ttl",
+        "eth_size",
+        "tcp_window_size",
+        "payload_entropy",
+        "payload_length",
+        "l3_ip_dst_count",
+        "jitter",
+    )
+    assert DIAD_FEATURES[11] == "stream_1_count"
+    assert DIAD_FEATURES[-1] == "stream_jitter_60_var"

@@ -43,6 +43,7 @@ ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
 def sha256_file(path: Path, chunk_size: ByteCount = 1024 * 1024) -> Sha256:
+    """SHA-256 of one file using an IO-sized read chunk."""
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(chunk_size), b""):
@@ -65,6 +66,7 @@ def _jsonable(value: object) -> JsonValue:
 
 
 def atomic_write_json(path: Path, payload: object) -> None:
+    """Atomically persist one JSON-serializable payload."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_name(f".{path.name}.tmp-{uuid.uuid4().hex}")
     text = json.dumps(_jsonable(payload), indent=2, sort_keys=True) + "\n"
@@ -73,6 +75,7 @@ def atomic_write_json(path: Path, payload: object) -> None:
 
 
 def atomic_write_text(path: Path, content: str) -> None:
+    """Atomically persist one text payload."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_name(f".{path.name}.tmp-{uuid.uuid4().hex}")
     temp.write_text(content, encoding="utf-8")
@@ -80,6 +83,7 @@ def atomic_write_text(path: Path, content: str) -> None:
 
 
 def write_jsonl(path: Path, records: tuple[BaseModel, ...]) -> None:
+    """Atomically append one JSON-lines document."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_name(f".{path.name}.tmp-{uuid.uuid4().hex}")
     with temp.open("w", encoding="utf-8") as handle:
@@ -89,11 +93,13 @@ def write_jsonl(path: Path, records: tuple[BaseModel, ...]) -> None:
 
 
 def load_json_model(path: Path, model: type[ModelT]) -> ModelT:
+    """Load and validate one pydantic model from JSON."""
     raw: object = json.loads(path.read_text(encoding="utf-8"))
     return model.model_validate(raw)
 
 
 def load_yaml_mapping(path: Path) -> object:
+    """Load one configuration document before validation."""
     raw: object = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError(f"Configuration document must be a mapping: {path}")
@@ -116,26 +122,32 @@ class ModelStore(Generic[ModelT]):
 
 
 class PreparedDatasetManifestStore(ModelStore):
+    """Atomic store for prepared-dataset manifests."""
     model = PreparedDatasetManifest
 
 
 class TrainingManifestStore(ModelStore):
+    """Atomic store for training manifests."""
     model = TrainingManifest
 
 
 class RunManifestStore(ModelStore):
+    """Atomic store for run manifests."""
     model = RunManifest
 
 
 class EligibilityManifestStore(ModelStore):
+    """Atomic store for eligibility manifests."""
     model = EligibilityManifest
 
 
 class CalibrationAssignmentManifestStore(ModelStore):
+    """Atomic store for calibration-assignment manifests."""
     model = CalibrationAssignmentManifest
 
 
 class CacheReferenceStore(ModelStore):
+    """Atomic store for cache references."""
     model = CacheReference
 
     @staticmethod
@@ -255,42 +267,134 @@ class RunLayout:
             directory.mkdir()
 
 
-class RunIdentityFactory:
-    """Build path-safe run IDs from one fully resolved scientific configuration."""
+class OutputsLayout:
+    """Own every reserved outputs/ path name so no module hardcodes one."""
 
-    @staticmethod
-    def for_policy_cell(
+    def __init__(self, outputs_root: Path = Path("outputs")) -> None:
+        self.outputs_root = outputs_root
+
+    @property
+    def runs(self) -> Path:
+        return self.outputs_root / "runs"
+
+    @property
+    def cache(self) -> Path:
+        return self.outputs_root / "cache"
+
+    @property
+    def cache_models(self) -> Path:
+        return self.cache / "models"
+
+    @property
+    def cache_scores(self) -> Path:
+        return self.cache / "scores"
+
+    @property
+    def cache_analysis(self) -> Path:
+        return self.cache / "analysis"
+
+    @property
+    def campaigns(self) -> Path:
+        return self.outputs_root / "campaigns"
+
+    @property
+    def logs(self) -> Path:
+        return self.outputs_root / "logs"
+
+    @property
+    def monitoring(self) -> Path:
+        return self.outputs_root / "monitoring"
+
+    @property
+    def reports(self) -> Path:
+        return self.outputs_root / "reports"
+
+    @property
+    def environment_file(self) -> Path:
+        return self.outputs_root / "environment.json"
+
+    @property
+    def telemetry_file(self) -> Path:
+        return self.monitoring / "telemetry.jsonl"
+
+    @property
+    def benchmark_report(self) -> Path:
+        return self.reports / "latest" / "benchmark.json"
+
+    @property
+    def readiness_plans_file(self) -> Path:
+        return self.cache_analysis / "readiness_plans.json"
+
+    @property
+    def mismatch_cutoffs_file(self) -> Path:
+        return self.cache_analysis / "mismatch_cutoffs.json"
+
+    def model_root(
+        self,
         config: ExperimentConfig,
         model_seed: ModelSeed,
-        calibration_seed: CalibrationSeed,
-        policy: PolicyId,
-    ) -> RunId:
-        protocol = config.protocol
-        detector = config.detector
-        if detector is None:
-            raise ValueError("Run identity requires a real-data detector profile")
-        alpha_ppm = round(protocol.alpha * 1_000_000)
-        rho_bp = round(protocol.rho * 10_000)
-        assurance_bp = round(protocol.readiness_assurance * 10_000)
-        confidence_bp = round(protocol.mismatch_confidence * 10_000)
-        detector_label = (
-            "ae" if detector.id is DetectorId.AUTOENCODER else detector.id.value
+    ) -> Path:
+        if config.detector is None:
+            raise ValueError("Model cache requires a detector profile")
+        return (
+            self.cache_models
+            / config.dataset.id.value
+            / config.detector.id.value
+            / f"m{int(model_seed)}"
+            / config.training_spec_hash[:16]
         )
-        prefix = (
-            f"{config.dataset.id.value}__{detector}__ms{int(model_seed)}__"
-            f"cs{int(calibration_seed)}__a{alpha_ppm}__r{rho_bp}__"
-            f"ga{assurance_bp}__gb{confidence_bp}__{policy.value.lower()}"
+
+    def score_root(
+        self,
+        config: ExperimentConfig,
+        model_seed: ModelSeed,
+    ) -> Path:
+        if config.detector is None:
+            raise ValueError("Score cache requires a detector profile")
+        return (
+            self.cache_scores
+            / config.dataset.id.value
+            / config.detector.id.value
+            / f"m{int(model_seed)}"
+            / config.training_spec_hash[:16]
         )
-        return f"{prefix}__cfg{config.config_hash[:12]}"
+
+
+def build_run_id(
+    config: ExperimentConfig,
+    model_seed: ModelSeed,
+    calibration_seed: CalibrationSeed,
+    policy: PolicyId,
+) -> RunId:
+    """Build a path-safe run id from one fully resolved scientific configuration."""
+    protocol = config.protocol
+    detector = config.detector
+    if detector is None:
+        raise ValueError("Run identity requires a real-data detector profile")
+    alpha_ppm = round(protocol.alpha * 1_000_000)
+    rho_bp = round(protocol.rho * 10_000)
+    assurance_bp = round(protocol.readiness_assurance * 10_000)
+    confidence_bp = round(protocol.mismatch_confidence * 10_000)
+    detector_label = (
+        "ae" if detector.id is DetectorId.AUTOENCODER else detector.id.value
+    )
+    prefix = (
+        f"{config.dataset.id.value}__{detector}__ms{int(model_seed)}__"
+        f"cs{int(calibration_seed)}__a{alpha_ppm}__r{rho_bp}__"
+        f"ga{assurance_bp}__gb{confidence_bp}__{policy.value.lower()}"
+    )
+    return f"{prefix}__cfg{config.config_hash[:12]}"
 
 
 class FileHashRecord:
+    """One file's relative path and SHA-256."""
     def __init__(self, relative_path: Identifier, sha256: Sha256) -> None:
         self.relative_path = relative_path
         self.sha256 = sha256
 
 
 class VerificationResult:
+    """Outcome of an artifact verification audit."""
     def __init__(
         self,
         valid: bool,
@@ -397,6 +501,7 @@ class ArtifactVerifier:
 
 
 def capture_environment(repository_root: Path) -> GitEnvironment:
+    """Freeze repository and Python environment evidence."""
     import subprocess
 
     def run(*args: str) -> str:

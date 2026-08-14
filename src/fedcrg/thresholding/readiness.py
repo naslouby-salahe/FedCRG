@@ -10,6 +10,7 @@ r*-th order statistic after the rank has been fixed.
 
 from __future__ import annotations
 
+import json
 import math
 from collections.abc import Mapping
 from pathlib import Path
@@ -250,17 +251,12 @@ class ReadinessPlanCache:
                 "precomputation command before evaluating real scores: " + key
             ) from exc
 
-    def plan_payloads(self) -> dict[PlanKey, dict[Identifier, JsonValue]]:
-        return {
-            key: plan.model_dump(mode="json") for key, plan in sorted(self._plans.items())
-        }
+    def plans(self) -> tuple[ReadinessPlan, ...]:
+        return tuple(plan for _, plan in sorted(self._plans.items()))
 
-    def load_payloads(self, payload: Mapping[PlanKey, Mapping[Identifier, JsonValue]]) -> None:
-        for raw_key, item in payload.items():
-            plan = ReadinessPlan.model_validate(dict(item))
+    def load_plans(self, plans: tuple[ReadinessPlan, ...]) -> None:
+        for plan in plans:
             expected_key = self.key(plan.sample_count, plan.band, plan.assurance)
-            if str(raw_key) != expected_key:
-                raise ValueError("Readiness-plan key does not match its payload")
             regenerated = self.builder.build(plan.sample_count, plan.band, plan.assurance)
             if (
                 regenerated.rank != plan.rank
@@ -278,21 +274,16 @@ class ReadinessPlanCache:
         target = path or self.path
         if target is None:
             raise ValueError("Readiness-plan cache has no persistence path")
-        atomic_write_json(target, self.plan_payloads())
+        atomic_write_json(
+            target,
+            [plan.model_dump(mode="json") for plan in self.plans()],
+        )
 
     def load(self, path: Path) -> None:
-        import json
-
         raw: object = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(raw, dict):
-            raise ValueError("Readiness-plan table must be a JSON object")
-        self.load_payloads(
-            {
-                str(key): value
-                for key, value in raw.items()
-                if isinstance(value, dict)
-            }
-        )
+        if not isinstance(raw, list):
+            raise ValueError("Readiness-plan table must be a JSON array")
+        self.load_plans(tuple(ReadinessPlan.model_validate(entry) for entry in raw))
 
 class CalibrationReadinessEvaluator:
     """Select the precomputed order statistic and audit continuity at that point."""
@@ -311,6 +302,7 @@ class CalibrationReadinessEvaluator:
         return CalibrationReadiness(plan=plan, threshold=threshold, diagnostics=diagnostics)
 
 def continuity_diagnostics(scores: np.ndarray, selected_rank: PositiveCount) -> ContinuityDiagnostics:
+    """Tie and continuity diagnostics at one rank."""
     values = np.asarray(scores, dtype=np.float64)
     if values.ndim != 1 or len(values) == 0:
         raise ValueError("Continuity diagnostics require a non-empty score vector")
@@ -371,6 +363,7 @@ def minimum_bidirectional_sample_count(lower_band: Fpr, confidence: ConfidenceLe
     return estimate
 
 class ReferenceMismatchEvaluator:
+    """Exact reference-mismatch evidence evaluator."""
     def evaluate(
         self,
         scores: np.ndarray,
@@ -413,6 +406,7 @@ class ReferenceMismatchEvaluator:
         )
 
 class FleetMismatchDecision(BaseModel):
+    """Fleet-level mismatch decision for one client."""
     model_config = Frozen
 
     client_id: ClientId
@@ -429,7 +423,9 @@ class DirectionalHypothesis(BaseModel):
     outcome: MismatchOutcome
     p_value: PValue
 
-def _directional_p_values(counts: BinomialCounts, band: OperatingBand) -> tuple[float | None, float]:
+def _directional_p_values(
+    counts: BinomialCounts, band: OperatingBand
+) -> tuple[PValue | None, PValue]:
     low = None if band.lower == 0.0 else float(binom.cdf(counts.x, counts.n, band.lower))
     high = float(binom.sf(counts.x - 1, counts.n, band.upper))
     return low, high
@@ -440,6 +436,7 @@ def bonferroni_fleet_sensitivity(
     *,
     familywise_alpha: Probability,
 ) -> tuple[FleetMismatchDecision, ...]:
+    """Bonferroni fleet-level sensitivity analysis."""
     if not counts_by_client:
         return ()
     confidence = 1.0 - familywise_alpha / len(counts_by_client)
@@ -487,6 +484,7 @@ def holm_directional_fleet_sensitivity(
     *,
     familywise_alpha: Probability,
 ) -> tuple[FleetMismatchDecision, ...]:
+    """Holm-Bonferroni directional fleet sensitivity."""
     hypotheses: list[DirectionalHypothesis] = []
     diagnostics: dict[ClientId, tuple[float | None, float]] = {}
     for client_id in sorted(counts_by_client):
@@ -529,7 +527,7 @@ def holm_directional_fleet_sensitivity(
         )
     return tuple(decisions)
 
-class ThresholdDecisionEngine:
+class DeploymentDecision:
     """Combine independent evidence without reinterpreting inconclusive states."""
 
     def decide(
@@ -537,7 +535,7 @@ class ThresholdDecisionEngine:
         reference: ReferenceThreshold,
         readiness: CalibrationReadiness,
         mismatch: MismatchEvidence,
-        reject_calibration_ties: bool = True,
+        reject_calibration_ties: bool,
     ) -> ThresholdDecision:
         tie_count = readiness.tie_count
         if mismatch.outcome is MismatchOutcome.INSUFFICIENT_EVIDENCE:

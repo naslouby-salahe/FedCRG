@@ -28,6 +28,7 @@ from fedcrg.runtime import resolve_compute_device
 from fedcrg.types import (
     Alpha,
     AttackGroupId,
+    BatchSize,
     ByteCount,
     CalibrationAssignmentMode,
     CalibrationSeed,
@@ -36,9 +37,11 @@ from fedcrg.types import (
     DataIntegrityError,
     DataRole,
     DatasetId,
+    Identifier,
     ImmutableRunError,
-    JsonValue,
     ModelSeed,
+    PreparedColumn,
+    PositiveCount,
     Position,
     RngSeed,
     RowId,
@@ -71,13 +74,8 @@ def _sha256_digest() -> hashlib._Hash:
     return hashlib.sha256()
 
 
-def _as_json_list(value: object) -> list[JsonValue]:
-    if not isinstance(value, list):
-        raise ValueError("Expected a JSON array")
-    return [item for item in value if isinstance(item, (str, int, float, bool, list, dict)) or item is None]
-
-
 def sha256_file(path: Path) -> Sha256:
+    """SHA-256 of one file using an IO-sized read chunk."""
     digest = _sha256_digest()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
@@ -86,6 +84,7 @@ def sha256_file(path: Path) -> Sha256:
 
 
 class RoleScoreInput(BaseModel):
+    """One role's scores plus row identities for scoring."""
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     role: DataRole
@@ -106,6 +105,7 @@ class RoleScoreInput(BaseModel):
 
 
 class ClientScoreInput(BaseModel):
+    """All role inputs for one client."""
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     client_id: ClientId
@@ -119,6 +119,7 @@ class ClientScoreInput(BaseModel):
 
 
 class RoleScores(BaseModel):
+    """Immutable float64 scores for one client/role partition."""
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     role: DataRole
@@ -155,6 +156,7 @@ class RoleScores(BaseModel):
 
 
 class RoleHash(BaseModel):
+    """Role identity and score-array hash."""
     model_config = Frozen
 
     role: DataRole
@@ -162,6 +164,7 @@ class RoleHash(BaseModel):
 
 
 class ClientRoleHashes(BaseModel):
+    """Per-role hashes for one client."""
     model_config = Frozen
 
     client_id: ClientId
@@ -169,6 +172,7 @@ class ClientRoleHashes(BaseModel):
 
 
 class ClientScoreSet(BaseModel):
+    """All role score sets for one client."""
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     client_id: ClientId
@@ -182,6 +186,7 @@ class ClientScoreSet(BaseModel):
 
 
 class ScoreManifest(BaseModel):
+    """Frozen score-cache manifest for one model seed."""
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     dataset: DatasetId
@@ -214,6 +219,7 @@ class ScoreManifest(BaseModel):
 
 
 class ClientCalibrationScores(BaseModel):
+    """One client's calibration-role score partition."""
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     client_id: ClientId
@@ -229,6 +235,7 @@ class ClientCalibrationScores(BaseModel):
 
 
 class CalibrationScoreViews(BaseModel):
+    """Seeded calibration-role views across clients."""
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     calibration_seed: CalibrationSeed
@@ -250,6 +257,7 @@ class CalibrationScoreViews(BaseModel):
 
 
 def truncate_view(role_scores: RoleScores, sample_count: SampleCount) -> RoleScores:
+    """Deterministic head-truncation of one role view."""
     if sample_count <= 0 or sample_count > len(role_scores.values):
         raise ValueError(
             f"Cannot take {sample_count} values from {len(role_scores.values)} {role_scores.role.value} scores"
@@ -366,15 +374,17 @@ class CalibrationScoreViewBuilder:
 
 
 class ScoreCacheMetadataRecord(BaseModel):
+    """One partition's identity and hash in cache metadata."""
     model_config = Frozen
 
     client_id: ClientId
     role: DataRole
     score_array_sha256: Sha256
-    row_count: int
+    row_count: PositiveCount
 
 
 class ScoreCacheMetadata(BaseModel):
+    """Frozen score-cache metadata document."""
     model_config = Frozen
 
     dataset: DatasetId
@@ -384,7 +394,7 @@ class ScoreCacheMetadata(BaseModel):
     training_spec_hash: Sha256
     dataset_manifest_hash: Sha256
     preprocessing_hash: Sha256
-    score_cache_file: str
+    score_cache_file: Identifier
     score_cache_sha256: Sha256
     client_ids: tuple[ClientId, ...]
     records: tuple[ScoreCacheMetadataRecord, ...]
@@ -405,14 +415,16 @@ class ScoreCacheIdentity:
 
 @dataclass(frozen=True, slots=True)
 class ScoreRoleCacheRecord:
+    """One role partition's identity and hash."""
     client_id: ClientId
     role: DataRole
     score_array_sha256: Sha256
-    row_count: int
+    row_count: PositiveCount
 
 
 @dataclass(frozen=True, slots=True)
 class ScoreCacheDescriptor:
+    """Cache identity and per-partition records."""
     identity: ScoreCacheIdentity
     cache_sha256: Sha256
     client_ids: tuple[ClientId, ...]
@@ -536,7 +548,7 @@ class ScoreCache:
             {
                 "dataset_id": identity.dataset.value,
                 "client_id": scores.client_id,
-                "row_id": [row_id for row_id in scores.row_ids],
+                PreparedColumn.ROW_ID.value: [row_id for row_id in scores.row_ids],
                 "phase": scores.role.value,
                 "model_seed": int(identity.model_seed),
                 "score_float64": np.asarray(scores.values, dtype=np.float64),
@@ -720,12 +732,15 @@ class ScoreCache:
             role=role,
             values=frame["score_float64"].to_numpy(dtype=np.float64),
             client_id=client_id,
-            row_ids=tuple(str(value) for value in frame["row_id"].astype(str)),
+            row_ids=tuple(
+                str(value) for value in frame[PreparedColumn.ROW_ID.value].astype(str)
+            ),
             attack_groups=groups,
         )
 
 
 def validate_score_manifest(manifest: ScoreManifest) -> None:
+    """Reject malformed or inconsistent score manifests."""
     if not manifest.clients:
         raise ValueError("Score manifest has no clients")
     for client in manifest.clients:
@@ -768,7 +783,7 @@ class ScoreComputer:
         model: DetectorModel,
         values: np.ndarray,
         device: ComputeDeviceId,
-        batch_size: int = 65_536,
+        batch_size: BatchSize,
     ) -> np.ndarray:
         if batch_size <= 0:
             raise ValueError("Scoring batch_size must be positive")
@@ -797,13 +812,14 @@ class ScoreComputer:
         preprocessing_hash: Sha256,
         clients: tuple[ClientScoreInput, ...],
         device: ComputeDeviceId,
+        batch_size: BatchSize,
     ) -> ScoreManifest:
         scored_clients: list[ClientScoreSet] = []
         for client in clients:
             role_scores = tuple(
                 RoleScores(
                     role=role_input.role,
-                    values=self.compute(model, role_input.values, device),
+                    values=self.compute(model, role_input.values, device, batch_size),
                     client_id=client.client_id,
                     row_ids=role_input.row_ids,
                     attack_groups=role_input.attack_groups,

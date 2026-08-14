@@ -29,6 +29,10 @@ from fedcrg.types import (
     ClientId,
     ClassMoments,
     FailureCode,
+    Fpr,
+    Identifier,
+    InformationRegime,
+    Metric,
     NonNegativeInt,
     OperatingBand,
     PolicyId,
@@ -36,12 +40,6 @@ from fedcrg.types import (
     Score,
     SupervisedClassLabel,
 )
-
-
-class InformationRegime(StrEnum):
-    BENIGN_ONLY = "benign_only"
-    SUPERVISED_DEVELOPMENT = "supervised_development"
-    FINAL_TEST_ORACLE = "final_test_oracle"
 
 
 class BenignPolicyEvidence:
@@ -132,6 +130,7 @@ class FinalTestEvidence:
 
 
 class ClientPolicyThreshold:
+    """Selected threshold for one client/policy."""
     def __init__(self, policy: PolicyId, client_id: ClientId, threshold: Threshold | None) -> None:
         self.policy = policy
         self.client_id = client_id
@@ -139,6 +138,7 @@ class ClientPolicyThreshold:
 
 
 class UndefinedPolicyReason:
+    """Closed domain of undefined-threshold reasons."""
     def __init__(self, policy: PolicyId, reason: FailureCode) -> None:
         self.policy = policy
         self.reason = reason
@@ -166,14 +166,15 @@ class PolicyThresholdSet:
         raise KeyError(f"No threshold for {policy.value}/{client_id}")
 
 
-def _finite_vector(scores: np.ndarray, name: str) -> np.ndarray:
-    values = np.asarray(scores, dtype=np.float64)
+def _finite_vector(values: np.ndarray, name: Identifier) -> np.ndarray:
+    values = np.asarray(values, dtype=np.float64)
     if values.ndim != 1 or len(values) == 0 or not np.isfinite(values).all():
         raise ValueError(f"{name} must be a finite non-empty vector")
     return values
 
 
 def empirical_quantile(scores: np.ndarray, alpha: Alpha) -> Threshold:
+    """Empirical quantile of one finite vector."""
     values = np.sort(np.asarray(scores, dtype=np.float64), kind="stable")
     if values.ndim != 1 or len(values) == 0:
         raise ValueError("Quantile thresholds require a non-empty one-dimensional array")
@@ -182,10 +183,12 @@ def empirical_quantile(scores: np.ndarray, alpha: Alpha) -> Threshold:
 
 
 def reference_quantile(client: BenignPolicyEvidence) -> Threshold:
+    """Reference-quantile threshold comparator."""
     return client.evaluation.reference.value
 
 
 def global_quantile(clients: tuple[BenignPolicyEvidence, ...], alpha: Alpha) -> Threshold:
+    """Global-quantile threshold comparator."""
     counts = {len(client.full_policy_budget) for client in clients}
     if len(counts) != 1:
         raise ValueError("Global quantile requires equal per-client benign policy budgets")
@@ -194,10 +197,12 @@ def global_quantile(clients: tuple[BenignPolicyEvidence, ...], alpha: Alpha) -> 
 
 
 def local_quantile(client: BenignPolicyEvidence, alpha: Alpha) -> Threshold:
+    """Local-quantile threshold comparator."""
     return empirical_quantile(client.full_policy_budget, alpha)
 
 
 def readiness_only(client: BenignPolicyEvidence) -> Threshold:
+    """Readiness-admission comparator."""
     readiness = client.evaluation.readiness
     if (
         readiness.plan.state is CalibrationReadinessState.READY
@@ -209,12 +214,13 @@ def readiness_only(client: BenignPolicyEvidence) -> Threshold:
 
 
 def mismatch_only(client: BenignPolicyEvidence, alpha: Alpha) -> Threshold:
+    """Mismatch-admission comparator."""
     if client.evaluation.mismatch.outcome in {MismatchOutcome.LOW, MismatchOutcome.HIGH}:
         return empirical_quantile(client.calibration_scores, alpha)
     return client.evaluation.reference.value
 
 
-def _estimated_fpr(scores: np.ndarray, threshold: Threshold) -> float:
+def _estimated_fpr(scores: np.ndarray, threshold: Threshold) -> Fpr:
     if len(scores) == 0:
         raise ValueError("Mismatch evidence cannot be empty when tuning shrinkage")
     return float(np.mean(np.asarray(scores, dtype=np.float64) > threshold))
@@ -225,6 +231,7 @@ def tune_shrinkage(
     alpha: Alpha,
     n0_candidates: tuple[SampleCount, ...],
 ) -> NonNegativeInt:
+    """Grid-search shrinkage strength over candidates."""
     if not n0_candidates:
         raise ValueError("Shrinkage tuning requires at least one candidate n0")
     best_n0 = n0_candidates[0]
@@ -247,6 +254,7 @@ def tune_shrinkage(
 
 
 def shrinkage(client: BenignPolicyEvidence, alpha: Alpha, n0: NonNegativeInt) -> Threshold:
+    """Shrinkage threshold comparator."""
     local = empirical_quantile(client.calibration_scores, alpha)
     n_calibration = len(client.calibration_scores)
     weight = n_calibration / (n_calibration + n0)
@@ -254,13 +262,17 @@ def shrinkage(client: BenignPolicyEvidence, alpha: Alpha, n0: NonNegativeInt) ->
 
 
 def three_sigma(clients: tuple[BenignPolicyEvidence, ...]) -> Threshold:
+    """Three-sigma threshold comparator."""
     pooled = np.concatenate(tuple(client.full_policy_budget for client in clients))
     mean = float(np.mean(pooled))
     population_std = float(np.sqrt(np.mean((pooled - mean) ** 2)))
     return mean + 3.0 * population_std
 
 
-def f1_at_threshold(client: SupervisedDevelopmentEvidence, threshold: Threshold) -> float:
+def f1_at_threshold(
+    client: SupervisedDevelopmentEvidence, threshold: Threshold
+) -> Metric:
+    """F1 of one development evidence pair at a threshold."""
     value = f1(confusion_matrix(client.scores, client.labels, threshold))
     return -1.0 if value is None else value
 
@@ -270,6 +282,7 @@ def dev_local_global(
     global_threshold: Threshold,
     local_threshold: Threshold,
 ) -> Threshold:
+    """Best-of development F1 comparator."""
     global_score = f1_at_threshold(client, global_threshold)
     local_score = f1_at_threshold(client, local_threshold)
     return local_threshold if local_score > global_score else global_threshold
@@ -277,7 +290,8 @@ def dev_local_global(
 
 def mean_client_f1_at_threshold(
     clients: tuple[SupervisedDevelopmentEvidence, ...], threshold: Threshold
-) -> float:
+) -> Metric:
+    """Mean F1 across development clients at a threshold."""
     return float(np.mean([f1_at_threshold(client, threshold) for client in clients]))
 
 
@@ -310,6 +324,7 @@ def summary_statistic_threshold(
     clients: tuple[SupervisedDevelopmentEvidence, ...],
     candidate_count: CandidateCount,
 ) -> Threshold | None:
+    """Summary-statistic supervised comparator."""
     if candidate_count <= 0:
         raise ValueError("candidate_count must be positive")
     benign = _pooled_moments(clients, SupervisedClassLabel.BENIGN)
@@ -330,6 +345,7 @@ def supervised_global_f1(
     clients: tuple[SupervisedDevelopmentEvidence, ...],
     candidate_count: CandidateCount,
 ) -> Threshold:
+    """Supervised global F1 comparator."""
     if candidate_count <= 0:
         raise ValueError("candidate_count must be positive")
     minimum = min(float(np.min(client.scores)) for client in clients)
@@ -345,6 +361,7 @@ def oracle_choice(
     candidates: tuple[Threshold, Threshold, Threshold],
     band: OperatingBand,
 ) -> Threshold:
+    """Oracle threshold choice from final-test evidence."""
     ranked: list[tuple[float, float, int, float]] = []
     benign_labels = np.zeros(len(client.benign_test_scores), dtype=np.int64)
     attack_labels = np.ones(len(client.attack_test_scores), dtype=np.int64)
@@ -368,6 +385,7 @@ SUPERVISED_POLICIES = frozenset(
 
 
 def information_regime(policy_id: PolicyId) -> InformationRegime:
+    """Information regime of one policy."""
     if policy_id is PolicyId.ORACLE_TEST:
         return InformationRegime.FINAL_TEST_ORACLE
     if policy_id in SUPERVISED_POLICIES:
@@ -376,6 +394,7 @@ def information_regime(policy_id: PolicyId) -> InformationRegime:
 
 
 def is_deployable(policy_id: PolicyId) -> bool:
+    """Whether one policy may deploy client thresholds."""
     return policy_id not in SUPERVISED_POLICIES and policy_id is not PolicyId.ORACLE_TEST
 
 

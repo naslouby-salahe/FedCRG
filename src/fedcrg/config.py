@@ -351,7 +351,8 @@ class DatasetConfig(BaseModel):
                 raise ValueError("Synthetic experiments must use the synthetic feature contract")
         return self
 
-class DatasetRegistry(RootModel[dict[DatasetId, DatasetConfig]]):
+class DatasetCatalogue(RootModel[dict[DatasetId, DatasetConfig]]):
+    """Frozen dataset-contract registry keyed by dataset identity."""
     """All dataset contracts, keyed by dataset id."""
 
     @field_validator("root", mode="before")
@@ -408,6 +409,7 @@ class ParameterAxis(BaseModel):
         return self
 
 class ParameterSetting(BaseModel):
+    """One locked axis value in an experiment cell."""
     model_config = ConfigDict(frozen=True)
 
     axis: ExperimentAxisId
@@ -448,6 +450,7 @@ class ParameterCell(BaseModel):
         raise KeyError(axis.value)
 
 class WorkloadExpectation(BaseModel):
+    """Locked workload ledger for one experiment."""
     model_config = ConfigDict(frozen=True)
 
     monte_carlo_trials: NonNegativeCount = 0
@@ -649,6 +652,7 @@ class ExperimentConfig(BaseModel):
         )
 
 def load_yaml_mapping(path: Path) -> object:
+    """Load one configuration document before validation."""
     try:
         raw: object = yaml.safe_load(path.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
@@ -660,18 +664,25 @@ def load_yaml_mapping(path: Path) -> object:
     return raw
 
 def load_study(path: Path = Path("config/study.yaml")) -> StudyConfig:
+    """Load and validate the study configuration."""
     return StudyConfig.model_validate(load_yaml_mapping(path))
 
-def load_dataset_registry(path: Path = Path("config/datasets.yaml")) -> DatasetRegistry:
+def load_dataset_registry(
+    path: Path = Path("config/datasets.yaml")
+) -> DatasetCatalogue:
+    """Load and validate the dataset contract registry."""
     root = load_yaml_mapping(path)
     if not isinstance(root, dict):
         raise ConfigurationError("datasets.yaml root must be a mapping")
     datasets = root.get("datasets")
     if not isinstance(datasets, dict):
         raise ConfigurationError("datasets.yaml must contain a 'datasets' mapping")
-    return DatasetRegistry.model_validate(datasets)
+    return DatasetCatalogue.model_validate(datasets)
 
-def load_experiment_catalogue(path: Path = Path("config/experiments.yaml")) -> ExperimentCatalogue:
+def load_experiment_catalogue(
+    path: Path = Path("config/experiments.yaml")
+) -> ExperimentCatalogue:
+    """Load and validate the experiment catalogue."""
     root = load_yaml_mapping(path)
     if not isinstance(root, dict):
         raise ConfigurationError("experiments.yaml root must be a mapping")
@@ -683,7 +694,7 @@ def load_experiment_catalogue(path: Path = Path("config/experiments.yaml")) -> E
 def resolve_experiment_config(
     spec: ExperimentSpec,
     study: StudyConfig,
-    datasets: DatasetRegistry,
+    datasets: DatasetCatalogue,
     *,
     dataset_id: DatasetId | None = None,
 ) -> ExperimentConfig:
@@ -718,7 +729,7 @@ class Study:
     def __init__(
         self,
         study_config: StudyConfig,
-        datasets: DatasetRegistry,
+        datasets: DatasetCatalogue,
         catalogue: ExperimentCatalogue,
     ) -> None:
         self.study_config = study_config

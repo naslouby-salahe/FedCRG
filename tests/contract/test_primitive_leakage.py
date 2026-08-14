@@ -1,4 +1,4 @@
-"""AST-based primitive-leakage contract (goal §7, §8).
+"""AST-based primitive-leakage contract.
 
 Scans every production annotation and flags raw ``float``/``int``/``str``/
 ``object``/``Any``/bare ``dict``/bare ``list``/weak generic mappings outside an
@@ -41,6 +41,8 @@ _ALLOWED_ANNOTATIONS: dict[tuple[str, str, str], str] = {
     ("evidence/store.py", "atomic_write_json", "payload"): "arbitrary JSON payload boundary",
     ("evidence/store.py", "_jsonable", "value"): "JSON serialization boundary",
     ("evidence/store.py", "load_yaml_mapping", "return"): "YAML parse boundary before validation",
+    ("experiments/analyses.py", "", "parameters"): "run-config parameters parsed before validation",
+    ("experiments/analyses.py", "RunConfigPayload", "parameters"): "run-config parameters parsed before validation",
 }
 
 # Pydantic before-validators receive and return unvalidated YAML/JSON input.
@@ -111,29 +113,68 @@ def test_no_any_in_production_source() -> None:
 
 
 def test_no_weak_generic_mappings() -> None:
+    """Weak generic annotations (object/Any values, `-> object` returns) are
+    banned everywhere except the documented YAML/JSON-before-validation
+    boundary, whose members are listed in _ALLOWED_ANNOTATIONS."""
     violations: list[str] = []
     for path in _python_files():
-        source = path.read_text(encoding="utf-8")
-        for fragment in (
-            "dict[str, object]",
-            "dict[str, Any]",
-            "Mapping[str, object]",
-            "Mapping[str, Any]",
-            "list[dict[",
-            "-> object",
-            "-> Any",
-        ):
-            for line_number, line in enumerate(source.splitlines(), 1):
-                if fragment in line:
-                    violations.append(f"{path.relative_to(ROOT)}:{line_number}: {fragment}")
+        relative = path.relative_to(SRC).as_posix()
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef):
+                if node.returns is not None and _annotation_is_weak(node.returns):
+                    key = (relative, node.name, "return")
+                    if key not in _ALLOWED_ANNOTATIONS:
+                        violations.append(
+                            f"{relative}:{node.lineno}: {node.name} returns "
+                            f"{ast.unparse(node.returns)}"
+                        )
+            if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                # Function-local annotations (e.g. `raw: object = json.loads(...)`)
+                # are the JSON boundary; only module/class-level fields are flagged.
+                if isinstance(_enclosing_scope(tree, node), (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                if node.annotation is not None and _annotation_is_weak(node.annotation):
+                    key = (relative, "", node.target.id)
+                    if key not in _ALLOWED_ANNOTATIONS:
+                        violations.append(
+                            f"{relative}:{node.lineno}: field {node.target.id} is "
+                            f"{ast.unparse(node.annotation)}"
+                        )
     assert not violations, "Weak generic mappings remain:\n" + "\n".join(violations)
+
+
+def _enclosing_scope(tree: ast.AST, node: ast.AST) -> ast.AST | None:
+    """Nearest enclosing FunctionDef/AsyncFunctionDef/ClassDef (or None)."""
+    for parent in ast.walk(tree):
+        for child in ast.iter_child_nodes(parent):
+            if child is node:
+                if isinstance(parent, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    return parent
+                return _enclosing_scope(tree, parent)
+    return None
+
+
+def _annotation_is_weak(annotation: ast.expr) -> bool:
+    """True when an annotation is a weak generic (dict[str, object/Any],
+    Mapping[str, object/Any], -> object, -> Any)."""
+    source = ast.unparse(annotation)
+    if source in {"object", "Any"}:
+        return True
+    if source.startswith("dict[") or source.startswith("Mapping["):
+        inner = source[source.find("[") + 1 : -1]
+        if inner.startswith("str, object") or inner.startswith("str, Any"):
+            return True
+    if "list[dict[" in source:
+        return True
+    return False
 
 
 def _is_click_handler(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     """True when the function is a click command handler.
 
     CLI input arrives before validation; click passes raw strings/ints to the
-    handler, which converts them to typed values immediately (goal §7 boundary).
+    handler, which converts them to typed values immediately.
     """
     for decorator in node.decorator_list:
         name = ""

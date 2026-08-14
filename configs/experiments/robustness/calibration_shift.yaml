@@ -1,2 +1,0 @@
-extends: ../synthetic/readiness_theorem.yaml
-id: calibration_shift

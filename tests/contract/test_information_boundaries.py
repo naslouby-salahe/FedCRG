@@ -1,8 +1,7 @@
-from dataclasses import fields
 import inspect
 
-from fedcrg.decision.client_evaluation import ClientEvaluation
-from fedcrg.decision.evidence import BenignPolicyEvidence
+from fedcrg.thresholding.metrics import ClientEvaluation
+from fedcrg.thresholding.policies import BenignPolicyEvidence
 
 
 def test_protocol_evaluation_has_no_attack_or_label_argument() -> None:
@@ -12,8 +11,9 @@ def test_protocol_evaluation_has_no_attack_or_label_argument() -> None:
 
 
 def test_benign_policy_evidence_cannot_carry_attack_arrays() -> None:
-    names = {field.name for field in fields(BenignPolicyEvidence)}
-    assert names == {
+    parameters = inspect.signature(BenignPolicyEvidence.__init__).parameters
+    assert set(parameters) == {
+        "self",
         "client_id",
         "reference_scores",
         "mismatch_scores",

@@ -19,6 +19,7 @@ from fedcrg.types import ByteCount, Dimension, ParameterCount, PositiveCount, Sh
 
 
 class DetectorModel(torch.nn.Module, ABC):
+    """Common detector contract: anomaly scores and state hashing."""
     @abstractmethod
     def anomaly_score(self, batch: torch.Tensor) -> torch.Tensor: ...
 
@@ -46,6 +47,7 @@ class DetectorModel(torch.nn.Module, ABC):
 
 
 def activation_module(activation: ActivationId) -> type[torch.nn.Module]:
+    """Resolve one activation module by identifier."""
     if activation is ActivationId.TANH:
         return torch.nn.Tanh
     raise ValueError(f"Unsupported activation: {activation.value}")
@@ -110,6 +112,7 @@ class Autoencoder(DetectorModel):
 
 
 class DeepSvdd(DetectorModel):
+    """Deep-SVDD detector with frozen equal-mean center."""
     center: torch.Tensor
 
     def __init__(self, input_dim: Dimension, config: DeepSvddConfig) -> None:
@@ -148,6 +151,7 @@ class DeepSvdd(DetectorModel):
 
 
 def create_detector(input_dim: Dimension, config: DetectorConfig) -> DetectorModel:
+    """Construct the detector declared by one configuration."""
     if isinstance(config, AutoencoderConfig):
         return Autoencoder(input_dim, config)
     if isinstance(config, DeepSvddConfig):

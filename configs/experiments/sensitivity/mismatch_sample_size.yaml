@@ -1,2 +1,0 @@
-extends: ../primary/nbaiot.yaml
-id: mismatch_sample_size

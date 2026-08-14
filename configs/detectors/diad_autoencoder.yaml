@@ -1,5 +1,0 @@
-id: autoencoder
-hidden_dims: [64, 43, 28, 21]
-activation: tanh
-xavier_tanh_gain: 1.6666666666666667
-zero_bias: true

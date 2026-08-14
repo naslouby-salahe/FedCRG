@@ -29,8 +29,9 @@ from fedcrg.evidence.models import (
 from fedcrg.evidence.store import (
     ArtifactVerifier,
     CacheReferenceStore,
+    OutputsLayout,
     PreparedDatasetManifestStore,
-    RunIdentityFactory,
+    build_run_id,
     RunLayout,
     RunManifestStore,
     TrainingManifestStore,
@@ -85,20 +86,34 @@ from fedcrg.types import (
     CalibrationAssignmentMode,
     CalibrationSeed,
     CampaignId,
+    CampaignStage,
     ClientId,
     DataRole,
     ExperimentId,
     ExperimentStatus,
     FailureCode,
+    FeatureName,
+    Identifier,
     ModelSeed,
     PolicyId,
     PositiveCount,
+    PreparedColumn,
     RunId,
     Sha256,
+    Timestamp,
+    Duration,
 )
 
 Frozen = ConfigDict(frozen=True)
 _LOGGER = get_logger(__name__)
+
+
+class PreflightReport(BaseModel):
+    """Outcome of the research preflight audit."""
+    model_config = Frozen
+
+    valid: bool
+    problems: tuple[Identifier, ...]
 
 
 def _tensor_sha256(tensor: torch.Tensor) -> Sha256:
@@ -110,6 +125,7 @@ def _tensor_sha256(tensor: torch.Tensor) -> Sha256:
 
 
 class ExperimentPlan(BaseModel):
+    """One validated execution plan for a policy cell."""
     model_config = Frozen
 
     definition: ExperimentSpec
@@ -136,6 +152,7 @@ _ALLOWED_TRANSITIONS: dict[ExperimentStatus, tuple[ExperimentStatus, ...]] = {
 
 
 def assert_transition(current: ExperimentStatus, target: ExperimentStatus) -> None:
+    """Reject a lifecycle transition outside the locked table."""
     if target not in _ALLOWED_TRANSITIONS[current]:
         raise ValueError(f"Invalid experiment transition: {current.value} -> {target.value}")
 
@@ -278,7 +295,7 @@ class RunExperiment:
         if policy not in config.policies:
             raise ValueError(f"Policy {policy.value} is not configured for this experiment")
         plan = self.planner.create(experiment_id, config, model_seed, calibration_seed)
-        run_id = RunIdentityFactory.for_policy_cell(config, model_seed, calibration_seed, policy)
+        run_id = build_run_id(config, model_seed, calibration_seed, policy)
         layout = RunLayout.for_run(config.outputs_root, run_id)
         layout.create()
         self.manifests.save(
@@ -321,9 +338,9 @@ class RunExperiment:
         model_seed: ModelSeed,
         calibration_seed: CalibrationSeed,
         policy: PolicyId,
-        runner: Callable[[ExperimentPlan, RunLayout], object],
+        runner: Callable[[ExperimentPlan, RunLayout], FederationMetrics | None],
         repository_root: Path,
-    ) -> tuple[object, RunLayout]:
+    ) -> tuple[FederationMetrics | None, RunLayout]:
         plan, layout = self.prepare(
             experiment_id,
             config,
@@ -349,16 +366,11 @@ class RunExperiment:
         return result, layout
 
 
-def feature_columns(frame: pd.DataFrame, expected_count: int) -> tuple[str, ...]:
-    metadata = {
-        "row_id",
-        "role",
-        "label",
-        "attack_group",
-        "source_file",
-        "source_row_index",
-        "capture_time",
-    }
+def feature_columns(
+    frame: pd.DataFrame, expected_count: PositiveCount
+) -> tuple[FeatureName, ...]:
+    """Resolve model-feature columns of a prepared frame."""
+    metadata = {column.value for column in PreparedColumn}
     columns = tuple(
         column
         for column in frame.columns
@@ -459,15 +471,7 @@ class TrainDetector:
 
         if config.detector is None:
             raise ValueError("Training requires a detector profile")
-        model_root = (
-            config.outputs_root
-            / "cache"
-            / "models"
-            / config.dataset.id.value
-            / config.detector.id.value
-            / f"m{int(model_seed)}"
-            / config.training_spec_hash[:16]
-        )
+        model_root = OutputsLayout(config.outputs_root).model_root(config, model_seed)
         model_path = model_root / "model.pt"
         manifest_path = model_root / "training.json"
         if model_path.exists() or manifest_path.exists():
@@ -618,15 +622,7 @@ class ComputeScores:
         )
         if config.detector is None:
             raise ValueError("Scoring requires a detector profile")
-        score_root = (
-            config.outputs_root
-            / "cache"
-            / "scores"
-            / config.dataset.id.value
-            / config.detector.id.value
-            / f"m{int(model_seed)}"
-            / config.training_spec_hash[:16]
-        )
+        score_root = OutputsLayout(config.outputs_root).score_root(config, model_seed)
         if score_root.exists():
             descriptor = self.cache.load_descriptor(score_root)
             if descriptor.identity != identity:
@@ -647,8 +643,11 @@ class ComputeScores:
                 values = frame[
                     [column for column in frame.columns if column not in _METADATA_COLUMNS]
                 ].to_numpy(dtype=np.float64)
-                if role is DataRole.ATTACK_TEST and "attack_group" in frame.columns:
-                    groups = tuple(str(value) for value in frame["attack_group"].astype(str))
+                if role is DataRole.ATTACK_TEST and PreparedColumn.ATTACK_GROUP.value in frame.columns:
+                    groups = tuple(
+                        str(value)
+                        for value in frame[PreparedColumn.ATTACK_GROUP.value].astype(str)
+                    )
                 else:
                     groups = ()
                 role_inputs.append((role, values, groups))
@@ -664,7 +663,9 @@ class ComputeScores:
             scored = tuple(
             RoleScores(
                 role=role,
-                values=self.computer.compute(model, values, training.device),
+                values=self.computer.compute(
+                    model, values, training.device, training.batch_size
+                ),
                     client_id=client_id,
                     row_ids=tuple(f"{client_id}:{role.value}:{i}" for i in range(len(values))),
                     attack_groups=groups if groups else None,
@@ -687,15 +688,7 @@ class ComputeScores:
         return score_root
 
 
-_METADATA_COLUMNS = {
-    "row_id",
-    "role",
-    "label",
-    "attack_group",
-    "source_file",
-    "source_row_index",
-    "capture_time",
-}
+_METADATA_COLUMNS = {column.value for column in PreparedColumn}
 
 _BASE_SCORE_ROLES = (
     DataRole.TRAIN,
@@ -858,7 +851,7 @@ class EvaluatePolicies:
                     ),
                     fpr_reference_interval=clopper_pearson_interval(
                         BinomialCounts(cm.fp, cm.fp + cm.tn),
-                        0.95,
+                        config.protocol.mismatch_confidence,
                     ),
                 )
                 evaluations.append(
@@ -1034,6 +1027,7 @@ class EvaluatePolicies:
 
 
 class FrozenCacheInputs:
+    """Frozen upstream cache paths for one model seed."""
     def __init__(
         self,
         prepared_root: Path,
@@ -1212,12 +1206,14 @@ class PolicyCellMaterializer:
 
 
 class PolicyRunDirectory:
+    """One policy run directory within a federation cell."""
     def __init__(self, policy: PolicyId, path: Path) -> None:
         self.policy = policy
         self.path = path
 
 
 class FederationCellResult(BaseModel):
+    """Run directories produced for one federation cell."""
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     experiment_id: ExperimentId
@@ -1304,6 +1300,7 @@ class FederationCellMaterializer:
 
 
 class FrozenModelEvidence(BaseModel):
+    """Frozen model and score cache evidence for one seed."""
     model_config = Frozen
 
     model_seed: ModelSeed
@@ -1313,6 +1310,7 @@ class FrozenModelEvidence(BaseModel):
 
 
 class WorkloadExecution(BaseModel):
+    """Executed model evidence and run directories for one experiment."""
     model_config = Frozen
 
     experiment_id: ExperimentId
@@ -1321,9 +1319,10 @@ class WorkloadExecution(BaseModel):
 
 
 class ResearchExecution(BaseModel):
+    """Preflight report and executed workload."""
     model_config = Frozen
 
-    preflight: object
+    preflight: PreflightReport
     workload: WorkloadExecution
 
 
@@ -1411,16 +1410,17 @@ class _CampaignOutcomeRow(BaseModel):
     model_config = Frozen
 
     experiment_id: ExperimentId
-    status: str
-    problem: str | None = None
-    finished_at: str | None = None
+    status: ExperimentStatus
+    problem: Identifier | None = None
+    finished_at: Timestamp | None = None
 
     @property
     def failed(self) -> bool:
-        return self.status == "failed"
+        return self.status is ExperimentStatus.FAILED
 
 
 class CampaignWorkItem(BaseModel):
+    """One ordered campaign work item."""
     model_config = Frozen
 
     experiment_id: ExperimentId
@@ -1429,47 +1429,52 @@ class CampaignWorkItem(BaseModel):
 
 
 class CampaignStatus(BaseModel):
+    """Persistent restart-safe campaign status snapshot."""
     model_config = ConfigDict(frozen=True)
 
     campaign_id: CampaignId
-    created_at: str
-    updated_at: str
+    created_at: Timestamp
+    updated_at: Timestamp
     current_experiment: ExperimentId | None = None
-    current_stage: str | None = None
+    current_stage: CampaignStage | None = None
     experiments: tuple[_CampaignOutcomeRow, ...] = ()
-    results_path: str | None = None
-    elapsed_seconds: float = 0.0
+    results_path: Identifier | None = None
+    elapsed_seconds: Duration = 0.0
 
     @property
-    def completed_experiments(self) -> tuple[str, ...]:
+    def completed_experiments(self) -> tuple[ExperimentId, ...]:
         return tuple(
-            item.experiment_id.value
+            item.experiment_id
             for item in self.experiments
-            if item.status == "complete"
+            if item.status is ExperimentStatus.COMPLETE
         )
 
     @property
-    def pending_experiments(self) -> tuple[str, ...]:
+    def pending_experiments(self) -> tuple[ExperimentId, ...]:
         return tuple(
-            item.experiment_id.value
+            item.experiment_id
             for item in self.experiments
-            if item.status == "pending"
+            if item.status is ExperimentStatus.PENDING
         )
 
     @property
-    def failed_experiments(self) -> tuple[str, ...]:
+    def failed_experiments(self) -> tuple[ExperimentId, ...]:
         return tuple(
-            item.experiment_id.value
+            item.experiment_id
             for item in self.experiments
-            if item.status == "failed"
+            if item.status is ExperimentStatus.FAILED
         )
 
 
 class CampaignStatusStore:
     """Persist campaign status as an atomically written JSON snapshot."""
 
-    def __init__(self, campaigns_root: Path | None = None) -> None:
-        self.campaigns_root = campaigns_root or Path("outputs/campaigns")
+    def __init__(
+        self,
+        campaigns_root: Path | None = None,
+        outputs_root: Path = Path("outputs"),
+    ) -> None:
+        self.campaigns_root = campaigns_root or OutputsLayout(outputs_root).campaigns
 
     def path_for(self, campaign_id: CampaignId) -> Path:
         value = str(campaign_id)
@@ -1518,11 +1523,11 @@ class CampaignExecutor:
         except FileNotFoundError:
             status = CampaignStatus(campaign_id=campaign_id, created_at=now, updated_at=now)
 
-        completed: set[str] = set(status.completed_experiments)
+        completed: set[ExperimentId] = set(status.completed_experiments)
         rows: list[_CampaignOutcomeRow] = list(status.experiments)
         started = time.monotonic()
         for item in work_items:
-            if item.experiment_id.value in completed:
+            if item.experiment_id in completed:
                 continue
             config = self.study.resolve(item.experiment_id)
             prepared_root = item.prepared_root
@@ -1531,7 +1536,7 @@ class CampaignExecutor:
                 created_at=now,
                 updated_at=datetime.now(UTC).isoformat(),
                 current_experiment=item.experiment_id,
-                current_stage="running",
+                current_stage=CampaignStage.RUNNING,
                 experiments=tuple(rows),
                 elapsed_seconds=time.monotonic() - started,
             )
@@ -1550,7 +1555,9 @@ class CampaignExecutor:
             created_at=now,
             updated_at=datetime.now(UTC).isoformat(),
             current_experiment=None,
-            current_stage="done" if not any(r.failed for r in rows) else "failed",
+            current_stage=(
+                CampaignStage.DONE if not any(r.failed for r in rows) else CampaignStage.FAILED
+            ),
             experiments=tuple(rows),
             elapsed_seconds=time.monotonic() - started,
         )
@@ -1558,13 +1565,22 @@ class CampaignExecutor:
         return final_status
 
 
-def _completed_row(experiment_id: ExperimentId, finished_at: str) -> _CampaignOutcomeRow:
+def _completed_row(
+    experiment_id: ExperimentId, finished_at: Timestamp
+) -> _CampaignOutcomeRow:
     return _CampaignOutcomeRow(
-        experiment_id=experiment_id, status="complete", finished_at=finished_at
+        experiment_id=experiment_id,
+        status=ExperimentStatus.COMPLETE,
+        finished_at=finished_at,
     )
 
 
-def _failed_row(experiment_id: ExperimentId, problem: str, finished_at: str) -> _CampaignOutcomeRow:
+def _failed_row(
+    experiment_id: ExperimentId, problem: Identifier, finished_at: Timestamp
+) -> _CampaignOutcomeRow:
     return _CampaignOutcomeRow(
-        experiment_id=experiment_id, status="failed", problem=problem, finished_at=finished_at
+        experiment_id=experiment_id,
+        status=ExperimentStatus.FAILED,
+        problem=problem,
+        finished_at=finished_at,
     )

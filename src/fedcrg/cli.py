@@ -22,7 +22,12 @@ import scipy
 import torch
 
 from fedcrg.config import ExperimentConfig, Study, validate_experiment_config
-from fedcrg.evidence.store import atomic_write_json, capture_environment, sha256_file
+from fedcrg.evidence.store import (
+    OutputsLayout,
+    atomic_write_json,
+    capture_environment,
+    sha256_file,
+)
 from fedcrg.runtime import (
     ResourceMonitor,
     configure_logging,
@@ -32,6 +37,7 @@ from fedcrg.runtime import (
     write_telemetry,
 )
 from fedcrg.thresholding.readiness import (
+    ReadinessPlan,
     ReadinessPlanBuilder,
     ReadinessPlanCache,
     familywise_readiness_assurance,
@@ -44,7 +50,6 @@ from fedcrg.types import (
     ExperimentId,
     ExperimentType,
     Identifier,
-    JsonValue,
     ModelSeed,
     NonNegativeCount,
     PositiveCount,
@@ -60,6 +65,8 @@ _CAMPAIGN_ID = TypeAdapter(CampaignId)
 
 
 class DoctorPayload(TypedDict):
+    """Runtime and CUDA pin printed by the doctor command."""
+
     python: Version
     numpy: Version
     scipy: Version
@@ -71,6 +78,8 @@ class DoctorPayload(TypedDict):
 
 
 class ValidationPayload(TypedDict):
+    """Typed result of the experiment validate command."""
+
     valid: bool
     experiment: ExperimentId
     type: ExperimentType
@@ -79,6 +88,8 @@ class ValidationPayload(TypedDict):
 
 
 class PlanPayload(TypedDict):
+    """Typed result of the experiment plan command."""
+
     experiment: ExperimentId
     config_hash: Sha256
     model_seed: ModelSeed | None
@@ -87,6 +98,8 @@ class PlanPayload(TypedDict):
 
 
 class RunSummaryPayload(TypedDict):
+    """Typed summary of one executed model workload."""
+
     experiment: ExperimentId
     model_seed: ModelSeed
     calibration_seed: CalibrationSeed
@@ -96,6 +109,8 @@ class RunSummaryPayload(TypedDict):
 
 
 class PreparedEntry(TypedDict):
+    """One prepared-cache status row."""
+
     dataset: DatasetId
     identity: Identifier
     prepared: bool
@@ -103,10 +118,14 @@ class PreparedEntry(TypedDict):
 
 
 class PreparedStatusPayload(TypedDict):
+    """Status of every dataset in the prepared cache."""
+
     prepared: tuple[PreparedEntry, ...]
 
 
 class CampaignStatusPayload(TypedDict):
+    """Typed campaign status printed by the campaign status command."""
+
     campaign_id: CampaignId
     status: Identifier
     completed: NonNegativeCount
@@ -116,6 +135,7 @@ class CampaignStatusPayload(TypedDict):
 
 
 class FreezePayload(TypedDict):
+    """Environment freeze pin printed by the freeze command."""
     path: Identifier
     sha256: Sha256
     git_commit: Identifier
@@ -123,21 +143,25 @@ class FreezePayload(TypedDict):
 
 
 class PublicationPayload(TypedDict):
+    """Publication build summary printed by the report command."""
     manifest: Identifier
     complete: bool
 
 
 class ResultsBuildPayload(TypedDict):
+    """Results bundle build summary."""
     results_path: Identifier
 
 
 class ResultsVerifyPayload(TypedDict):
+    """Results bundle verification summary."""
     valid: bool
     problems: tuple[Identifier, ...]
 
 
 class ReadinessTablePayload(TypedDict):
-    plans: dict[Identifier, dict[Identifier, JsonValue]]
+    """Precomputed readiness-plan table payload."""
+    plans: tuple[ReadinessPlan, ...]
 
 
 class _ModelEvidence(Protocol):
@@ -175,7 +199,11 @@ class _CampaignStatus(Protocol):
 
 
 class _CampaignStatusStore(Protocol):
-    def __init__(self, root: Path) -> None: ...
+    def __init__(
+        self,
+        campaigns_root: Path | None = None,
+        outputs_root: Path = Path("outputs"),
+    ) -> None: ...
     def load(self, campaign_id: CampaignId) -> _CampaignStatus: ...
 
 
@@ -301,7 +329,7 @@ def _experiment_runner() -> _ExperimentRunner:
 
 def _campaign_module() -> _CampaignModule:
     try:
-        import fedcrg.experiments.campaign as campaign  # pyright: ignore[reportMissingImports]  # wired after runner lands
+        import fedcrg.experiments.runner as campaign  # pyright: ignore[reportMissingImports]
     except ImportError as exc:
         raise click.ClickException(
             "The campaign execution layer is not wired into this build yet."
@@ -423,7 +451,7 @@ def doctor() -> None:
 )
 def monitor_command(outputs: Path, interval: float, samples: int | None) -> None:
     """Stream CPU/RAM/GPU telemetry and persist it under outputs/monitoring/."""
-    telemetry_path = outputs / "monitoring" / "telemetry.jsonl"
+    telemetry_path = OutputsLayout(outputs).telemetry_file
     monitor = ResourceMonitor()
     if interval <= 0:
         raise click.BadParameter("--interval must be positive")
@@ -497,13 +525,14 @@ def run_experiment(
 @click.option(
     "--output",
     type=click.Path(path_type=Path),
-    default=Path("outputs/reports/latest/benchmark.json"),
+    default=None,
 )
-def benchmark_command(config_path: Path | None, output: Path) -> None:
+def benchmark_command(config_path: Path | None, output: Path | None) -> None:
     """Run the computational benchmark on synthetic evidence."""
     study = _load_study(config_path)
     config = study.resolve(ExperimentId.COMPUTATIONAL_BENCHMARK)
-    path = _benchmark_runner().run(config, output)
+    target = output or OutputsLayout(config.outputs_root).benchmark_report
+    path = _benchmark_runner().run(config, target)
     click.echo(str(path))
 
 
@@ -595,7 +624,7 @@ def preprocess_data(dataset_id: str, data_root: Path, config_path: Path | None) 
         experiment_id = _DATASET_EXPERIMENTS[dataset]
     except KeyError as exc:
         raise click.BadParameter(
-            f"Unknown raw dataset id {dataset_id!r}; expected one of "
+            f"Unknown raw dataset id {dataset_id!r}, expected one of "
             + ", ".join(sorted(item.value for item in _DATASET_EXPERIMENTS))
         ) from exc
     study = _load_study(config_path)
@@ -686,7 +715,7 @@ def environment_group() -> None:
 @click.option(
     "--output",
     type=click.Path(path_type=Path),
-    default=Path("outputs/environment.json"),
+    default=None,
     show_default=True,
 )
 @click.option(
@@ -695,12 +724,13 @@ def environment_group() -> None:
     default=Path("."),
     show_default=True,
 )
-def freeze_environment(output: Path, repository_root: Path) -> None:
+def freeze_environment(output: Path | None, repository_root: Path) -> None:
     """Write the repository and Python environment pin as a JSON document."""
     environment = capture_environment(repository_root)
-    atomic_write_json(output, environment)
+    target = output or OutputsLayout().environment_file
+    atomic_write_json(target, environment)
     payload = FreezePayload(
-        path=str(output),
+        path=str(target),
         sha256=environment.environment_pin_sha256,
         git_commit=environment.git_commit,
         git_clean=environment.git_clean,
@@ -720,10 +750,10 @@ def tables_group() -> None:
 @click.option(
     "--output",
     type=click.Path(path_type=Path),
-    default=Path("outputs/cache/analysis/readiness_plans.json"),
+    default=None,
     show_default=True,
 )
-def precompute_readiness(config_path: Path | None, output: Path) -> None:
+def precompute_readiness(config_path: Path | None, output: Path | None) -> None:
     """Precompute the per-dataset readiness plan table from protocol constants."""
     study = _load_study(config_path)
     protocol = study.study_config.protocol
@@ -739,13 +769,14 @@ def precompute_readiness(config_path: Path | None, output: Path) -> None:
             continue
         assurance = familywise_readiness_assurance(client_count, familywise_alpha)
         cache.precompute(dataset.split.calibration_benign, protocol.band, assurance)
-    payload = ReadinessTablePayload(plans=cache.plan_payloads())
-    if output.is_file():
-        render_cache_status("readiness", hit=True, target=str(output))
+    target = output or OutputsLayout().readiness_plans_file
+    payload = ReadinessTablePayload(plans=cache.plans())
+    if target.is_file():
+        render_cache_status("readiness", hit=True, target=str(target))
         return
-    atomic_write_json(output, payload)
-    render_cache_status("readiness", hit=False, target=str(output), detail="plans written")
-    click.echo(str(output))
+    atomic_write_json(target, payload)
+    render_cache_status("readiness", hit=False, target=str(target), detail="plans written")
+    click.echo(str(target))
 
 
 @click.group(name="analysis")
@@ -1012,7 +1043,9 @@ def campaign_run(
 def campaign_status(campaign_id: str, outputs: Path) -> None:
     """Show persistent status for one campaign."""
     typed_campaign_id = _CAMPAIGN_ID.validate_python(campaign_id)
-    status = _campaign_module().CampaignStatusStore(outputs / "campaigns").load(typed_campaign_id)
+    status = _campaign_module().CampaignStatusStore(
+        outputs_root=outputs
+    ).load(typed_campaign_id)
     payload = CampaignStatusPayload(
         campaign_id=typed_campaign_id,
         status=status.status,
@@ -1032,7 +1065,9 @@ def campaign_status(campaign_id: str, outputs: Path) -> None:
 def campaign_report(campaign_id: str, outputs: Path) -> None:
     """Render a status table for one campaign."""
     typed_campaign_id = _CAMPAIGN_ID.validate_python(campaign_id)
-    status = _campaign_module().CampaignStatusStore(outputs / "campaigns").load(typed_campaign_id)
+    status = _campaign_module().CampaignStatusStore(
+        outputs_root=outputs
+    ).load(typed_campaign_id)
     render_campaign_status(
         typed_campaign_id,
         status.status,
@@ -1047,7 +1082,7 @@ def campaign_report(campaign_id: str, outputs: Path) -> None:
 @click.option("--outputs", type=click.Path(path_type=Path), default=Path("outputs"))
 def campaign_list(outputs: Path) -> None:
     """List recorded campaign ids."""
-    campaigns_root = outputs / "campaigns"
+    campaigns_root = OutputsLayout(outputs).campaigns
     ids = (
         sorted(path.stem for path in campaigns_root.glob("*.json"))
         if campaigns_root.is_dir()

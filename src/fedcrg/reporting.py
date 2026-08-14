@@ -8,6 +8,8 @@ no model is retrained, and missing evidence remains explicitly incomplete.
 from __future__ import annotations
 
 import json
+
+import pydantic
 from collections.abc import Callable
 from pathlib import Path
 
@@ -18,6 +20,7 @@ from fedcrg.config import ExperimentConfig, Study
 from fedcrg.evidence.models import RunManifest
 from fedcrg.evidence.store import (
     ArtifactVerifier,
+    OutputsLayout,
     RunLayout,
     atomic_write_json,
     load_json_model,
@@ -29,34 +32,63 @@ from fedcrg.experiments.analyses import (
     split_sensitivity,
 )
 from fedcrg.runtime import get_logger
-from fedcrg.types import (
-    CampaignId,
-    ExperimentId,
-    Identifier,
-    JsonValue,
-    PolicyId,
-    Sha256,
+from fedcrg.thresholding.metrics import FederationMetrics
+from fedcrg.evidence.models import (
+    ChecksumRecord,
+    GitEnvironment,
+    MetricRecord,
+    PreparedDatasetManifest,
+    RunManifest,
+    ThresholdRecord,
 )
+from fedcrg.types import (
+    Assurance,
+    CalibrationSeed,
+    CampaignId,
+    ClientId,
+    DataRole,
+    DecisionSource,
+    DecisionState,
+    Description,
+    DetectorId,
+    DatasetId,
+    ExperimentId,
+    FailureCode,
+    Fraction,
+    Identifier,
+    InformationRegime,
+    Metric,
+    ModelSeed,
+    NonNegativeCount,
+    PolicyId,
+    PositiveCount,
+    Probability,
+    ProtocolConstantValue,
+    PValue,
+    RunId,
+    Score,
+    Sha256,
+    Tpr,
+)
+from pydantic import BaseModel, ConfigDict
+
+Frozen = ConfigDict(frozen=True)
 
 _LOGGER = get_logger(__name__)
 
 
-def _read_json(path: Path) -> dict[Identifier, JsonValue]:
-    raw: object = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(raw, dict):
-        raise ValueError(f"Expected a JSON object: {path}")
-    return {str(key): value for key, value in raw.items()}
-
-
-def _manifest_value(run_dir: Path, key: str) -> JsonValue | None:
+def _run_manifest(run_dir: Path) -> RunManifest | None:
     manifest_path = run_dir / "manifest.json"
     if not manifest_path.is_file():
         return None
-    return _read_json(manifest_path).get(key)
+    try:
+        return RunManifest.model_validate_json(manifest_path.read_text(encoding="utf-8"))
+    except pydantic.ValidationError:
+        return None
 
 
 def _completed_runs(outputs_root: Path) -> tuple[Path, ...]:
-    runs_root = outputs_root / "runs"
+    runs_root = OutputsLayout(outputs_root).runs
     if not runs_root.exists():
         return ()
     rows: list[Path] = []
@@ -74,7 +106,7 @@ def _completed_runs(outputs_root: Path) -> tuple[Path, ...]:
     return tuple(rows)
 
 
-def _jsonl_count(path: Path) -> int:
+def _jsonl_count(path: Path) -> NonNegativeCount:
     if not path.is_file():
         return 0
     return sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line)
@@ -83,19 +115,21 @@ def _jsonl_count(path: Path) -> int:
 def build_run_report(run_dir: Path) -> Path:
     """Markdown summary of one immutable policy run."""
     layout = RunLayout(run_dir)
-    manifest = _read_json(layout.manifest)
+    manifest = RunManifest.model_validate_json(layout.manifest.read_text(encoding="utf-8"))
     verification = ArtifactVerifier().record(layout, _definition_for(manifest))
-    federation: dict[str, JsonValue] | None = None
+    federation: FederationMetrics | None = None
     if layout.federation_metrics.exists():
-        federation = _read_json(layout.federation_metrics)
+        federation = FederationMetrics.model_validate_json(
+            layout.federation_metrics.read_text(encoding="utf-8")
+        )
     client_count = _jsonl_count(layout.metric_records)
     lines = [
-        f"# FedCRG Run {manifest.get('run_id')}",
+        f"# FedCRG Run {manifest.run_id}",
         "",
-        f"- Experiment: `{manifest.get('experiment_id')}`",
-        f"- Policy: `{manifest.get('policy_id')}`",
-        f"- Status: `{manifest.get('status')}`",
-        f"- Config hash: `{manifest.get('config_hash')}`",
+        f"- Experiment: `{manifest.experiment_id.value}`",
+        f"- Policy: `{manifest.policy_id.value}`",
+        f"- Status: `{manifest.status.value}`",
+        f"- Config hash: `{manifest.config_hash}`",
         f"- Verified artifact hashes: `{verification.valid}`",
         f"- Evaluated clients: `{client_count}`",
     ]
@@ -105,13 +139,13 @@ def build_run_report(run_dir: Path) -> Path:
                 "",
                 "## Federation endpoints",
                 "",
-                f"- MEBE: `{federation.get('mebe')}`",
-                f"- HighExcess: `{federation.get('high_excess')}`",
-                f"- BandViolationRate: `{federation.get('band_violation_rate')}`",
-                f"- MAFE: `{federation.get('mafe')}`",
-                f"- ABMacroTPR: `{federation.get('attack_balanced_macro_tpr')}`",
-                f"- MacroTPR: `{federation.get('macro_tpr')}`",
-                f"- Worst-client TPR: `{federation.get('worst_client_tpr')}`",
+                f"- MEBE: `{federation.mebe}`",
+                f"- HighExcess: `{federation.high_excess}`",
+                f"- BandViolationRate: `{federation.band_violation_rate}`",
+                f"- MAFE: `{federation.mafe}`",
+                f"- ABMacroTPR: `{federation.attack_balanced_macro_tpr}`",
+                f"- MacroTPR: `{federation.macro_tpr}`",
+                f"- Worst-client TPR: `{federation.worst_client_tpr}`",
             ]
         )
     lines.extend(
@@ -132,12 +166,99 @@ def _definition_for(manifest: RunManifest):
     return Study.load().catalogue.spec(manifest.experiment_id)
 
 
+class LiteratureBoundaryRow(BaseModel):
+    """One literature-boundary table row."""
+    model_config = Frozen
+
+    policy_id: PolicyId
+    information_regime: InformationRegime
+
+
+class AdmissionStateRow(BaseModel):
+    """One admission-state table row."""
+    model_config = Frozen
+
+    run_id: RunId
+    policy_id: PolicyId
+    client_id: ClientId
+    tau_ref: Score | None
+    tau_local: Score | None
+    selected_tau: Score | None
+    readiness_n: PositiveCount
+    readiness_rank: PositiveCount
+    readiness_probability: Assurance
+    mismatch_n: PositiveCount
+    mismatch_x: NonNegativeCount
+    cp_lower: Probability
+    cp_upper: Probability
+    p_low: PValue | None
+    p_high: PValue | None
+    state: DecisionState
+    tie_count: NonNegativeCount
+    selected_source: DecisionSource
+    reason_code: FailureCode
+
+
+class ContrastTableRow(BaseModel):
+    """One contrast table row."""
+    model_config = Frozen
+
+    comparator: PolicyId
+    metric: Identifier
+    method_mean: Metric
+    comparator_mean: Metric
+    observed_difference: Metric
+    bootstrap_lower: Metric
+    bootstrap_upper: Metric
+    relative_difference: Metric | None
+
+
+class ProtocolConstantRow(BaseModel):
+    """One protocol-constant table row."""
+    model_config = Frozen
+
+    constant: Identifier
+    value: ProtocolConstantValue
+
+
+class DatasetInventoryRow(BaseModel):
+    """One dataset-inventory table row."""
+    model_config = Frozen
+
+    client_id: ClientId
+    feature_count: PositiveCount
+    role_counts: tuple[RoleCountRow, ...]
+
+
+class RoleCountRow(BaseModel):
+    """Role row-count and hash within a dataset row."""
+    model_config = Frozen
+
+    role: DataRole
+    rows: NonNegativeCount
+    row_id_sha256: Sha256
+
+
+class FederationResultsRow(BaseModel):
+    """One federation-results table row."""
+    model_config = Frozen
+
+    run_id: RunId
+    mebe: Metric
+    high_excess: Metric
+    band_violation_rate: Fraction
+    attack_balanced_macro_tpr: Tpr | None
+
+
 class PublicationTableBuilder:
     """Deterministic manuscript-table builders from frozen artifacts."""
 
     def literature_boundary(self, output: Path) -> Path:
-        rows = [
-            {"policy_id": policy.value, "information_regime": "benign_only"}
+        rows = tuple(
+            LiteratureBoundaryRow(
+                policy_id=policy,
+                information_regime=InformationRegime.BENIGN_ONLY,
+            )
             for policy in (
                 PolicyId.REFERENCE_QUANTILE,
                 PolicyId.GLOBAL_QUANTILE,
@@ -146,15 +267,21 @@ class PublicationTableBuilder:
                 PolicyId.THREE_SIGMA,
                 PolicyId.FEDCRG,
             )
-        ] + [
-            {"policy_id": policy.value, "information_regime": "supervised_development"}
+        ) + tuple(
+            LiteratureBoundaryRow(
+                policy_id=policy,
+                information_regime=InformationRegime.SUPERVISED_DEVELOPMENT,
+            )
             for policy in (
                 PolicyId.DEV_F1_SELECT,
                 PolicyId.SUMMARY_STATISTIC_SELECT,
                 PolicyId.SUPERVISED_F1,
             )
-        ]
-        return self._write(pd.DataFrame.from_records(rows), output)
+        )
+        return self._write(
+            pd.DataFrame.from_records(row.model_dump(mode="json") for row in rows),
+            output,
+        )
 
     def primary_policy_results(self, run_dirs: tuple[Path, ...], output: Path) -> Path:
         records = load_federation_results(run_dirs)
@@ -162,17 +289,20 @@ class PublicationTableBuilder:
         return self._write(pd.DataFrame.from_records(rows), output)
 
     def admission_states_from_runs(self, run_dirs: tuple[Path, ...], output: Path) -> Path:
-        rows: list[dict[str, JsonValue]] = []
+        records: list[ThresholdRecord] = []
         for run_dir in run_dirs:
             path = RunLayout(run_dir).threshold_records
             if not path.is_file():
                 continue
             for line in path.read_text(encoding="utf-8").splitlines():
                 if line:
-                    row = json.loads(line)
-                    row["run_id"] = run_dir.name
-                    rows.append(row)
-        return self._write(pd.DataFrame.from_records(rows), output)
+                    records.append(
+                        ThresholdRecord.model_validate_json(line)
+                    )
+        return self._write(
+            pd.DataFrame.from_records(record.model_dump(mode="json") for record in records),
+            output,
+        )
 
     def ablations(self, run_dirs: tuple[Path, ...], output: Path, config: ExperimentConfig) -> Path:
         records = load_federation_results(run_dirs)
@@ -184,80 +314,114 @@ class PublicationTableBuilder:
             bootstrap_seed=config.statistics.bootstrap_seed,
             bootstrap_replicates=config.statistics.bootstrap_replicates,
         )
-        rows = [
-            {
-                "comparator": result.comparator.value,
-                "metric": metric.metric,
-                "method_mean": metric.method_summary.mean,
-                "comparator_mean": metric.comparator_summary.mean,
-                "observed_difference": metric.paired_difference.observed_difference,
-                "bootstrap_lower": metric.paired_difference.lower,
-                "bootstrap_upper": metric.paired_difference.upper,
-                "relative_difference": metric.relative_difference,
-            }
+        rows = tuple(
+            ContrastTableRow(
+                comparator=result.comparator,
+                metric=metric.metric,
+                method_mean=metric.method_summary.mean,
+                comparator_mean=metric.comparator_summary.mean,
+                observed_difference=metric.paired_difference.observed_difference,
+                bootstrap_lower=metric.paired_difference.lower,
+                bootstrap_upper=metric.paired_difference.upper,
+                relative_difference=metric.relative_difference,
+            )
             for result in contrasts
             for metric in result.metrics
-        ]
-        return self._write(pd.DataFrame.from_records(rows), output)
+        )
+        return self._write(
+            pd.DataFrame.from_records(row.model_dump(mode="json") for row in rows),
+            output,
+        )
 
     def protocol_constants(self, config: ExperimentConfig, output: Path) -> Path:
         protocol = config.protocol
-        rows: list[tuple[str, object]] = [
-            ("alpha", protocol.alpha),
-            ("rho", protocol.rho),
-            ("band_lower", protocol.band.lower),
-            ("band_upper", protocol.band.upper),
-            ("readiness_assurance", protocol.readiness_assurance),
-            ("mismatch_confidence", protocol.mismatch_confidence),
+        rows: list[ProtocolConstantRow] = [
+            ProtocolConstantRow(constant="alpha", value=protocol.alpha),
+            ProtocolConstantRow(constant="rho", value=protocol.rho),
+            ProtocolConstantRow(constant="band_lower", value=protocol.band.lower),
+            ProtocolConstantRow(constant="band_upper", value=protocol.band.upper),
+            ProtocolConstantRow(
+                constant="readiness_assurance", value=protocol.readiness_assurance
+            ),
+            ProtocolConstantRow(
+                constant="mismatch_confidence", value=protocol.mismatch_confidence
+            ),
         ]
         training = config.training
         if training is not None:
             rows.extend(
                 [
-                    ("rounds", training.rounds),
-                    ("local_epochs", training.local_epochs),
-                    ("batch_size", training.batch_size),
-                    ("learning_rate_initial", training.learning_rate_initial),
-                    ("learning_rate_final", training.learning_rate_final),
-                    ("client_fraction", training.client_fraction),
+                    ProtocolConstantRow(constant="rounds", value=training.rounds),
+                    ProtocolConstantRow(
+                        constant="local_epochs", value=training.local_epochs
+                    ),
+                    ProtocolConstantRow(
+                        constant="batch_size", value=training.batch_size
+                    ),
+                    ProtocolConstantRow(
+                        constant="learning_rate_initial",
+                        value=training.learning_rate_initial,
+                    ),
+                    ProtocolConstantRow(
+                        constant="learning_rate_final",
+                        value=training.learning_rate_final,
+                    ),
+                    ProtocolConstantRow(
+                        constant="client_fraction", value=training.client_fraction
+                    ),
                 ]
             )
-        return self._write(pd.DataFrame(rows, columns=["constant", "value"]), output)
+        return self._write(
+            pd.DataFrame.from_records(row.model_dump(mode="json") for row in rows),
+            output,
+        )
 
     def dataset_inventory(self, prepared_manifest: Path, output: Path) -> Path:
-        payload = _read_json(prepared_manifest)
-        feature_names = payload.get("feature_names")
-        feature_count = len(feature_names) if isinstance(feature_names, list) else 0
-        rows: list[dict[str, JsonValue]] = []
-        clients = payload.get("clients")
-        if isinstance(clients, list):
-            for client in sorted(clients, key=lambda item: str(item) if isinstance(item, dict) else ""):
-                if not isinstance(client, dict):
-                    continue
-                row: dict[str, JsonValue] = {
-                    "client_id": str(client.get("client_id")),
-                    "feature_count": feature_count,
-                }
-                roles = client.get("roles")
-                if isinstance(roles, list):
-                    for role_entry in roles:
-                        if not isinstance(role_entry, dict):
-                            continue
-                        role = str(role_entry.get("role"))
-                        row[f"{role}_rows"] = role_entry.get("rows")
-                        row[f"{role}_sha256"] = role_entry.get("row_id_sha256")
-                rows.append(row)
-        return self._write(pd.DataFrame.from_records(rows), output)
+        manifest = PreparedDatasetManifest.model_validate_json(
+            prepared_manifest.read_text(encoding="utf-8")
+        )
+        feature_count = len(manifest.feature_names)
+        rows = tuple(
+            DatasetInventoryRow(
+                client_id=client.client_id,
+                feature_count=feature_count,
+                role_counts=tuple(
+                    RoleCountRow(
+                        role=role.role,
+                        rows=role.rows,
+                        row_id_sha256=role.row_id_sha256,
+                    )
+                    for role in client.roles
+                ),
+            )
+            for client in manifest.clients
+        )
+        return self._write(
+            pd.DataFrame.from_records(row.model_dump(mode="json") for row in rows),
+            output,
+        )
 
     def federation_results(self, run_dirs: tuple[Path, ...], output: Path) -> Path:
-        rows: list[dict[str, JsonValue]] = []
+        rows: list[FederationResultsRow] = []
         for run_dir in run_dirs:
             metrics = run_dir / "metrics" / "federation.json"
             if metrics.exists():
-                row = _read_json(metrics)
-                row["run_id"] = run_dir.name
-                rows.append(row)
-        return self._write(pd.DataFrame.from_records(rows), output)
+                federation = FederationMetrics.model_validate_json(
+                    metrics.read_text(encoding="utf-8")
+                )
+                rows.append(
+                    FederationResultsRow(
+                        run_id=run_dir.name,
+                        mebe=federation.mebe,
+                        high_excess=federation.high_excess,
+                        band_violation_rate=federation.band_violation_rate,
+                        attack_balanced_macro_tpr=federation.attack_balanced_macro_tpr,
+                    )
+                )
+        return self._write(
+            pd.DataFrame.from_records(row.model_dump(mode="json") for row in rows),
+            output,
+        )
 
     @staticmethod
     def _write(frame: pd.DataFrame, output: Path) -> Path:
@@ -267,6 +431,7 @@ class PublicationTableBuilder:
 
 
 class PublicationPackage:
+    """Tables, figures, and manifest of one publication."""
     def __init__(
         self,
         tables: tuple[PublicationArtifact, ...],
@@ -283,12 +448,13 @@ class PublicationPackage:
 
 
 class PublicationArtifact:
+    """One generated table or figure with availability."""
     def __init__(
         self,
-        name: str,
+        name: Description,
         path: Path | None,
         available: bool,
-        reason: str | None = None,
+        reason: Description | None = None,
     ) -> None:
         self.name = name
         self.path = path
@@ -318,12 +484,16 @@ class PublicationPackageBuilder:
 
         runs = _completed_runs(outputs_root)
         primary_runs = tuple(
-            path for path in runs if _manifest_value(path, "experiment_id") == "primary_nbaiot"
+            path
+            for path in runs
+            if (manifest := _run_manifest(path)) is not None
+            and manifest.experiment_id is ExperimentId.PRIMARY_NBAIOT
         )
         fedcrg_primary = tuple(
             path
             for path in primary_runs
-            if _manifest_value(path, "policy_id") == PolicyId.FEDCRG.value
+            if (manifest := _run_manifest(path)) is not None
+            and manifest.policy_id is PolicyId.FEDCRG
         )
 
         tables = (
@@ -407,7 +577,7 @@ class PublicationPackageBuilder:
         )
         return PublicationPackage(tables, figures, manifest_path)
 
-    def _table(self, name: str, builder: Callable[[], Path]) -> PublicationArtifact:
+    def _table(self, name: Description, builder: Callable[[], Path]) -> PublicationArtifact:
         try:
             path = builder()
         except Exception as exc:
@@ -416,10 +586,10 @@ class PublicationPackageBuilder:
 
     def _optional_table(
         self,
-        name: str,
+        name: Description,
         source: Path | None,
         builder: Callable[[Path], Path],
-        reason: str,
+        reason: Description,
     ) -> PublicationArtifact:
         if source is None or not source.is_file():
             return PublicationArtifact(name, None, False, reason)
@@ -427,16 +597,16 @@ class PublicationPackageBuilder:
 
     def _runs_table(
         self,
-        name: str,
+        name: Description,
         runs: tuple[Path, ...],
         builder: Callable[[], Path],
-        reason: str,
+        reason: Description,
     ) -> PublicationArtifact:
         if not runs:
             return PublicationArtifact(name, None, False, reason)
         return self._table(name, builder)
 
-    def _figure(self, name: str, builder: Callable[[], Path]) -> PublicationArtifact:
+    def _figure(self, name: Description, builder: Callable[[], Path]) -> PublicationArtifact:
         try:
             path = builder()
         except Exception as exc:
@@ -567,6 +737,7 @@ def build_repository_report(outputs: Path, config: ExperimentConfig) -> Path:
 
 
 def build_publication(outputs: Path, config: ExperimentConfig) -> Path:
+    """Build the publication package and return its manifest."""
     package = PublicationPackageBuilder().build(
         config=config,
         outputs_root=outputs,
@@ -585,7 +756,24 @@ _REQUIRED_BUNDLE_DIRECTORIES = (
 )
 
 
+class ResultsManifest(BaseModel):
+    """Frozen results-bundle manifest."""
+    model_config = Frozen
+
+    campaign_id: CampaignId
+    complete: bool
+    config_hash: Sha256
+    dataset_id: DatasetId
+    detector_id: DetectorId | None
+    model_seeds: tuple[ModelSeed, ...]
+    calibration_seeds: tuple[CalibrationSeed, ...]
+    outputs_root: Identifier
+    file_count: PositiveCount
+    source_policy: Description
+
+
 class ResultsVerification:
+    """Validity and problems of one bundle verification."""
     def __init__(self, valid: bool, problems: tuple[Identifier, ...]) -> None:
         self.valid = valid
         self.problems = problems
@@ -635,26 +823,27 @@ class ResultsBuilder:
 
     @staticmethod
     def _copy_metrics(outputs_root: Path, destination: Path) -> None:
-        runs_root = outputs_root / "runs"
+        runs_root = OutputsLayout(outputs_root).runs
         if not runs_root.exists():
             return
-        rows: list[dict[str, JsonValue]] = []
+        records: list[MetricRecord] = []
         for run_root in sorted(path for path in runs_root.iterdir() if path.is_dir()):
             metric_path = run_root / "metrics" / "metric_record.jsonl"
             if not metric_path.is_file():
                 continue
             for line in metric_path.read_text(encoding="utf-8").splitlines():
                 try:
-                    payload: object = json.loads(line)
-                except json.JSONDecodeError:
+                    records.append(MetricRecord.model_validate_json(line))
+                except pydantic.ValidationError:
                     continue
-                if isinstance(payload, dict):
-                    rows.append({str(key): value for key, value in payload.items()})
-        atomic_write_json(destination / "metric_records.json", {"records": rows})
+        atomic_write_json(
+            destination / "metric_records.json",
+            {"records": [record.model_dump(mode="json") for record in records]},
+        )
 
     @staticmethod
     def _copy_statistics(outputs_root: Path, destination: Path) -> None:
-        analysis_root = outputs_root / "cache" / "analysis"
+        analysis_root = OutputsLayout(outputs_root).cache_analysis
         if not analysis_root.exists():
             return
         for name in ("readiness_plans.json", "mismatch_cutoffs.json"):
@@ -671,14 +860,18 @@ class ResultsBuilder:
 
     @staticmethod
     def _write_provenance(outputs_root: Path, destination: Path) -> None:
-        environment = None
-        environment_path = outputs_root / "environment.json"
+        environment: GitEnvironment | None = None
+        environment_path = OutputsLayout(outputs_root).environment_file
         if environment_path.is_file():
-            environment = _read_json(environment_path)
+            environment = GitEnvironment.model_validate_json(
+                environment_path.read_text(encoding="utf-8")
+            )
         atomic_write_json(
             destination / "provenance.json",
             {
-                "environment": environment,
+                "environment": (
+                    environment.model_dump(mode="json") if environment is not None else None
+                ),
                 "prepared_data_root": "data/preprocessed/",
                 "outputs_root": str(outputs_root),
             },
@@ -701,12 +894,17 @@ class ResultsBuilder:
                     (target_dir / path.name).write_bytes(path.read_bytes())
 
     @staticmethod
-    def _checksums(root: Path) -> dict[Identifier, Sha256]:
-        checksums: dict[Identifier, Sha256] = {}
+    def _checksums(root: Path) -> tuple[ChecksumRecord, ...]:
+        records: list[ChecksumRecord] = []
         for path in sorted(root.rglob("*")):
             if path.is_file() and path.name != "checksums.json":
-                checksums[path.relative_to(root).as_posix()] = sha256_file(path)
-        return checksums
+                records.append(
+                    ChecksumRecord(
+                        relative_path=path.relative_to(root).as_posix(),
+                        sha256=sha256_file(path),
+                    )
+                )
+        return tuple(records)
 
     @staticmethod
     def _manifest(
@@ -714,22 +912,21 @@ class ResultsBuilder:
         outputs_root: Path,
         destination: Path,
         config: ExperimentConfig,
-        checksums: dict[Identifier, Sha256],
-    ) -> dict[str, JsonValue]:
+        checksums: tuple[ChecksumRecord, ...],
+    ) -> ResultsManifest:
         detector = config.detector
-        payload: dict[str, JsonValue] = {
-            "campaign_id": str(campaign_id),
-            "complete": True,
-            "config_hash": config.config_hash,
-            "dataset_id": config.dataset.id.value,
-            "detector_id": None if detector is None else detector.id.value,
-            "model_seeds": [int(seed) for seed in config.randomness.model_seeds],
-            "calibration_seeds": [int(seed) for seed in config.dataset.calibration_seeds],
-            "outputs_root": str(outputs_root),
-            "file_count": len(checksums),
-            "source_policy": "all numerical content is derived from immutable FedCRG artifacts",
-        }
-        return payload
+        return ResultsManifest(
+            campaign_id=campaign_id,
+            complete=True,
+            config_hash=config.config_hash,
+            dataset_id=config.dataset.id,
+            detector_id=detector.id if detector is not None else None,
+            model_seeds=tuple(config.randomness.model_seeds),
+            calibration_seeds=tuple(config.dataset.calibration_seeds),
+            outputs_root=str(outputs_root),
+            file_count=len(checksums),
+            source_policy="all numerical content is derived from immutable FedCRG artifacts",
+        )
 
 
 class ResultsVerifier:
@@ -758,11 +955,17 @@ class ResultsVerifier:
         if not checksums_path.is_file():
             problems.append("missing bundle checksums.json")
         else:
-            checksums = _read_json(checksums_path)
+            checksums = tuple(
+                ChecksumRecord.model_validate(entry)
+                for entry in json.loads(checksums_path.read_text(encoding="utf-8"))
+            )
             for path in sorted(destination.rglob("*")):
                 if path.is_file() and path.name != "checksums.json":
                     relative = path.relative_to(destination).as_posix()
-                    expected = checksums.get(relative)
+                    expected = next(
+                        (record.sha256 for record in checksums if record.relative_path == relative),
+                        None,
+                    )
                     if expected is None:
                         problems.append(f"unchecksummed bundle file: {relative}")
                     elif str(expected) != sha256_file(path):
@@ -775,6 +978,7 @@ def build_results_bundle(
     outputs_root: Path,
     results_root: Path,
 ) -> Path:
+    """Assemble one immutable results bundle."""
     return ResultsBuilder().build(
         campaign_id=campaign_id,
         outputs_root=outputs_root,
@@ -787,6 +991,7 @@ def verify_results_bundle(
     outputs_root: Path,
     results_root: Path,
 ) -> ResultsVerification:
+    """Verify one results bundle's structure and checksums."""
     return ResultsVerifier().verify(
         campaign_id,
         results_root=results_root,
