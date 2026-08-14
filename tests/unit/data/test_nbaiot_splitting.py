@@ -72,5 +72,6 @@ def test_split_rejects_insufficient_benign_rows() -> None:
         attack=_client().attack,
         chronology=ChronologyStatus.SOURCE_ORDER_ONLY,
     )
+    builder = BaseSplitBuilder()
     with pytest.raises((ValueError, DataIntegrityError)):
-        BaseSplitBuilder().build(client, config, attack_split_seed=9001)
+        builder.build(client, config, attack_split_seed=9001)

@@ -174,10 +174,9 @@ class ReadinessPlanBuilder:
 
         ranks = np.arange(1, sample_count + 1)
         upper_shapes = sample_count + 1 - ranks
-        
-        probs = (
-            special.betainc(upper_shapes, ranks, band.upper) - 
-            special.betainc(upper_shapes, ranks, band.lower)
+
+        probs = special.betainc(upper_shapes, ranks, band.upper) - special.betainc(
+            upper_shapes, ranks, band.lower
         )
 
         max_prob = np.max(probs)
@@ -286,12 +285,12 @@ class CalibrationReadinessEvaluator:
             raise ValueError("Observed calibration size does not match the frozen readiness plan")
         if not np.isfinite(values).all():
             raise ValueError("Calibration scores must be finite")
-            
+
         diagnostics = continuity_diagnostics(values, plan.rank)
-        
+
         if plan.state is CalibrationReadinessState.NOT_READY:
             return CalibrationReadiness(plan=plan, threshold=None, diagnostics=diagnostics)
-            
+
         ordered = np.sort(values, kind="stable")
         threshold = float(ordered[plan.rank - 1])
         return CalibrationReadiness(plan=plan, threshold=threshold, diagnostics=diagnostics)
@@ -305,17 +304,19 @@ def continuity_diagnostics(
         raise ValueError("Continuity diagnostics require a non-empty score vector")
     if not 1 <= selected_rank <= values.size:
         raise ValueError("selected_rank must lie inside the score vector")
-        
+
     ordered = np.sort(values, kind="stable")
     selected = float(ordered[selected_rank - 1])
     unique = np.unique(ordered)
     positive_spacing = np.diff(unique)
-    
+
     return ContinuityDiagnostics(
         unique_score_fraction=float(unique.size / values.size),
         duplicate_count=int(values.size - unique.size),
         selected_threshold_multiplicity=int(np.count_nonzero(ordered == selected)),
-        minimum_positive_spacing=None if positive_spacing.size == 0 else float(np.min(positive_spacing)),
+        minimum_positive_spacing=None
+        if positive_spacing.size == 0
+        else float(np.min(positive_spacing)),
     )
 
 
@@ -353,12 +354,12 @@ def minimum_bidirectional_sample_count(
         raise ValueError("lower_band must be in [0, 1)")
     if not 0.0 < confidence < 1.0:
         raise ValueError("confidence must be in (0, 1)")
-    if lower_band == 0.0:
+    if not lower_band:
         return None
-        
+
     tail = (1.0 - confidence) / 2.0
     estimate = max(1, math.ceil(math.log(tail) / math.log(1.0 - lower_band)))
-    
+
     while 1.0 - tail ** (1.0 / estimate) >= lower_band:
         estimate += 1
     while estimate > 1 and 1.0 - tail ** (1.0 / (estimate - 1)) < lower_band:
@@ -429,7 +430,7 @@ class DirectionalHypothesis(BaseModel):
 def _directional_p_values(
     counts: BinomialCounts, band: OperatingBand
 ) -> tuple[PValue | None, PValue]:
-    low = None if band.lower == 0.0 else float(binom.cdf(counts.x, counts.n, band.lower))
+    low = None if not band.lower else float(binom.cdf(counts.x, counts.n, band.lower))
     high = float(binom.sf(counts.x - 1, counts.n, band.upper))
     return low, high
 
@@ -442,20 +443,20 @@ def bonferroni_fleet_sensitivity(
 ) -> tuple[FleetMismatchDecision, ...]:
     if not counts_by_client:
         return ()
-        
+
     confidence = 1.0 - familywise_alpha / len(counts_by_client)
     decisions = []
-    
+
     for client_id in sorted(counts_by_client):
         counts = counts_by_client[client_id]
         interval = clopper_pearson_interval(counts, confidence)
-        
+
         outcome = MismatchOutcome.NO_MATERIAL_DIFFERENCE
         if band.lower > 0.0 and interval.upper < band.lower:
             outcome = MismatchOutcome.LOW
         elif interval.lower > band.upper:
             outcome = MismatchOutcome.HIGH
-            
+
         low, high = _directional_p_values(counts, band)
         decisions.append(
             FleetMismatchDecision(
@@ -478,7 +479,7 @@ def _holm_rejected(
     )
     total = len(ordered)
     rejected = set()
-    
+
     for index, hypothesis in enumerate(ordered):
         if hypothesis.p_value <= alpha / (total - index):
             rejected.add((hypothesis.client_id, hypothesis.outcome))
@@ -495,32 +496,37 @@ def holm_directional_fleet_sensitivity(
 ) -> tuple[FleetMismatchDecision, ...]:
     hypotheses = []
     diagnostics = {}
-    
+
     for client_id in sorted(counts_by_client):
         counts = counts_by_client[client_id]
         low, high = _directional_p_values(counts, band)
         diagnostics[client_id] = (low, high)
-        
+
         if low is not None:
-            hypotheses.append(DirectionalHypothesis(client_id=client_id, outcome=MismatchOutcome.LOW, p_value=low))
-        hypotheses.append(DirectionalHypothesis(client_id=client_id, outcome=MismatchOutcome.HIGH, p_value=high))
+            hypotheses.append(
+                DirectionalHypothesis(client_id=client_id, outcome=MismatchOutcome.LOW, p_value=low)
+            )
+        hypotheses.append(
+            DirectionalHypothesis(client_id=client_id, outcome=MismatchOutcome.HIGH, p_value=high)
+        )
 
     rejected = _holm_rejected(hypotheses, familywise_alpha)
     decisions = []
-    
+
     for client_id in sorted(counts_by_client):
         low_rejected = (client_id, MismatchOutcome.LOW) in rejected
         high_rejected = (client_id, MismatchOutcome.HIGH) in rejected
-        
+
         if low_rejected and high_rejected:
             raise RuntimeError(f"DIRECTION_CONTRADICTION: both directions rejected for {client_id}")
-            
-        outcome = (
-            MismatchOutcome.LOW if low_rejected
-            else MismatchOutcome.HIGH if high_rejected
-            else MismatchOutcome.NO_MATERIAL_DIFFERENCE
-        )
-        
+
+        if low_rejected:
+            outcome = MismatchOutcome.LOW
+        elif high_rejected:
+            outcome = MismatchOutcome.HIGH
+        else:
+            outcome = MismatchOutcome.NO_MATERIAL_DIFFERENCE
+
         low, high = diagnostics[client_id]
         decisions.append(
             FleetMismatchDecision(
@@ -544,10 +550,16 @@ class DeploymentDecision:
         tie_count = readiness.tie_count
 
         if mismatch.outcome is MismatchOutcome.INSUFFICIENT_EVIDENCE:
-            state, reason = DecisionState.MISMATCH_EVIDENCE_INSUFFICIENT, DecisionReason.INSUFFICIENT_MISMATCH_EVIDENCE
+            state, reason = (
+                DecisionState.MISMATCH_EVIDENCE_INSUFFICIENT,
+                DecisionReason.INSUFFICIENT_MISMATCH_EVIDENCE,
+            )
         elif mismatch.outcome is MismatchOutcome.NO_MATERIAL_DIFFERENCE:
             state, reason = DecisionState.REFERENCE_RETAINED, DecisionReason.NO_MATERIAL_DIFFERENCE
-        elif readiness.plan.state is CalibrationReadinessState.NOT_READY or readiness.threshold is None:
+        elif (
+            readiness.plan.state is CalibrationReadinessState.NOT_READY
+            or readiness.threshold is None
+        ):
             state, reason = DecisionState.CALIBRATION_DEFICIT, DecisionReason.CALIBRATION_NOT_READY
         elif reject_calibration_ties and tie_count > 1:
             state, reason = DecisionState.ASSUMPTION_VIOLATION, DecisionReason.CALIBRATION_TIE

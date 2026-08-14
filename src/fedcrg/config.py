@@ -83,7 +83,9 @@ from fedcrg.types import (
     XavierGain,
 )
 
-FrozenModel = ConfigDict(frozen=True, extra="forbid", use_enum_values=False)
+FrozenModel = ConfigDict(
+    frozen=True, extra="forbid", use_enum_values=False, revalidate_instances="never"
+)
 
 _CALIBRATION_SEED_ADAPTER = TypeAdapter(CalibrationSeed)
 
@@ -347,40 +349,44 @@ class DatasetConfig(BaseModel):
             raise ValueError("Feature names must be unique")
 
         if self.id is DatasetId.NBAIOT:
-            if self.feature_contract is not DatasetFeatureContractId.NBAIOT_LOCKED_115:
-                raise ValueError("N-BaIoT must use the locked 115-feature contract")
-            if len(self.feature_names) != self.feature_count:
-                raise ValueError("N-BaIoT must declare the locked 115-feature contract")
-            if len(self.source_headers) != self.feature_count:
-                raise ValueError("N-BaIoT must declare its locked source-header order")
-            if len(self.device_directories) != (self.expected_clients or 0):
-                raise ValueError("N-BaIoT must declare its nine-device directory table")
-            if self.expected_clients is None or self.expected_clients < 1:
-                raise ValueError("N-BaIoT must declare its nine-client contract")
-            if len(self.expected_benign_counts) != self.expected_clients:
-                raise ValueError("N-BaIoT expected-benign-count ledger must match the client count")
-
+            self._validate_nbaiot_contract()
         elif self.id is DatasetId.DIAD:
-            if self.diad_client_id_mac_digest_length is None:
-                raise ValueError("DIAD must declare its client-id MAC digest length")
-            if self.diad_finite_rate_minimum is None:
-                raise ValueError("DIAD must declare its per-feature finite-rate minimum")
-            if self.feature_contract not in {
-                DatasetFeatureContractId.DIAD_LOCKED_86,
-                DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE,
-            }:
-                raise ValueError("DIAD uses either the locked or training-derived feature contract")
-            if self.expected_source_clients is None or self.expected_source_clients < 1:
-                raise ValueError("DIAD must declare its source identity count")
-            if self.minimum_benign_rows is None or self.minimum_malicious_rows is None:
-                raise ValueError("DIAD eligibility counts must be declared")
-            if len(self.feature_names) != self.feature_count:
-                raise ValueError("DIAD requires a frozen feature-name list matching feature_count")
-
+            self._validate_diad_contract()
         elif self.id is DatasetId.SYNTHETIC:
             if self.feature_contract is not DatasetFeatureContractId.SYNTHETIC:
                 raise ValueError("Synthetic experiments must use the synthetic feature contract")
         return self
+
+    def _validate_nbaiot_contract(self) -> None:
+        if self.feature_contract is not DatasetFeatureContractId.NBAIOT_LOCKED_115:
+            raise ValueError("N-BaIoT must use the locked 115-feature contract")
+        if len(self.feature_names) != self.feature_count:
+            raise ValueError("N-BaIoT must declare the locked 115-feature contract")
+        if len(self.source_headers) != self.feature_count:
+            raise ValueError("N-BaIoT must declare its locked source-header order")
+        if len(self.device_directories) != (self.expected_clients or 0):
+            raise ValueError("N-BaIoT must declare its nine-device directory table")
+        if self.expected_clients is None or self.expected_clients < 1:
+            raise ValueError("N-BaIoT must declare its nine-client contract")
+        if len(self.expected_benign_counts) != self.expected_clients:
+            raise ValueError("N-BaIoT expected-benign-count ledger must match the client count")
+
+    def _validate_diad_contract(self) -> None:
+        if self.diad_client_id_mac_digest_length is None:
+            raise ValueError("DIAD must declare its client-id MAC digest length")
+        if self.diad_finite_rate_minimum is None:
+            raise ValueError("DIAD must declare its per-feature finite-rate minimum")
+        if self.feature_contract not in {
+            DatasetFeatureContractId.DIAD_LOCKED_86,
+            DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE,
+        }:
+            raise ValueError("DIAD uses either the locked or training-derived feature contract")
+        if self.expected_source_clients is None or self.expected_source_clients < 1:
+            raise ValueError("DIAD must declare its source identity count")
+        if self.minimum_benign_rows is None or self.minimum_malicious_rows is None:
+            raise ValueError("DIAD eligibility counts must be declared")
+        if len(self.feature_names) != self.feature_count:
+            raise ValueError("DIAD requires a frozen feature-name list matching feature_count")
 
 
 class DatasetCatalogue(RootModel[dict[DatasetId, DatasetConfig]]):
@@ -635,6 +641,10 @@ class ExperimentConfig(BaseModel):
             raise ValueError("Real-data experiments require at least one policy")
         if len(set(self.policies)) != len(self.policies):
             raise ValueError("Policies must be unique")
+        self._validate_experiment_identity_contracts()
+        return self
+
+    def _validate_experiment_identity_contracts(self) -> None:
         if self.id is ExperimentId.SECOND_DETECTOR:
             if self.detector is None or self.detector.id is not DetectorId.DEEP_SVDD:
                 raise ValueError("Second-detector experiment requires Deep-SVDD")
@@ -660,7 +670,6 @@ class ExperimentConfig(BaseModel):
                 "The training-schema-derived DIAD feature contract is exclusive to the "
                 "feature-sensitivity experiment"
             )
-        return self
 
     def serialized_payload(self) -> str:
         payload = self.model_dump(mode="json", exclude={"outputs_root", "preprocessed_root"})

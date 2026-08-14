@@ -48,8 +48,10 @@ def _jsonable(value: object) -> JsonValue:
     match value:
         case BaseModel():
             return value.model_dump(mode="json")
-        case tuple() | list():
-            return [_jsonable(item) for item in value]
+        case tuple() as items:
+            return [_jsonable(item) for item in items]
+        case list() as items:
+            return [_jsonable(item) for item in items]
         case dict():
             return {str(key): _jsonable(item) for key, item in value.items()}
         case str() | int() | float() | bool() | None:
@@ -134,6 +136,7 @@ class RunManifestStore(ModelStore[RunManifest]):
                     and existing.status is not manifest.status
                 ):
                     from fedcrg.types import ImmutableRunError
+
                     raise ImmutableRunError(
                         f"Cannot overwrite a finalized run manifest: {path} "
                         f"({existing.status} -> {manifest.status})"
@@ -207,7 +210,9 @@ class VerificationResult:
     hashes: tuple[FileHashRecord, ...]
 
     def hash_for(self, relative_path: Identifier) -> Sha256 | None:
-        return next((record.sha256 for record in self.hashes if record.relative_path == relative_path), None)
+        return next(
+            (record.sha256 for record in self.hashes if record.relative_path == relative_path), None
+        )
 
 
 class ArtifactVerifier:
@@ -270,7 +275,12 @@ class ArtifactVerifier:
         if layout.verification.is_dir():
             atomic_write_json(
                 layout.hashes,
-                {"files": [{"relative_path": item.relative_path, "sha256": item.sha256} for item in hashes]},
+                {
+                    "files": [
+                        {"relative_path": item.relative_path, "sha256": item.sha256}
+                        for item in hashes
+                    ]
+                },
             )
 
         return VerificationResult(
@@ -293,7 +303,7 @@ class ArtifactVerifier:
 
         try:
             return CacheReference.model_validate_json(reference.read_text(encoding="utf-8")).sha256
-        except (ValueError, json.JSONDecodeError):
+        except ValueError:
             return None
 
 

@@ -28,5 +28,6 @@ def test_completed_run_manifest_is_immutable(tmp_path: Path) -> None:
 
     complete = _manifest(ExperimentStatus.COMPLETE)
     store.save(layout.manifest, complete)
+    running = _manifest(ExperimentStatus.RUNNING)
     with pytest.raises(ImmutableRunError):
-        store.save(layout.manifest, _manifest(ExperimentStatus.RUNNING))
+        store.save(layout.manifest, running)

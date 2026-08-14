@@ -57,15 +57,17 @@ def test_server_returns_state_hash() -> None:
 def test_server_rejects_nan_updates() -> None:
     server = FederatedServer(_model((0.0, 0.0)))
     poisoned = _model((float("nan"), 1.0))
+    updates = [_model((1.0, 1.0)), poisoned]
     with pytest.raises((ValueError, FloatingPointError)):
-        server.aggregate([_model((1.0, 1.0)), poisoned])
+        server.aggregate(updates)
 
 
 def test_server_rejects_infinite_updates() -> None:
     server = FederatedServer(_model((0.0, 0.0)))
     poisoned = _model((float("inf"), 1.0))
+    updates = [_model((1.0, 1.0)), poisoned]
     with pytest.raises((ValueError, FloatingPointError)):
-        server.aggregate([_model((1.0, 1.0)), poisoned])
+        server.aggregate(updates)
 
 
 def test_aggregate_rejects_empty_participant_set() -> None:

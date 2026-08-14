@@ -10,6 +10,8 @@ import nox
 
 nox.options.sessions = ["lint", "typecheck", "unit"]
 
+_EDITABLE_DEV_INSTALL = ".[dev]"
+
 
 @nox.session
 def format(session: nox.Session) -> None:
@@ -33,25 +35,25 @@ def typecheck(session: nox.Session) -> None:
 
 @nox.session
 def unit(session: nox.Session) -> None:
-    session.install("-e", ".[dev]")
+    session.install("-e", _EDITABLE_DEV_INSTALL)
     session.run("pytest", "tests/unit")
 
 
 @nox.session
 def integration(session: nox.Session) -> None:
-    session.install("-e", ".[dev]")
+    session.install("-e", _EDITABLE_DEV_INSTALL)
     session.run("pytest", "tests/integration")
 
 
 @nox.session
 def contract(session: nox.Session) -> None:
-    session.install("-e", ".[dev]")
+    session.install("-e", _EDITABLE_DEV_INSTALL)
     session.run("pytest", "tests/contract")
 
 
 @nox.session
 def regression(session: nox.Session) -> None:
-    session.install("-e", ".[dev]")
+    session.install("-e", _EDITABLE_DEV_INSTALL)
     session.run("pytest", "tests/regression")
 
 
@@ -63,7 +65,7 @@ def audit(session: nox.Session) -> None:
 
 @nox.session
 def quality(session: nox.Session) -> None:
-    session.install("-e", ".[dev]")
+    session.install("-e", _EDITABLE_DEV_INSTALL)
     session.install("pyright")
     session.run("ruff", "format", "--check", "src", "tests")
     session.run("ruff", "check", "src", "tests")

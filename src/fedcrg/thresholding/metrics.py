@@ -58,7 +58,7 @@ def confusion_matrix(
 ) -> ConfusionMatrix:
     values = np.asarray(scores, dtype=np.float64)
     targets = np.asarray(labels, dtype=np.int64)
-    
+
     if values.shape != targets.shape or values.ndim != 1:
         raise ValueError("scores and labels must be aligned one-dimensional arrays")
     if not np.isfinite(values).all():
@@ -101,7 +101,7 @@ def recall(cm: ConfusionMatrix) -> Tpr | None:
 def f1(cm: ConfusionMatrix) -> Metric | None:
     p = precision(cm)
     r = recall(cm)
-    if p is None or r is None or p + r == 0.0:
+    if p is None or r is None or not p + r:
         return None
     return 2.0 * p * r / (p + r)
 
@@ -142,7 +142,7 @@ def attack_balanced_tpr(
 ) -> Tpr | None:
     values = np.asarray(scores, dtype=np.float64)
     targets = np.asarray(labels, dtype=np.int64)
-    
+
     pos_mask = targets == 1
     if not np.any(pos_mask):
         return None
@@ -243,7 +243,7 @@ class AdmissionSummary(BaseModel):
 def summarize_admission(results: tuple[ClientEvaluationResult, ...]) -> AdmissionSummary:
     if not results:
         raise ValueError("Admission summary requires clients")
-    
+
     n = len(results)
     readiness_count = 0
     low_mismatch_count = 0
@@ -256,7 +256,7 @@ def summarize_admission(results: tuple[ClientEvaluationResult, ...]) -> Admissio
     for item in results:
         if item.readiness.plan.state is CalibrationReadinessState.READY:
             readiness_count += 1
-            
+
         if item.mismatch.outcome is MismatchOutcome.LOW:
             low_mismatch_count += 1
         elif item.mismatch.outcome is MismatchOutcome.HIGH:
@@ -303,9 +303,9 @@ def aggregate_policy(
     ]
     if not rows:
         raise ValueError(f"No evaluated client metrics for {policy}")
-        
+
     fprs = np.fromiter((row.fpr for row in rows), dtype=np.float64, count=len(rows))
-    
+
     return FederationMetrics(
         policy=policy,
         client_count=len(rows),
@@ -333,13 +333,13 @@ def assert_ranking_metric_invariance(
     evaluations: tuple[PolicyEvaluation, ...], tolerance: Tolerance
 ) -> None:
     by_client: dict[ClientId, tuple[list[Fpr], list[Fpr]]] = {}
-    
+
     for row in evaluations:
         if row.metrics is not None:
             auroc_list, auprc_list = by_client.setdefault(row.client_id, ([], []))
             auroc_list.append(row.metrics.auroc)
             auprc_list.append(row.metrics.auprc)
-            
+
     for client_id, (auroc_values, auprc_values) in by_client.items():
         if auroc_values and max(auroc_values) - min(auroc_values) > tolerance:
             raise RuntimeError(f"Ranking AUROC changed across policies for {client_id}")

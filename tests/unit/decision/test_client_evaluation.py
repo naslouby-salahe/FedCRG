@@ -88,10 +88,11 @@ def test_evaluate_client_retains_reference_without_mismatch() -> None:
 def test_evaluate_client_requires_precomputed_readiness() -> None:
     protocol = primary_protocol()
     evaluator = ClientEvaluation()
+    reference = _reference()
     with pytest.raises(FileNotFoundError):
         evaluator.evaluate_client(
             _CLIENT_A,
-            _reference(),
+            reference,
             _HIGH_CALIBRATION,
             _HIGH_MISMATCH,
             protocol,

@@ -47,7 +47,8 @@ def test_training_spec_change_selects_distinct_model_cache(tmp_path: Path) -> No
     assert changed.training_spec_hash != config.training_spec_hash
     second_path, _ = _train_once(changed, prepared)
     assert second_path != model_path
-    assert model_path.parent.is_dir() and second_path.parent.is_dir()
+    assert model_path.parent.is_dir()
+    assert second_path.parent.is_dir()
 
 
 def test_identical_scoring_request_reuses_score_cache(tmp_path: Path) -> None:

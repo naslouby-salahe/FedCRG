@@ -139,13 +139,13 @@ class PrepareData:
         )
         if adapter.dataset_id is not config.dataset.id:
             raise ValueError("Adapter dataset identity does not match experiment config")
-        
+
         sources = tuple(
             self._source_file_manifest(path, adapter.root) for path in adapter.source_files()
         )
         source_identity_hash = self._source_identity_hash(sources)
         final_root = self.prepared_root(config, source_identity_hash)
-        
+
         if final_root.exists():
             try:
                 return self._reuse_existing(
@@ -154,7 +154,7 @@ class PrepareData:
             except DataIntegrityError as exc:
                 _LOGGER.warning("prepared cache invalid (%s); rebuilding %s", exc, final_root)
                 shutil.rmtree(final_root, ignore_errors=True)
-                
+
         return self._materialize(
             config,
             adapter,
@@ -171,12 +171,12 @@ class PrepareData:
         source_root: Path,
     ) -> PreparedDatasetManifest:
         layout = PreparedDatasetLayout(final_root)
-        
+
         if not layout.manifest.is_file() or not layout.preprocessing.is_file():
             raise DataIntegrityError("Prepared cache is missing manifest or preprocessing evidence")
-            
+
         manifest = self.manifests.load_model(layout.manifest)
-        
+
         if manifest.data_spec_hash != config.data_spec_hash:
             raise DataIntegrityError("Prepared cache data-spec hash differs from configuration")
         if manifest.dataset_id is not config.dataset.id:
@@ -184,30 +184,54 @@ class PrepareData:
         if manifest.source_files != sources:
             raise DataIntegrityError("Prepared cache source identity differs from the raw data")
 
+        self._verify_source_files(sources, source_root)
+        self._verify_role_artifacts(manifest, final_root)
+        self._verify_calibration_assignments(manifest, final_root)
+
+        _LOGGER.info("prepared cache reused %s", final_root)
+        return manifest
+
+    @staticmethod
+    def _verify_source_files(sources: tuple[SourceFileManifest, ...], source_root: Path) -> None:
         for item in sources:
             source_path = source_root / item.relative_path
             if not source_path.is_file():
-                raise DataIntegrityError(f"Raw source file is missing for the prepared cache: {item.relative_path}")
+                raise DataIntegrityError(
+                    f"Raw source file is missing for the prepared cache: {item.relative_path}"
+                )
             if sha256_file(source_path) != item.sha256:
-                raise DataIntegrityError(f"Raw source file changed since preparation: {item.relative_path}")
+                raise DataIntegrityError(
+                    f"Raw source file changed since preparation: {item.relative_path}"
+                )
 
+    @staticmethod
+    def _verify_role_artifacts(manifest: PreparedDatasetManifest, final_root: Path) -> None:
         for client in manifest.clients:
             for role in client.roles:
                 artifact = final_root / role.relative_path
                 if not artifact.is_file():
-                    raise DataIntegrityError(f"Prepared role artifact is missing: {role.relative_path}")
+                    raise DataIntegrityError(
+                        f"Prepared role artifact is missing: {role.relative_path}"
+                    )
                 if sha256_file(artifact) != role.file_sha256:
-                    raise DataIntegrityError(f"Prepared role artifact hash mismatch: {role.relative_path}")
+                    raise DataIntegrityError(
+                        f"Prepared role artifact hash mismatch: {role.relative_path}"
+                    )
 
+    @staticmethod
+    def _verify_calibration_assignments(
+        manifest: PreparedDatasetManifest, final_root: Path
+    ) -> None:
         for reference in manifest.calibration_assignments:
             assignment = final_root / reference.relative_path
             if not assignment.is_file():
-                raise DataIntegrityError(f"Calibration-assignment manifest is missing: {reference.relative_path}")
+                raise DataIntegrityError(
+                    f"Calibration-assignment manifest is missing: {reference.relative_path}"
+                )
             if sha256_file(assignment) != reference.sha256:
-                raise DataIntegrityError(f"Calibration-assignment manifest hash changed: {reference.relative_path}")
-
-        _LOGGER.info("prepared cache reused %s", final_root)
-        return manifest
+                raise DataIntegrityError(
+                    f"Calibration-assignment manifest hash changed: {reference.relative_path}"
+                )
 
     def _materialize(
         self,
@@ -232,13 +256,13 @@ class PrepareData:
                 adapter,
                 discovered,
             )
-            
+
             eligible_ids = tuple(
                 record.client_id
                 for record in eligibility_records
                 if record.status is EligibilityStatus.ELIGIBLE
             )
-            
+
             eligibility_manifest = EligibilityManifest(
                 dataset_id=config.dataset.id,
                 discovered_clients=tuple(discovered),
@@ -261,7 +285,7 @@ class PrepareData:
                     preprocessing,
                     include_source_order_assignment,
                 )
-                
+
                 atomic_write_json(staging_layout.preprocessing, preprocessing)
                 self._write_dataset_manifest(
                     staging_layout,
@@ -271,7 +295,7 @@ class PrepareData:
                     preprocessing.feature_columns,
                     assignments,
                 )
-                
+
             shutil.rmtree(staging_layout.raw_staging, ignore_errors=True)
             os.replace(staging_root, final_root)
         except Exception:
@@ -294,9 +318,11 @@ class PrepareData:
         self, config: ExperimentConfig, discovered: tuple[ClientId, ...]
     ) -> None:
         if config.dataset.id is DatasetId.NBAIOT:
-            expected_devices = tuple(device.client_id for device in config.dataset.device_directories)
+            expected_devices = (device.client_id for device in config.dataset.device_directories)
             if sorted(discovered) != sorted(expected_devices):
-                raise DataIntegrityError(f"{FailureCode.DATASET_COUNT_MISMATCH}: expected nine N-BaIoT devices")
+                raise DataIntegrityError(
+                    f"{FailureCode.DATASET_COUNT_MISMATCH}: expected nine N-BaIoT devices"
+                )
         elif config.dataset.id is DatasetId.DIAD:
             expected_count = config.dataset.expected_source_clients
             if expected_count is not None and len(discovered) != expected_count:
@@ -315,29 +341,36 @@ class PrepareData:
         records: list[EligibilityRecord] = []
         statistics: dict[ClientId, ClientPreprocessingStatistics] = {}
         total = len(discovered)
-        
+
         for index, client_id in enumerate(discovered, start=1):
             started = time.monotonic()
             _LOGGER.info("staging client %d/%d %s", index, total, client_id)
-            
+
             data = adapter.load_client(client_id)
             if data.client_id != client_id:
                 raise DataIntegrityError(
                     f"{FailureCode.NONDETERMINISTIC_PARITY_FAIL}: "
                     "adapter returned a client identity that does not match the request"
                 )
-                
+
             if config.dataset.id is DatasetId.NBAIOT:
                 self._validate_nbaiot_count(config, data)
-                
+
             record = self.eligibility.evaluate(data, config.dataset)
             records.append(record)
-            
+
             if record.status is not EligibilityStatus.ELIGIBLE:
-                _LOGGER.info("client %s excluded (%s) in %.1fs", client_id, record.status, time.monotonic() - started)
+                _LOGGER.info(
+                    "client %s excluded (%s) in %.1fs",
+                    client_id,
+                    record.status,
+                    time.monotonic() - started,
+                )
                 continue
-                
-            splits = self.base_split_builder.build(data, config.dataset, config.randomness.attack_split_seed)
+
+            splits = self.base_split_builder.build(
+                data, config.dataset, config.randomness.attack_split_seed
+            )
             statistics[client_id] = self.preprocessor.client_statistics(
                 splits,
                 config.dataset.id,
@@ -346,7 +379,7 @@ class PrepareData:
             )
             self._write_raw_splits(root, splits)
             _LOGGER.info("client %s staged in %.1fs", client_id, time.monotonic() - started)
-            
+
         return tuple(records), statistics
 
     @staticmethod
@@ -357,7 +390,9 @@ class PrepareData:
             + config.dataset.split.min_benign_test
         )
         if len(data.benign) < required_size:
-            raise DataIntegrityError(f"{FailureCode.NBAIOT_ATTACK_BUDGET_FAIL}: benign evidence is insufficient")
+            raise DataIntegrityError(
+                f"{FailureCode.NBAIOT_ATTACK_BUDGET_FAIL}: benign evidence is insufficient"
+            )
 
     @staticmethod
     def _write_raw_splits(root: Path, splits: ClientSplits) -> None:
@@ -393,7 +428,7 @@ class PrepareData:
         for client_id in sorted(eligible_ids):
             splits = self._load_raw_splits(root, client_id)
             client_manifests.append(self._write_client_roles(root, splits, preprocessing))
-            
+
             for seed in parsed_seeds:
                 seeded_assignments[seed].append(
                     self._client_assignment_manifest(
@@ -403,7 +438,7 @@ class PrepareData:
                         CalibrationAssignmentMode.SEEDED_PERMUTATION,
                     )
                 )
-                
+
             if include_source_order_assignment:
                 source_order_clients.append(
                     self._client_assignment_manifest(
@@ -431,28 +466,26 @@ class PrepareData:
         client_root = root / str(splits.client_id)
         client_root.mkdir(parents=True, exist_ok=True)
         roles: list[RoleArtifactManifest] = []
-        
+
         for item in splits.roles:
             frame = item.frame
             if item.role is DataRole.TRAIN:
                 frame = preprocessing.transform(frame, splits.client_id)
-                
+
             relative = f"{splits.client_id}/{item.role}.csv"
             path = root / relative
             frame.to_csv(path, index=False)
-            
+
             roles.append(
                 RoleArtifactManifest(
                     role=item.role,
                     rows=len(frame),
-                    row_id_sha256=hash_row_ids(
-                        frame[PreparedColumn.ROW_ID].astype(str).tolist()
-                    ),
+                    row_id_sha256=hash_row_ids(frame[PreparedColumn.ROW_ID].astype(str).tolist()),
                     relative_path=PurePosixPath(relative),
                     file_sha256=sha256_file(path),
                 )
             )
-            
+
         return ClientDatasetManifest(client_id=splits.client_id, roles=tuple(roles))
 
     def _client_assignment_manifest(
@@ -490,7 +523,7 @@ class PrepareData:
     ) -> tuple[CalibrationAssignmentReference, ...]:
         layout = PreparedDatasetLayout(root)
         references: list[CalibrationAssignmentReference] = []
-        
+
         for seed, clients in sorted(seeded.items()):
             manifest = CalibrationAssignmentManifest(
                 calibration_seed=seed,
@@ -508,7 +541,7 @@ class PrepareData:
                     sha256=sha256_file(path),
                 )
             )
-            
+
         if source_order:
             seed = int(config.dataset.primary_calibration_seed)
             manifest = CalibrationAssignmentManifest(
@@ -527,7 +560,7 @@ class PrepareData:
                     sha256=sha256_file(path),
                 )
             )
-            
+
         return tuple(references)
 
     def _write_eligibility(
@@ -536,7 +569,9 @@ class PrepareData:
         config: ExperimentConfig,
         manifest: EligibilityManifest,
     ) -> None:
-        path = layout.diad_eligibility if config.dataset.id is DatasetId.DIAD else layout.eligibility
+        path = (
+            layout.diad_eligibility if config.dataset.id is DatasetId.DIAD else layout.eligibility
+        )
         atomic_write_json(path, manifest)
 
     def _write_dataset_manifest(

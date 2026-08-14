@@ -21,4 +21,5 @@ def test_device_info_reports_cuda_capabilities() -> None:
     assert info.available is torch.cuda.is_available()
     if info.available:
         assert info.device_name
-        assert info.vram_capacity_bytes and info.vram_capacity_bytes > 0
+        assert info.vram_capacity_bytes
+        assert info.vram_capacity_bytes > 0

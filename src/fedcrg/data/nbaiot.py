@@ -99,9 +99,7 @@ class NBaiotAdapter(DatasetAdapter):
         except KeyError as exc:
             raise DataIntegrityError(f"Unknown N-BaIoT client id: {client_id}") from exc
         files = DatasetDiscovery.csv_files(directory)
-        benign_files = tuple(
-            path for path in files if NbaiotFileMarker.BENIGN in str(path).lower()
-        )
+        benign_files = tuple(path for path in files if NbaiotFileMarker.BENIGN in str(path).lower())
         attack_files = tuple(path for path in files if path not in benign_files)
         if not benign_files or not attack_files:
             raise DataIntegrityError(
@@ -145,20 +143,17 @@ class NBaiotAdapter(DatasetAdapter):
                     "match the locked UCI N-BaIoT feature contract"
                 )
             frame = frame.rename(
-                columns={
-                    raw: feature
-                    for raw, feature in zip(
-                        self.dataset.source_headers, self.dataset.feature_names, strict=True
-                    )
-                }
+                columns=dict(
+                    zip(self.dataset.source_headers, self.dataset.feature_names, strict=True)
+                )
             )
             try:
                 numeric = frame.apply(pd.to_numeric, errors="raise")
-                assert isinstance(numeric, pd.DataFrame)
             except Exception as exc:
                 raise DataIntegrityError(
                     f"{FailureCode.FEATURE_SCHEMA_MISMATCH}: non-numeric value in {path}"
                 ) from exc
+            assert isinstance(numeric, pd.DataFrame)
             values = numeric.to_numpy(dtype=np.float64, copy=False)
             if not np.isfinite(values).all():
                 raise DataIntegrityError(
@@ -195,9 +190,6 @@ class NBaiotAdapter(DatasetAdapter):
                 f"{FailureCode.DATASET_COUNT_MISMATCH}: cannot derive attack subtype from {path}"
             )
         subtype = (
-            path.stem.lower()
-            .replace(NbaiotFileMarker.BENIGN, "")
-            .replace(family, "")
-            .strip("_")
+            path.stem.lower().replace(NbaiotFileMarker.BENIGN, "").replace(family, "").strip("_")
         )
         return f"{family}_{subtype}"

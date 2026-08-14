@@ -8,6 +8,7 @@ def test_primary_config_resolves_without_filename_inference() -> None:
     config = Study.load().resolve(ExperimentId.PRIMARY_NBAIOT)
     validate_experiment_config(config)
     assert config.dataset.id is DatasetId.NBAIOT
-    assert config.detector is not None and config.detector.id is DetectorId.AUTOENCODER
+    assert config.detector is not None
+    assert config.detector.id is DetectorId.AUTOENCODER
     assert PolicyId.FEDCRG in config.policies
     assert len(config.config_hash) == 64

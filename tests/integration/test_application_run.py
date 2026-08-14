@@ -39,11 +39,10 @@ def test_run_application_creates_immutable_complete_run(tmp_path: Path) -> None:
     assert (layout.verification / "hashes.json").exists()
     stored = RunManifestStore().load(layout.manifest)
     assert stored.status is ExperimentStatus.COMPLETE
+    store = RunManifestStore()
+    mutated = stored.model_copy(update={"status": ExperimentStatus.RUNNING})
     with pytest.raises(ImmutableRunError):
-        RunManifestStore().save(
-            layout.manifest,
-            stored.model_copy(update={"status": ExperimentStatus.RUNNING}),
-        )
+        store.save(layout.manifest, mutated)
 
 
 def test_run_application_records_failed_status(tmp_path: Path) -> None:

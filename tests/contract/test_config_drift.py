@@ -29,7 +29,10 @@ _ALLOWED_SOURCE_LITERALS: dict[tuple[str, object], str] = {
     ("experiments/analyses.py", 75): "IQR upper quantile (75th percentile)",
     ("experiments/analyses.py", 95): "upper percentile quantile (95th percentile)",
     ("learning/federated.py", 0.5): "cosine learning-rate schedule midpoint",
-    ("thresholding/metrics.py", 4.0): "confusion matrix bin count (tn/fp/fn/tp), not a scientific value",
+    (
+        "thresholding/metrics.py",
+        4.0,
+    ): "confusion matrix bin count (tn/fp/fn/tp), not a scientific value",
     (
         "learning/federated.py",
         4,
@@ -40,7 +43,10 @@ _ALLOWED_SOURCE_LITERALS: dict[tuple[str, object], str] = {
     ("reporting.py", 0.5): "decision-figure canvas coordinate",
     ("reporting.py", 0.6): "decision-figure canvas coordinate",
     ("reporting.py", 10.0): "decision-figure canvas coordinate",
-    ("reporting.py", 2.5): "decision-figure canvas coordinate, unrelated to statistics.bootstrap_ci_percentiles",
+    (
+        "reporting.py",
+        2.5,
+    ): "decision-figure canvas coordinate, unrelated to statistics.bootstrap_ci_percentiles",
     ("reporting.py", 300): "figure rasterization dpi",
     ("reporting.py", 5.0): "decision-figure canvas coordinate",
     ("reporting.py", 9.0): "decision-figure canvas coordinate and label fontsize",

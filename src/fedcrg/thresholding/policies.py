@@ -729,6 +729,42 @@ class PolicyThresholdSelector:
         if len(set(client_ids)) != len(client_ids):
             raise ValueError("Policy selection received duplicate client identities")
 
+        supervised_by_client = self._resolve_supervised_evidence(
+            non_oracle, client_ids, supervised_clients
+        )
+        need_method = any(POLICIES[policy].needs_method for policy in requested_policies)
+        prepared = self._prepare_thresholds(
+            benign_clients,
+            protocol,
+            statistics,
+            requested_policies,
+            non_oracle,
+            supervised_by_client,
+        )
+
+        entries, undefined = self._build_threshold_entries(
+            benign_clients,
+            non_oracle,
+            requested_policies,
+            prepared,
+            protocol,
+            need_method,
+        )
+
+        expected = {(policy, client_id) for policy in non_oracle for client_id in client_ids}
+        observed = {
+            (entry.policy, entry.client_id) for entry in entries if entry.policy in non_oracle
+        }
+        if observed != expected:
+            raise RuntimeError("Policy selection did not produce each requested client-policy cell")
+        return PolicyThresholdSet(tuple(entries), tuple(undefined), prepared.shrinkage_n0)
+
+    @staticmethod
+    def _resolve_supervised_evidence(
+        non_oracle: tuple[PolicyId, ...],
+        client_ids: tuple[ClientId, ...],
+        supervised_clients: tuple[SupervisedDevelopmentEvidence, ...] | None,
+    ) -> dict[ClientId, SupervisedDevelopmentEvidence]:
         supervised_needed = any(
             POLICIES[policy].requires_supervised_development for policy in non_oracle
         )
@@ -743,10 +779,19 @@ class PolicyThresholdSelector:
             raise ValueError(
                 "Supervised development evidence was supplied although no supervised policy was requested"
             )
+        return supervised_by_client
 
+    @staticmethod
+    def _prepare_thresholds(
+        benign_clients: tuple[BenignPolicyEvidence, ...],
+        protocol: ProtocolConfig,
+        statistics: StatisticsConfig,
+        requested_policies: tuple[PolicyId, ...],
+        non_oracle: tuple[PolicyId, ...],
+        supervised_by_client: dict[ClientId, SupervisedDevelopmentEvidence],
+    ) -> _PreparedThresholds:
         need_global = any(POLICIES[policy].uses_global_budget for policy in requested_policies)
         need_local = any(POLICIES[policy].uses_local_budget for policy in requested_policies)
-        need_method = any(POLICIES[policy].needs_method for policy in requested_policies)
 
         global_q = global_quantile(benign_clients, protocol.alpha) if need_global else None
         local_q = (
@@ -784,7 +829,7 @@ class PolicyThresholdSelector:
             if any(POLICIES[policy].uses_supervised_f1 for policy in non_oracle)
             else None
         )
-        prepared = _PreparedThresholds(
+        return _PreparedThresholds(
             global_q=global_q,
             local_q=local_q,
             shrinkage_n0=shrinkage_n0,
@@ -794,9 +839,18 @@ class PolicyThresholdSelector:
             supervised_by_client=supervised_by_client,
         )
 
+    @staticmethod
+    def _build_threshold_entries(
+        benign_clients: tuple[BenignPolicyEvidence, ...],
+        non_oracle: tuple[PolicyId, ...],
+        requested_policies: tuple[PolicyId, ...],
+        prepared: _PreparedThresholds,
+        protocol: ProtocolConfig,
+        need_method: bool,
+    ) -> tuple[list[ClientPolicyThreshold], list[UndefinedPolicyReason]]:
         entries: list[ClientPolicyThreshold] = []
         undefined: list[UndefinedPolicyReason] = []
-        if PolicyId.SUMMARY_STATISTIC_SELECT in non_oracle and summary_threshold is None:
+        if PolicyId.SUMMARY_STATISTIC_SELECT in non_oracle and prepared.summary_threshold is None:
             undefined.append(
                 UndefinedPolicyReason(
                     PolicyId.SUMMARY_STATISTIC_SELECT,
@@ -811,21 +865,23 @@ class PolicyThresholdSelector:
                 entries.append(ClientPolicyThreshold(policy, client_id, threshold))
 
             if PolicyId.ORACLE_TEST in requested_policies:
-                if global_q is None or client_id not in local_q or not need_method:
-                    raise RuntimeError("Oracle candidate thresholds were not prepared")
-                for policy in POLICIES[PolicyId.ORACLE_TEST].candidate_policies:
-                    if not any(
-                        item.policy is policy and item.client_id == client_id for item in entries
-                    ):
-                        candidate = _evaluate(
-                            POLICIES[policy].strategy, benign, prepared, protocol.alpha
-                        )
-                        entries.append(ClientPolicyThreshold(policy, client_id, candidate))
+                PolicyThresholdSelector._append_oracle_candidates(
+                    benign, entries, prepared, protocol, need_method
+                )
+        return entries, undefined
 
-        expected = {(policy, client_id) for policy in non_oracle for client_id in client_ids}
-        observed = {
-            (entry.policy, entry.client_id) for entry in entries if entry.policy in non_oracle
-        }
-        if observed != expected:
-            raise RuntimeError("Policy selection did not produce each requested client-policy cell")
-        return PolicyThresholdSet(tuple(entries), tuple(undefined), shrinkage_n0)
+    @staticmethod
+    def _append_oracle_candidates(
+        benign: BenignPolicyEvidence,
+        entries: list[ClientPolicyThreshold],
+        prepared: _PreparedThresholds,
+        protocol: ProtocolConfig,
+        need_method: bool,
+    ) -> None:
+        client_id = benign.client_id
+        if prepared.global_q is None or client_id not in prepared.local_q or not need_method:
+            raise RuntimeError("Oracle candidate thresholds were not prepared")
+        for policy in POLICIES[PolicyId.ORACLE_TEST].candidate_policies:
+            if not any(item.policy is policy and item.client_id == client_id for item in entries):
+                candidate = _evaluate(POLICIES[policy].strategy, benign, prepared, protocol.alpha)
+                entries.append(ClientPolicyThreshold(policy, client_id, candidate))

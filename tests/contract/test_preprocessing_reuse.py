@@ -83,7 +83,7 @@ PreparedState = tuple[
 ]
 
 
-@pytest.fixture()
+@pytest.fixture
 def prepared(tmp_path: Path) -> PreparedState:
     config = _config(tmp_path / "outputs")
     raw = tmp_path / "raw"
@@ -196,5 +196,7 @@ def test_adapter_dataset_mismatch_is_rejected(tmp_path: Path) -> None:
         def dataset_id(self) -> DatasetId:
             return DatasetId.DIAD
 
+    preparer = PrepareData()
+    adapter = WrongDatasetAdapter(raw)
     with pytest.raises(ValueError):
-        PrepareData().ensure_prepared(config, raw, adapter_override=WrongDatasetAdapter(raw))
+        preparer.ensure_prepared(config, raw, adapter_override=adapter)

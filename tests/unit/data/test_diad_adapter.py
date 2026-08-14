@@ -79,5 +79,6 @@ def test_diad_adapter_loads_benign_and_attack_roles(tmp_path: Path) -> None:
 def test_diad_adapter_rejects_unknown_client(tmp_path: Path) -> None:
     _write_diad_layout(tmp_path)
     adapter = DiadAdapter(tmp_path, _DIAD_DATASET)
+    unknown_client_id = _CLIENT_ID_ADAPTER.validate_python("diad_ffffffffffff")
     with pytest.raises(DataIntegrityError, match="Unknown DIAD client"):
-        adapter.load_client(_CLIENT_ID_ADAPTER.validate_python("diad_ffffffffffff"))
+        adapter.load_client(unknown_client_id)

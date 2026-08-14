@@ -51,5 +51,6 @@ def test_nbaiot_adapter_rejects_unknown_client(tmp_path: Path) -> None:
             root / "gafgyt" / "scan.csv", index=False
         )
     adapter = NBaiotAdapter(tmp_path, _NBAIOT_DATASET)
+    unknown_client_id = _CLIENT_ID_ADAPTER.validate_python("nb99")
     with pytest.raises(DataIntegrityError):
-        adapter.load_client(_CLIENT_ID_ADAPTER.validate_python("nb99"))
+        adapter.load_client(unknown_client_id)

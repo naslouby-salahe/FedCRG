@@ -53,20 +53,24 @@ class ScoreCacheColumn(StrEnum):
     ATTACK_FAMILY_TEST_ONLY = "attack_family_test_only"
 
 
-_CALIBRATION_ROLES = frozenset((
-    DataRole.REFERENCE,
-    DataRole.MISMATCH,
-    DataRole.CALIBRATION,
-    DataRole.BENIGN_GUARD,
-))
+_CALIBRATION_ROLES = frozenset(
+    (
+        DataRole.REFERENCE,
+        DataRole.MISMATCH,
+        DataRole.CALIBRATION,
+        DataRole.BENIGN_GUARD,
+    )
+)
 
-_BASE_SCORE_ROLES = frozenset((
-    DataRole.TRAIN,
-    DataRole.RESERVOIR,
-    DataRole.BENIGN_TEST,
-    DataRole.ATTACK_DEV,
-    DataRole.ATTACK_TEST,
-))
+_BASE_SCORE_ROLES = frozenset(
+    (
+        DataRole.TRAIN,
+        DataRole.RESERVOIR,
+        DataRole.BENIGN_TEST,
+        DataRole.ATTACK_DEV,
+        DataRole.ATTACK_TEST,
+    )
+)
 
 _REQUIRED_BASE_ROLES = _BASE_SCORE_ROLES
 _FORBIDDEN_DERIVED_ROLES = _CALIBRATION_ROLES
@@ -260,28 +264,38 @@ class CalibrationAssignment:
         reservoir_row_ids: tuple[RowId, ...],
     ) -> None:
         split = dataset.split
-        total_len = split.reference_benign + split.mismatch_benign + split.calibration_benign + split.benign_guard
+        total_len = (
+            split.reference_benign
+            + split.mismatch_benign
+            + split.calibration_benign
+            + split.benign_guard
+        )
         positions = np.arange(total_len)
-        
+
         if mode is CalibrationAssignmentMode.SEEDED_PERMUTATION:
             rng = np.random.Generator(
                 np.random.PCG64(_assignment_seed(dataset.id, calibration_seed, client_id))
             )
             positions = rng.permutation(positions)
-            
+
         self._positions: dict[DataRole, tuple[int, ...]] = {
             DataRole.REFERENCE: tuple(positions[: split.reference_benign].tolist()),
             DataRole.MISMATCH: tuple(
-                positions[split.reference_benign : split.reference_benign + split.mismatch_benign].tolist()
+                positions[
+                    split.reference_benign : split.reference_benign + split.mismatch_benign
+                ].tolist()
             ),
             DataRole.CALIBRATION: tuple(
                 positions[
-                    split.reference_benign + split.mismatch_benign : 
-                    split.reference_benign + split.mismatch_benign + split.calibration_benign
+                    split.reference_benign + split.mismatch_benign : split.reference_benign
+                    + split.mismatch_benign
+                    + split.calibration_benign
                 ].tolist()
             ),
             DataRole.BENIGN_GUARD: tuple(
-                positions[split.reference_benign + split.mismatch_benign + split.calibration_benign :].tolist()
+                positions[
+                    split.reference_benign + split.mismatch_benign + split.calibration_benign :
+                ].tolist()
             ),
         }
         self._row_ids = reservoir_row_ids
@@ -485,9 +499,7 @@ class ScoreCache:
             self._validate_stream_roles(observed_roles)
             cache_hash = sha256_file(parquet_path)
             client_ids = tuple(sorted(observed_roles))
-            frozen_records = tuple(
-                sorted(records, key=lambda item: (item.client_id, item.role))
-            )
+            frozen_records = tuple(sorted(records, key=lambda item: (item.client_id, item.role)))
             self._write_metadata(staging, identity, cache_hash, client_ids, frozen_records)
             os.replace(staging, root)
             return ScoreCacheDescriptor(
@@ -506,14 +518,14 @@ class ScoreCache:
     def _role_frame(identity: ScoreCacheIdentity, scores: RoleScores) -> pd.DataFrame:
         groups = scores.attack_groups
         n_samples = len(scores.values)
-        
+
         if scores.role is DataRole.BENIGN_TEST:
             label: int | None = 0
         elif scores.role is DataRole.ATTACK_TEST:
             label = 1
         else:
             label = None
-            
+
         return pd.DataFrame(
             {
                 ScoreCacheColumn.DATASET_ID: identity.dataset,
@@ -522,9 +534,7 @@ class ScoreCache:
                 ScoreCacheColumn.PHASE: scores.role,
                 ScoreCacheColumn.MODEL_SEED: int(identity.model_seed),
                 ScoreCacheColumn.SCORE_FLOAT64: np.asarray(scores.values, dtype=np.float64),
-                ScoreCacheColumn.LABEL_TEST_ONLY: pd.array(
-                    [label] * n_samples, dtype="Int64"
-                ),
+                ScoreCacheColumn.LABEL_TEST_ONLY: pd.array([label] * n_samples, dtype="Int64"),
                 ScoreCacheColumn.ATTACK_FAMILY_TEST_ONLY: pd.array(
                     (
                         list(groups)
@@ -546,8 +556,8 @@ class ScoreCache:
                 extra = roles - _REQUIRED_BASE_ROLES
                 raise ValueError(
                     f"Score-cache role contract failed for {client_id}, "
-                    f"missing={sorted(role for role in missing)}, "
-                    f"extra={sorted(role for role in extra)}"
+                    f"missing={sorted(missing)}, "
+                    f"extra={sorted(extra)}"
                 )
 
     @classmethod
@@ -698,9 +708,7 @@ class ScoreCache:
         if bool(group_values.notna().any()):
             groups = tuple(str(value) for value in group_values.dropna().astype(str))
             if len(groups) != len(frame):
-                raise ValueError(
-                    f"Attack-group metadata is incomplete for {client_id}/{role}"
-                )
+                raise ValueError(f"Attack-group metadata is incomplete for {client_id}/{role}")
         return RoleScores(
             role=role,
             values=frame[ScoreCacheColumn.SCORE_FLOAT64].to_numpy(dtype=np.float64),
@@ -710,39 +718,46 @@ class ScoreCache:
         )
 
 
+def _validate_client_role_coverage(client: ClientScoreSet) -> None:
+    client_id = client.client_id
+    present = {item.role for item in client.scores}
+    missing = _REQUIRED_BASE_ROLES - present
+    if missing:
+        names = ", ".join(sorted(missing))
+        raise ValueError(f"Score manifest {client_id} is missing base roles: {names}")
+    duplicated = _FORBIDDEN_DERIVED_ROLES & present
+    if duplicated:
+        names = ", ".join(sorted(duplicated))
+        raise ValueError(f"Score cache must not materialize calibration-assignment roles: {names}")
+
+
+def _validate_client_role_scores(client: ClientScoreSet) -> None:
+    client_id = client.client_id
+    row_ids: set[RowId] = set()
+    for role_scores in client.scores:
+        role = role_scores.role
+        if role_scores.values.dtype != np.float64:
+            raise ValueError("Cached scores must be float64")
+        if not np.isfinite(role_scores.values).all():
+            raise ValueError("NONFINITE_SCORE")
+        overlap = row_ids.intersection(role_scores.row_ids)
+        if overlap:
+            raise ValueError(f"ROLE_OVERLAP: {client_id}/{role}")
+        row_ids.update(role_scores.row_ids)
+        if len(role_scores.sha256) != 64:
+            raise ValueError("Invalid role-score hash")
+    if len(client.get(DataRole.BENIGN_TEST).values) == 0:
+        raise ValueError(f"Final benign test is empty for {client_id}")
+    if len(client.get(DataRole.ATTACK_TEST).values) == 0:
+        raise ValueError(f"Final attack test is empty for {client_id}")
+
+
 def validate_score_manifest(manifest: ScoreManifest) -> None:
     if not manifest.clients:
         raise ValueError("Score manifest has no clients")
     for client in manifest.clients:
-        client_id = client.client_id
-        present = {item.role for item in client.scores}
-        missing = _REQUIRED_BASE_ROLES - present
-        if missing:
-            names = ", ".join(sorted(role for role in missing))
-            raise ValueError(f"Score manifest {client_id} is missing base roles: {names}")
-        duplicated = _FORBIDDEN_DERIVED_ROLES & present
-        if duplicated:
-            names = ", ".join(sorted(role for role in duplicated))
-            raise ValueError(
-                f"Score cache must not materialize calibration-assignment roles: {names}"
-            )
-        row_ids: set[RowId] = set()
-        for role_scores in client.scores:
-            role = role_scores.role
-            if role_scores.values.dtype != np.float64:
-                raise ValueError("Cached scores must be float64")
-            if not np.isfinite(role_scores.values).all():
-                raise ValueError("NONFINITE_SCORE")
-            overlap = row_ids.intersection(role_scores.row_ids)
-            if overlap:
-                raise ValueError(f"ROLE_OVERLAP: {client_id}/{role}")
-            row_ids.update(role_scores.row_ids)
-            if len(role_scores.sha256) != 64:
-                raise ValueError("Invalid role-score hash")
-        if len(client.get(DataRole.BENIGN_TEST).values) == 0:
-            raise ValueError(f"Final benign test is empty for {client_id}")
-        if len(client.get(DataRole.ATTACK_TEST).values) == 0:
-            raise ValueError(f"Final attack test is empty for {client_id}")
+        _validate_client_role_coverage(client)
+        _validate_client_role_scores(client)
 
 
 class ScoreComputer:
@@ -770,7 +785,9 @@ class ScoreComputer:
                     dtype=torch.float32,
                     device=torch_device,
                 )
-                out[start:end] = model.anomaly_score(batch).detach().cpu().numpy().astype(np.float64, copy=False)
+                out[start:end] = (
+                    model.anomaly_score(batch).detach().cpu().numpy().astype(np.float64, copy=False)
+                )
         return out
 
     def compute_manifest(

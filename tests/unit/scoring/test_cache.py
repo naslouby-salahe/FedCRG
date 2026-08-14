@@ -24,9 +24,7 @@ _ROLES = (
 
 
 def _row_ids(role: DataRole, count: int) -> tuple[str, ...]:
-    return tuple(
-        hashlib.sha256(f"{role}-{index}".encode()).hexdigest() for index in range(count)
-    )
+    return tuple(hashlib.sha256(f"{role}-{index}".encode()).hexdigest() for index in range(count))
 
 
 def _role_scores(role: DataRole, count: int) -> RoleScores:

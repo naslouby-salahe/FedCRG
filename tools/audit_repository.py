@@ -68,21 +68,24 @@ def _python_files(root: Path) -> tuple[Path, ...]:
     return tuple(sorted(root.rglob("*.py")))
 
 
-def _check_findings() -> list[str]:
+def _source_findings(path: Path) -> list[str]:
     findings: list[str] = []
+    source = path.read_text(encoding="utf-8")
+    relative = path.relative_to(ROOT)
+    for fragment in _FORBIDDEN_FRAGMENTS:
+        if fragment in source:
+            findings.append(f"{relative}: contains {fragment!r}")
+    if path.name in _REDIRECT_MODULES:
+        findings.append(f"{relative}: redirect module")
+    tree = ast.parse(source, filename=str(path))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id == "Any":
+            findings.append(f"{relative}:{node.lineno}: Any annotation")
+    return findings
 
-    for path in _python_files(SRC):
-        source = path.read_text(encoding="utf-8")
-        relative = path.relative_to(ROOT)
-        for fragment in _FORBIDDEN_FRAGMENTS:
-            if fragment in source:
-                findings.append(f"{relative}: contains {fragment!r}")
-        if path.name in _REDIRECT_MODULES:
-            findings.append(f"{relative}: redirect module")
-        tree = ast.parse(source, filename=str(path))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Name) and node.id == "Any":
-                findings.append(f"{relative}:{node.lineno}: Any annotation")
+
+def _layout_findings() -> list[str]:
+    findings: list[str] = []
 
     for name in _STALE_PACKAGES:
         if (SRC / name).exists():
@@ -104,6 +107,14 @@ def _check_findings() -> list[str]:
         if not (ROOT / "config" / config_name).is_file():
             findings.append(f"config/{config_name} missing")
 
+    return findings
+
+
+def _check_findings() -> list[str]:
+    findings: list[str] = []
+    for path in _python_files(SRC):
+        findings.extend(_source_findings(path))
+    findings.extend(_layout_findings())
     return findings
 
 

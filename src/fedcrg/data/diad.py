@@ -115,9 +115,7 @@ class DiadAdapter(DatasetAdapter):
                     f"{path.relative_to(self.root)}"
                 ) from exc
             frame.columns = [str(column).strip() for column in frame.columns]
-            normalized = (
-                frame[DiadSourceColumn.DEVICE_MAC].astype(str).str.strip().str.lower()
-            )
+            normalized = frame[DiadSourceColumn.DEVICE_MAC].astype(str).str.strip().str.lower()
             selected = frame.loc[normalized.isin(macs)].copy()
             if selected.empty:
                 continue
@@ -203,9 +201,7 @@ class NumericSafeFeatureContract(BaseModel):
 
 
 def _is_forbidden_name(column: FeatureName, derivation: DiadFeatureDerivation) -> bool:
-    excluded = frozenset(derivation.excluded_feature_exact) | {
-        item for item in PreparedColumn
-    }
+    excluded = frozenset(derivation.excluded_feature_exact) | set(PreparedColumn)
     lowered = column.lower()
     if column in excluded or lowered in {value.lower() for value in excluded}:
         return True
@@ -240,7 +236,7 @@ def derive_numeric_safe_features(
             sha256=hash_row_ids(
                 item.frame[PreparedColumn.ROW_ID].astype(str).tolist()
                 if PreparedColumn.ROW_ID in item.frame.columns
-                else tuple()
+                else ()
             ),
         )
         for item in sorted(training_frames, key=lambda entry: entry.client_id)

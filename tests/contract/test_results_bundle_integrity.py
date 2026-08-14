@@ -22,7 +22,7 @@ def _write_fake_evidence(outputs_root: Path) -> None:
     (publication.figures / "figure_1.png").write_bytes(b"png")
 
 
-@pytest.fixture()
+@pytest.fixture
 def bundle(tmp_path: Path) -> Path:
     outputs_root = tmp_path / "outputs"
     _write_fake_evidence(outputs_root)
@@ -67,8 +67,9 @@ def test_bundle_detects_missing_required_directory(bundle: Path, tmp_path: Path)
 
 
 def test_bundle_build_refuses_overwrite(bundle: Path, tmp_path: Path) -> None:
+    builder = ResultsBuilder()
     with pytest.raises(FileExistsError):
-        ResultsBuilder().build(
+        builder.build(
             campaign_id="c1",
             outputs_root=tmp_path / "outputs",
             results_root=tmp_path / "results",

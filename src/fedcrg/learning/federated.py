@@ -21,6 +21,7 @@ from fedcrg.types import (
     Correlation,
     EpochCount,
     FeatureCount,
+    Identifier,
     LearningRate,
     Loss,
     MetricDifference,
@@ -122,36 +123,37 @@ StateDict = dict[str, torch.Tensor]
 def equal_client_mean(models: Sequence[DetectorModel]) -> StateDict:
     if not models:
         raise ValueError("At least one client model is required")
-    
+
     states = [model.state_dict() for model in models]
     keys = tuple(states[0].keys())
-    
+
     if any(tuple(state.keys()) != keys for state in states[1:]):
         raise ValueError("Client model state dictionaries do not match")
-        
+
     result: StateDict = {}
-    
     for key in keys:
         tensors = [state[key].detach() for state in states]
-        base_tensor = tensors[0]
-        shape = base_tensor.shape
-        dtype = base_tensor.dtype
-        
-        if any(tensor.shape != shape for tensor in tensors[1:]):
-            raise ValueError(f"Client tensor shapes differ for {key}")
-        if any(tensor.dtype != dtype for tensor in tensors[1:]):
-            raise ValueError(f"Client tensor dtypes differ for {key}")
-            
-        if dtype.is_floating_point:
-            if any(not torch.isfinite(tensor).all() for tensor in tensors):
-                raise FloatingPointError(f"TRAINING_NUMERICAL_FAILURE: non-finite tensor {key}")
-            result[key] = torch.stack(tensors, dim=0).mean(dim=0)
-        else:
-            if any(not torch.equal(base_tensor, tensor) for tensor in tensors[1:]):
-                raise ValueError(f"Non-floating state differs across clients: {key}")
-            result[key] = base_tensor.clone()
-            
+        result[key] = _merged_client_tensor(key, tensors)
     return result
+
+
+def _merged_client_tensor(key: Identifier, tensors: list[torch.Tensor]) -> torch.Tensor:
+    base_tensor = tensors[0]
+    shape = base_tensor.shape
+    dtype = base_tensor.dtype
+
+    if any(tensor.shape != shape for tensor in tensors[1:]):
+        raise ValueError(f"Client tensor shapes differ for {key}")
+    if any(tensor.dtype != dtype for tensor in tensors[1:]):
+        raise ValueError(f"Client tensor dtypes differ for {key}")
+
+    if dtype.is_floating_point:
+        if any(not torch.isfinite(tensor).all() for tensor in tensors):
+            raise FloatingPointError(f"TRAINING_NUMERICAL_FAILURE: non-finite tensor {key}")
+        return torch.stack(tensors, dim=0).mean(dim=0)
+    if any(not torch.equal(base_tensor, tensor) for tensor in tensors[1:]):
+        raise ValueError(f"Non-floating state differs across clients: {key}")
+    return base_tensor.clone()
 
 
 class ClientRoundResult(BaseModel):
@@ -229,14 +231,15 @@ class FederatedClient:
                 shuffle=True,
                 generator=generator,
                 drop_last=False,
+                num_workers=0,
             )
             for batch in loader:
                 values = batch[0] if isinstance(batch, (tuple, list)) else batch
                 values = values.to(self.device, dtype=torch.float32)
                 optimizer.zero_grad(set_to_none=True)
-                
+
                 loss = model.anomaly_score(values).mean()
-                
+
                 if not torch.isfinite(loss):
                     raise FloatingPointError(
                         f"TRAINING_NUMERICAL_FAILURE: non-finite loss for {self.client_id}"
@@ -252,7 +255,7 @@ class FederatedClient:
 
         if record_presentations == 0:
             raise RuntimeError(f"Client {self.client_id} produced no training records")
-            
+
         result = ClientRoundResult(
             client_id=self.client_id,
             mean_loss=weighted_loss_sum / record_presentations,
@@ -338,7 +341,10 @@ class FederatedTrainer:
                 model_payload_bytes=model_payload_bytes,
             )
             round_results.append(round_result)
-            if config.record_round20_score_correlation and round_index == self.diagnostic_round_index:
+            if (
+                config.record_round20_score_correlation
+                and round_index == self.diagnostic_round_index
+            ):
                 round20_model = server.broadcast().cpu()
 
         final_model = server.broadcast().cpu()
@@ -347,9 +353,9 @@ class FederatedTrainer:
             final_model,
             datasets,
         )
-        
+
         total_communication = sum(item.round_communication_bytes for item in round_results)
-        
+
         result = TrainingResult(
             model_seed=model_seed,
             rounds=tuple(round_results),
@@ -380,7 +386,7 @@ class FederatedTrainer:
         selected_clients = sampler.select()
         before = server.broadcast().cpu()
         global_model = server.broadcast()
-        
+
         trained_models: list[DetectorModel] = []
         client_results: list[ClientRoundResult] = []
 
@@ -397,7 +403,7 @@ class FederatedTrainer:
 
         global_hash = server.aggregate(trained_models)
         after = server.broadcast().cpu()
-        
+
         losses = np.asarray([item.mean_loss for item in client_results], dtype=np.float64)
         update_norm = self._parameter_update_norm(before, after)
         communication_bytes = 2 * len(selected_clients) * model_payload_bytes
@@ -438,7 +444,7 @@ class FederatedTrainer:
             if not tensor.dtype.is_floating_point:
                 continue
             delta = tensor.detach().cpu().double() - before_state[name].detach().cpu().double()
-            squared_norm += float(torch.sum(delta ** 2))
+            squared_norm += float(torch.sum(delta**2))
         return float(math.sqrt(squared_norm))
 
     @staticmethod
@@ -449,23 +455,23 @@ class FederatedTrainer:
     ) -> Correlation | None:
         if round20_model is None:
             return None
-            
+
         round20_model.eval()
         final_model.eval()
-        
+
         round20_scores: list[Tensor] = []
         final_scores: list[Tensor] = []
-        
+
         with torch.no_grad():
             for client_id in sorted(datasets):
                 values = datasets[client_id].tensors[0].to(dtype=torch.float32)
                 round20_scores.append(round20_model.anomaly_score(values).cpu())
                 final_scores.append(final_model.anomaly_score(values).cpu())
-                
+
         left = torch.cat(round20_scores).double().numpy()
         right = torch.cat(final_scores).double().numpy()
-        
-        if np.std(left) == 0.0 or np.std(right) == 0.0:
+
+        if not np.std(left) or not np.std(right):
             return None
-            
+
         return float(np.corrcoef(left, right)[0, 1])

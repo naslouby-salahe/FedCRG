@@ -43,7 +43,7 @@ def build_mlp(
     dims: tuple[Dimension, ...],
     activation: type[torch.nn.Module],
     bias: bool = True,
-    output_activation: bool = False
+    output_activation: bool = False,
 ) -> torch.nn.Sequential:
     layers: list[torch.nn.Module] = []
     for i, (left, right) in enumerate(zip(dims[:-1], dims[1:], strict=True)):
@@ -54,9 +54,7 @@ def build_mlp(
 
 
 def initialize_weights(
-    module: torch.nn.Module,
-    gain: XavierGain,
-    forbid_bias: bool = False
+    module: torch.nn.Module, gain: XavierGain, forbid_bias: bool = False
 ) -> None:
     for m in module.modules():
         if isinstance(m, torch.nn.Linear):

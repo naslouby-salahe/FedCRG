@@ -21,7 +21,7 @@ from fedcrg.types import (
 
 Frozen = ConfigDict(frozen=True)
 
-_METADATA = frozenset(column for column in PreparedColumn)
+_METADATA = frozenset(PreparedColumn)
 
 
 def model_feature_columns(frame: pd.DataFrame, expected: PositiveCount) -> tuple[FeatureName, ...]:
@@ -73,13 +73,15 @@ class PreprocessingModel(BaseModel):
                 values = np.where(missing, medians, values)
 
         if not np.isfinite(values).all():
-            raise DataIntegrityError(f"Non-finite values remain after preprocessing for {client_id}")
+            raise DataIntegrityError(
+                f"Non-finite values remain after preprocessing for {client_id}"
+            )
 
         minima = np.asarray(self.global_minima, dtype=np.float64)
         span = np.asarray(self.global_maxima, dtype=np.float64) - minima
-        
+
         scaled = np.zeros_like(values)
-        np.divide(values - minima, span, out=scaled, where=span != 0.0)
+        np.divide(values - minima, span, out=scaled, where=span.astype(bool))
 
         result = frame.copy()
         result.loc[:, features] = scaled
@@ -118,7 +120,7 @@ class TrainOnlyPreprocessing:
                 raise DataIntegrityError(
                     "DIAD preprocessing requires a configured per-feature finite-rate minimum"
                 )
-            
+
             finite_rates = np.isfinite(values).mean(axis=0)
             failing = [
                 columns[i] for i, rate in enumerate(finite_rates) if rate < finite_rate_minimum
@@ -142,26 +144,26 @@ class TrainOnlyPreprocessing:
             expected_features,
             finite_rate_minimum=finite_rate_minimum,
         )
-        
+
         train_frame = splits.get(DataRole.TRAIN)
-        training_row_hash = hash_row_ids(
-            train_frame[PreparedColumn.ROW_ID].astype(str).tolist()
-        )
+        training_row_hash = hash_row_ids(train_frame[PreparedColumn.ROW_ID].astype(str).tolist())
         train_values = train_frame.loc[:, list(columns)].to_numpy(dtype=np.float64, copy=True)
-        
+
         median_tuple = None
         if dataset is DatasetId.DIAD:
             finite_mask = np.isfinite(train_values)
             masked_values = np.where(finite_mask, train_values, np.nan)
             medians = np.nanmedian(masked_values, axis=0)
-            
+
             if not np.isfinite(medians).all():
-                raise DataIntegrityError(f"DIAD imputation median is undefined for {splits.client_id}")
-            
+                raise DataIntegrityError(
+                    f"DIAD imputation median is undefined for {splits.client_id}"
+                )
+
             missing = ~finite_mask
             if missing.any():
                 train_values = np.where(missing, medians, train_values)
-            
+
             median_tuple = tuple(medians.tolist())
 
         return ClientPreprocessingStatistics(
@@ -180,16 +182,16 @@ class TrainOnlyPreprocessing:
     ) -> PreprocessingModel:
         if not statistics:
             raise DataIntegrityError("Cannot fit preprocessing without clients")
-        
+
         ordered = tuple(sorted(statistics, key=lambda item: item.client_id))
         feature_columns = ordered[0].feature_columns
-        
+
         if any(item.feature_columns != feature_columns for item in ordered):
             raise DataIntegrityError("Model feature order differs across clients")
 
         minima_stack = np.array([item.local_minima for item in ordered])
         maxima_stack = np.array([item.local_maxima for item in ordered])
-        
+
         return PreprocessingModel(
             dataset=dataset,
             feature_columns=feature_columns,

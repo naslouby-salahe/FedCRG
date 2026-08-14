@@ -47,6 +47,7 @@ from fedcrg.types import (
     CampaignId,
     ClientId,
     ConfidenceLevel,
+    DataIntegrityError,
     DataRole,
     DecisionSource,
     DecisionState,
@@ -483,49 +484,49 @@ class PublicationPackageBuilder:
             ),
         )
         figures = (
-            self._figure(
+            self._table(
                 "Figure 1 - Decision architecture",
                 lambda: build_decision_architecture_figure(
                     figure_root / "figure_1_decision_architecture.png"
                 ),
             ),
-            self._figure(
+            self._table(
                 "Figure 2 - Finite-sample readiness frontier",
                 lambda: build_readiness_frontier_from_catalogue(
                     figure_root / "figure_2_readiness_frontier.png"
                 ),
             ),
-            self._figure(
+            self._table(
                 "Figure 3 - Reference-mismatch evidence/power map",
                 lambda: build_mismatch_power_map_from_catalogue(
                     figure_root / "figure_3_mismatch_power_map.png"
                 ),
             ),
-            self._figure(
+            self._table(
                 "Figure 4 - Per-client operating points",
                 lambda: build_per_client_operating_points_figure(
                     figure_root / "figure_4_per_client_operating_points.png", destination
                 ),
             ),
-            self._figure(
+            self._table(
                 "Figure 5 - Reliability-utility frontier",
                 lambda: build_reliability_utility_frontier_figure(
                     figure_root / "figure_5_reliability_utility_frontier.png", destination
                 ),
             ),
-            self._figure(
+            self._table(
                 "Figure 6 - Calibration-size phase transition",
                 lambda: build_phase_transition_from_catalogue(
                     figure_root / "figure_6_phase_transition.png"
                 ),
             ),
-            self._figure(
+            self._table(
                 "Figure 7 - Assumption stress",
                 lambda: build_assumption_stress_figure(
                     figure_root / "figure_7_assumption_stress.png", destination
                 ),
             ),
-            self._figure(
+            self._table(
                 "Figure 8 - External replication",
                 lambda: build_external_replication_figure(
                     figure_root / "figure_8_external_replication.png", destination
@@ -536,9 +537,7 @@ class PublicationPackageBuilder:
         atomic_write_json(
             manifest_path,
             {
-                ExperimentStatus.COMPLETE: all(
-                    item.available for item in (*tables, *figures)
-                ),
+                ExperimentStatus.COMPLETE: all(item.available for item in (*tables, *figures)),
                 "tables": [
                     {
                         "name": item.name,
@@ -589,13 +588,6 @@ class PublicationPackageBuilder:
         if not runs:
             return PublicationArtifact(name, None, False, reason)
         return self._table(name, builder)
-
-    def _figure(self, name: Description, builder: Callable[[], Path]) -> PublicationArtifact:
-        try:
-            path = builder()
-        except Exception as exc:
-            return PublicationArtifact(name, None, False, str(exc))
-        return PublicationArtifact(name, path, path.is_file())
 
 
 def build_decision_architecture_figure(output: Path) -> Path:
@@ -808,9 +800,7 @@ def _band_guide_lines() -> tuple[Fpr, Fpr, Fpr]:
 
 
 def build_per_client_operating_points_figure(output: Path, results_root: Path) -> Path:
-    frame = _require_bundle_table(
-        results_root, PublicationTableFilename.PRIMARY_POLICY_RESULTS
-    )
+    frame = _require_bundle_table(results_root, PublicationTableFilename.PRIMARY_POLICY_RESULTS)
     if "client_id" not in frame.columns or "fpr" not in frame.columns:
         raise ValueError("primary policy results table lacks client_id/fpr columns")
     figure, axis = plt.subplots(figsize=(9, 5))
@@ -830,9 +820,7 @@ def build_per_client_operating_points_figure(output: Path, results_root: Path) -
 
 
 def build_reliability_utility_frontier_figure(output: Path, results_root: Path) -> Path:
-    frame = _require_bundle_table(
-        results_root, PublicationTableFilename.PRIMARY_POLICY_RESULTS
-    )
+    frame = _require_bundle_table(results_root, PublicationTableFilename.PRIMARY_POLICY_RESULTS)
     required = {"policy_id", "mebe", "attack_balanced_macro_tpr"}
     if not required.issubset(frame.columns):
         raise ValueError("primary policy results table lacks MEBE/ABMacroTPR columns")
@@ -1172,8 +1160,12 @@ class ResultsBuilder:
         self, outputs_root: Path, config: ExperimentConfig, layout: ResultsBundleLayout
     ) -> None:
         report = build_repository_report(outputs_root, config)
-        if report.is_file():
-            (layout.reports / report.name).write_bytes(report.read_bytes())
+        if not report.is_file():
+            return
+        destination = (layout.reports / report.name).resolve()
+        if destination.parent != layout.reports.resolve():
+            raise DataIntegrityError(f"Repository report escapes the reports directory: {report}")
+        destination.write_bytes(report.read_bytes())
 
     @staticmethod
     def _write_provenance(
@@ -1271,22 +1263,31 @@ class ResultsVerifier:
         if not checksums_path.is_file():
             problems.append("missing bundle checksums.json")
         else:
-            checksums = tuple(
-                ChecksumRecord.model_validate(entry)
-                for entry in json.loads(checksums_path.read_text(encoding="utf-8"))
-            )
-            for path in sorted(destination.rglob("*")):
-                if path.is_file() and path.name != layout.checksums.name:
-                    relative = path.relative_to(destination).as_posix()
-                    expected = next(
-                        (record.sha256 for record in checksums if record.relative_path == relative),
-                        None,
-                    )
-                    if expected is None:
-                        problems.append(f"unchecksummed bundle file: {relative}")
-                    elif str(expected) != sha256_file(path):
-                        problems.append(f"bundle hash mismatch: {relative}")
+            problems.extend(self._checksum_mismatches(destination, layout, checksums_path))
         return ResultsVerification(not problems, tuple(problems))
+
+    @staticmethod
+    def _checksum_mismatches(
+        destination: Path, layout: ResultsBundleLayout, checksums_path: Path
+    ) -> list[Identifier]:
+        problems: list[Identifier] = []
+        checksums = tuple(
+            ChecksumRecord.model_validate(entry)
+            for entry in json.loads(checksums_path.read_text(encoding="utf-8"))
+        )
+        for path in sorted(destination.rglob("*")):
+            if not path.is_file() or path.name == layout.checksums.name:
+                continue
+            relative = path.relative_to(destination).as_posix()
+            expected = next(
+                (record.sha256 for record in checksums if record.relative_path == relative),
+                None,
+            )
+            if expected is None:
+                problems.append(f"unchecksummed bundle file: {relative}")
+            elif str(expected) != sha256_file(path):
+                problems.append(f"bundle hash mismatch: {relative}")
+        return problems
 
 
 def build_results_bundle(

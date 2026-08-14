@@ -62,9 +62,11 @@ def test_diad_preprocessing_imputes_from_client_train_median() -> None:
 def test_diad_training_finite_rate_is_enforced() -> None:
     values = np.ones((100, 2))
     values[:2, 0] = np.nan
+    preprocessor = TrainOnlyPreprocessing()
+    splits = _splits(values)
     with pytest.raises(DataIntegrityError, match="DIAD_FEATURE_FINITE_RATE_FAIL"):
-        TrainOnlyPreprocessing().validate_training_rows(
-            _splits(values),
+        preprocessor.validate_training_rows(
+            splits,
             DatasetId.DIAD,
             expected_features=2,
             finite_rate_minimum=0.99,

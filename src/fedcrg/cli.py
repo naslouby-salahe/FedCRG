@@ -244,7 +244,7 @@ def doctor() -> None:
 
 
 @cli.command(name="validate")
-@click.argument("experiment_id", type=click.Choice([item for item in ExperimentId]))
+@click.argument("experiment_id", type=click.Choice(list(ExperimentId)))
 @click.pass_context
 def validate(ctx: click.Context, experiment_id: str) -> None:
     study = _study(ctx)
@@ -266,7 +266,7 @@ def validate(ctx: click.Context, experiment_id: str) -> None:
 
 
 @cli.command(name="plan")
-@click.argument("experiment_id", type=click.Choice([item for item in ExperimentId]))
+@click.argument("experiment_id", type=click.Choice(list(ExperimentId)))
 @click.pass_context
 def plan(ctx: click.Context, experiment_id: str) -> None:
     study = _study(ctx)
@@ -290,7 +290,7 @@ def plan(ctx: click.Context, experiment_id: str) -> None:
 @click.argument(
     "dataset_id",
     required=False,
-    type=click.Choice([item for item in DatasetId]),
+    type=click.Choice(list(DatasetId)),
 )
 @click.option("--overwrite", is_flag=True, help="Rebuild the prepared cache explicitly.")
 @click.pass_context
@@ -303,7 +303,7 @@ def preprocess(ctx: click.Context, dataset_id: str | None, overwrite: bool) -> N
         if dataset not in _DATASET_EXPERIMENTS:
             raise click.BadParameter(
                 f"Raw dataset {dataset_id!r} has no preprocessing pipeline, "
-                "expected one of " + ", ".join(sorted(item for item in _DATASET_EXPERIMENTS))
+                "expected one of " + ", ".join(sorted(_DATASET_EXPERIMENTS))
             )
         datasets = (dataset,)
     preparer = PrepareData()
@@ -327,7 +327,7 @@ def preprocess(ctx: click.Context, dataset_id: str | None, overwrite: bool) -> N
 
 
 @cli.command(name="run")
-@click.argument("experiment_id", type=click.Choice([item for item in ExperimentId]))
+@click.argument("experiment_id", type=click.Choice(list(ExperimentId)))
 @click.option("--overwrite", is_flag=True, help="Re-run and replace regenerable evidence.")
 @click.pass_context
 def run(ctx: click.Context, experiment_id: str, overwrite: bool) -> None:
@@ -398,9 +398,7 @@ def campaign(ctx: click.Context, overwrite: bool) -> None:
     _print(
         CampaignPayload(
             campaign_id=campaign_id,
-            status=status.current_stage
-            if status.current_stage
-            else CampaignStage.PENDING,
+            status=status.current_stage if status.current_stage else CampaignStage.PENDING,
             completed=len(status.completed_experiments),
             total=max(1, len(work_items)),
             current_experiment=status.current_experiment,
@@ -410,38 +408,43 @@ def campaign(ctx: click.Context, overwrite: bool) -> None:
     )
 
 
+def _collect_run_status_counts(runs_root: Path) -> dict[ExperimentId, RunStatusCounts]:
+    counts: dict[ExperimentId, RunStatusCounts] = {}
+    if not runs_root.is_dir():
+        return counts
+    for run_dir in runs_root.iterdir():
+        run_layout = RunLayout(run_dir)
+        if not run_layout.manifest.is_file():
+            continue
+        try:
+            manifest = RunManifest.model_validate_json(
+                run_layout.manifest.read_text(encoding="utf-8")
+            )
+        except (OSError, ValidationError):
+            continue
+        counter = counts.setdefault(manifest.experiment_id, RunStatusCounts())
+        counter.total += 1
+        if manifest.status is ExperimentStatus.COMPLETE:
+            counter.completed += 1
+        elif manifest.status is ExperimentStatus.FAILED:
+            counter.failed += 1
+        else:
+            counter.running += 1
+    return counts
+
+
 @cli.command(name="status")
 @click.argument(
     "experiment_id",
     required=False,
-    type=click.Choice([item for item in ExperimentId]),
+    type=click.Choice(list(ExperimentId)),
 )
 @click.pass_context
 def status(ctx: click.Context, experiment_id: str | None) -> None:
     study = _study(ctx)
     outputs_root = study.paths.outputs_root
     layout = OutputsLayout(outputs_root)
-    counts: dict[ExperimentId, RunStatusCounts] = {}
-    runs_root = layout.runs
-    if runs_root.is_dir():
-        for run_dir in runs_root.iterdir():
-            run_layout = RunLayout(run_dir)
-            if not run_layout.manifest.is_file():
-                continue
-            try:
-                manifest = RunManifest.model_validate_json(
-                    run_layout.manifest.read_text(encoding="utf-8")
-                )
-            except (OSError, ValidationError):
-                continue
-            counter = counts.setdefault(manifest.experiment_id, RunStatusCounts())
-            counter.total += 1
-            if manifest.status is ExperimentStatus.COMPLETE:
-                counter.completed += 1
-            elif manifest.status is ExperimentStatus.FAILED:
-                counter.failed += 1
-            else:
-                counter.running += 1
+    counts = _collect_run_status_counts(layout.runs)
     rows = tuple(
         ExperimentStatusRow(
             experiment=experiment,
@@ -458,9 +461,7 @@ def status(ctx: click.Context, experiment_id: str | None) -> None:
     try:
         campaign_status = CampaignStatusStore(outputs_root=outputs_root).load(study.campaign_id)
         campaign_record = campaign_status.campaign_id
-        campaign_stage = (
-            campaign_status.current_stage if campaign_status.current_stage else None
-        )
+        campaign_stage = campaign_status.current_stage if campaign_status.current_stage else None
     except FileNotFoundError:
         pass
     _print(
@@ -516,6 +517,7 @@ def report(ctx: click.Context) -> None:
 
 @cli.group(name="results")
 def results_group() -> None:
+    # Click group callback: subcommands below attach to this group and carry the behavior.
     pass
 
 

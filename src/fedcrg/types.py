@@ -242,7 +242,7 @@ class OperatingBand(BaseModel):
 
     @model_validator(mode="after")
     def _validate(self) -> OperatingBand:
-        if not self.lower < self.upper:
+        if self.lower >= self.upper:
             raise ValueError("Operating band must satisfy lower < upper")
         return self
 

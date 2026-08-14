@@ -32,12 +32,14 @@ from fedcrg.types import (
 
 Frozen = ConfigDict(frozen=True)
 _ATTACK_GROUP_ADAPTER = TypeAdapter(AttackGroupId)
-_CALIBRATION_ROLES = frozenset({
-    DataRole.REFERENCE,
-    DataRole.MISMATCH,
-    DataRole.CALIBRATION,
-    DataRole.BENIGN_GUARD,
-})
+_CALIBRATION_ROLES = frozenset(
+    {
+        DataRole.REFERENCE,
+        DataRole.MISMATCH,
+        DataRole.CALIBRATION,
+        DataRole.BENIGN_GUARD,
+    }
+)
 
 
 class RoleFrame(BaseModel):
@@ -105,7 +107,7 @@ def validate_split_disjointness(
             continue
         if row_id_column not in frame.columns:
             raise DataIntegrityError(f"{role} is missing {row_id_column}")
-        
+
         role_ids = set(frame[row_id_column].astype(str).unique())
         overlap = seen.intersection(role_ids)
         if overlap:
@@ -130,12 +132,12 @@ class CalibrationAssignmentBuilder:
             + split.calibration_benign
             + split.benign_guard
         )
-        
+
         if len(frame) != reservoir_total:
             raise DataIntegrityError(
                 f"Reservoir row count {len(frame)} != {reservoir_total} for {client_id}"
             )
-            
+
         if mode is CalibrationAssignmentMode.SEEDED_PERMUTATION:
             rng = calibration_rng(dataset, client_id, calibration_seed)
             positions = tuple(int(index) for index in rng.permutation(reservoir_total))
@@ -147,10 +149,10 @@ class CalibrationAssignmentBuilder:
             split.reference_benign + split.mismatch_benign,
             split.reference_benign + split.mismatch_benign + split.calibration_benign,
         )
-        
+
         row_id_series = frame[PreparedColumn.ROW_ID].astype(str)
         roles: list[RolePositions] = []
-        
+
         role_slices = (
             (DataRole.REFERENCE, 0, boundaries[0]),
             (DataRole.MISMATCH, boundaries[0], boundaries[1]),
@@ -202,28 +204,29 @@ class BaseSplitBuilder:
     ) -> ClientSplits:
         split = config.split
         benign = data.benign.reset_index(drop=True)
-        
+
         req_benign = split.train_benign + split.reservoir_size + split.min_benign_test
         if len(benign) < req_benign:
             raise DataIntegrityError(f"Benign evidence is insufficient for {data.client_id}")
-            
+
         train = benign.iloc[: split.train_benign].copy()
-        reservoir = benign.iloc[split.train_benign : split.train_benign + split.reservoir_size].copy()
+        reservoir = benign.iloc[
+            split.train_benign : split.train_benign + split.reservoir_size
+        ].copy()
         benign_test = benign.iloc[split.train_benign + split.reservoir_size : req_benign].copy()
 
         attack = data.attack.reset_index(drop=True)
         if PreparedColumn.ATTACK_GROUP not in attack.columns:
             raise DataIntegrityError(f"Attack frame lacks attack_group for {data.client_id}")
-            
+
         group_values = attack[PreparedColumn.ATTACK_GROUP].astype(str)
         unique_groups = group_values.unique()
         groups = tuple(sorted(_ATTACK_GROUP_ADAPTER.validate_python(g) for g in unique_groups))
-        
+
         group_counts = AttackGroupAllocation(
             groups=tuple(
                 AttackGroupCount(
-                    group=_ATTACK_GROUP_ADAPTER.validate_python(str(group)), 
-                    count=int(count)
+                    group=_ATTACK_GROUP_ADAPTER.validate_python(str(group)), count=int(count)
                 )
                 for group, count in group_values.value_counts().items()
             )
@@ -246,7 +249,7 @@ class BaseSplitBuilder:
 
         dev_index = set(dev_rows)
         test_rows = [i for i in range(len(attack)) if i not in dev_index]
-        
+
         attack_dev = attack.iloc[dev_rows].copy()
         attack_test = attack.iloc[test_rows].copy()
 
@@ -294,7 +297,7 @@ class BaseSplitBuilder:
                 )
             )
             return BaseSplitBuilder.waterfill_allocation(groups, capacities, development_budget)
-        
+
         return BaseSplitBuilder._nbaiot_balanced_allocation(
             groups, group_counts, development_budget, reserve_per_group
         )
@@ -308,13 +311,13 @@ class BaseSplitBuilder:
     ) -> AttackGroupAllocation:
         if not groups:
             raise DataIntegrityError("Attack frame contains no attack groups")
-        
+
         per_group, remainder = divmod(int(development_budget), len(groups))
         allocation = {group: int(per_group) for group in groups}
-        
+
         for group in groups[:remainder]:
             allocation[group] += 1
-            
+
         for group in groups:
             total = group_counts.for_group(group)
             capacity = total - min(reserve_per_group, total)
@@ -323,10 +326,10 @@ class BaseSplitBuilder:
                     f"{FailureCode.NBAIOT_ATTACK_BUDGET_FAIL}: attack group {group} "
                     f"cannot retain {reserve_per_group} final-test rows"
                 )
-                
+
         if sum(allocation.values()) != int(development_budget):
             raise RuntimeError("Attack development allocation is unbalanced")
-            
+
         return AttackGroupAllocation(
             groups=tuple(AttackGroupCount(group=g, count=c) for g, c in allocation.items())
         )
@@ -339,10 +342,10 @@ class BaseSplitBuilder:
     ) -> AttackGroupAllocation:
         if not groups:
             raise DataIntegrityError("Attack development allocation requires groups")
-            
-        development = {group: 0 for group in groups}
+
+        development = dict.fromkeys(groups, 0)
         budget = int(development_budget)
-        
+
         for _ in range(budget):
             eligible = [g for g in groups if development[g] < capacities.for_group(g)]
             if not eligible:
@@ -350,7 +353,7 @@ class BaseSplitBuilder:
                     f"{FailureCode.ATTACK_DEV_CAPACITY_LT_500}: "
                     "attack development capacity is exhausted before the budget is met"
                 )
-            
+
             minimum = min(development[g] for g in eligible)
             chosen = next(g for g in eligible if development[g] == minimum)
             development[chosen] += 1
