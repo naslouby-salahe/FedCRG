@@ -83,3 +83,24 @@ def test_calibration_seed_change_keeps_score_cache(tmp_path: Path) -> None:
     assert OutputsLayout(changed.outputs_root).score_root(changed, 11) == OutputsLayout(
         config.outputs_root
     ).score_root(config, 11)
+
+
+def test_model_change_invalidates_dependent_score_cache(tmp_path: Path) -> None:
+    config = diad_pipeline_config(tmp_path)
+    prepared = write_prepared_diad(tmp_path / "prepared", config)
+    model_path, training_manifest = _train_once(config, prepared)
+    compute = ComputeScores()
+    first = compute.score_from_cache(config, prepared, model_path, 11, training_manifest)
+
+    assert config.training is not None
+    changed = config.model_copy(
+        deep=True,
+        update={"training": config.training.model_copy(update={"local_epochs": 2})},
+    )
+    changed_model_path, changed_manifest = _train_once(changed, prepared)
+    assert changed_model_path != model_path
+    second = compute.score_from_cache(changed, prepared, changed_model_path, 11, changed_manifest)
+    assert second != first
+    assert OutputsLayout(changed.outputs_root).score_root(changed, 11) != OutputsLayout(
+        config.outputs_root
+    ).score_root(config, 11)
