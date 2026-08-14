@@ -1,11 +1,3 @@
-"""Behavior contract: model and score caches are reused by identity.
-
-Training and scoring must be skipped when the cache identity already exists:
-identical requests return the existing cache root untouched, calibration-seed
-changes must not invalidate the model or score caches, and a training-spec
-change must select a distinct model cache while leaving the original intact.
-"""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -80,9 +72,10 @@ def test_calibration_seed_change_keeps_score_cache(tmp_path: Path) -> None:
     )
     second = compute.score_from_cache(changed, prepared, model_path, 11, training_manifest)
     assert second == first
-    assert OutputsLayout(changed.outputs_root).score_cache(changed, 11).root == OutputsLayout(
-        config.outputs_root
-    ).score_cache(config, 11).root
+    assert (
+        OutputsLayout(changed.outputs_root).score_cache(changed, 11).root
+        == OutputsLayout(config.outputs_root).score_cache(config, 11).root
+    )
 
 
 def test_model_change_invalidates_dependent_score_cache(tmp_path: Path) -> None:
@@ -101,6 +94,7 @@ def test_model_change_invalidates_dependent_score_cache(tmp_path: Path) -> None:
     assert changed_model_path != model_path
     second = compute.score_from_cache(changed, prepared, changed_model_path, 11, changed_manifest)
     assert second != first
-    assert OutputsLayout(changed.outputs_root).score_cache(changed, 11).root != OutputsLayout(
-        config.outputs_root
-    ).score_cache(config, 11).root
+    assert (
+        OutputsLayout(changed.outputs_root).score_cache(changed, 11).root
+        != OutputsLayout(config.outputs_root).score_cache(config, 11).root
+    )

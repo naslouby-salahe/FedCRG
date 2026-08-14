@@ -1,12 +1,3 @@
-"""Threshold-comparator policies: evidence views, the twelve locked policy
-rules, selection, and typed results.
-
-All policies consume the same frozen score evidence. Supervised comparators
-require explicit development evidence so attack labels cannot enter benign-only
-code; the oracle requires final-test evidence and is never exposed as a
-deployable threshold.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -54,8 +45,6 @@ _INT64_BYTES = 8
 
 
 class PolicyTrafficLedgerRow(BaseModel):
-    """Deterministic threshold-policy upload payload for one policy."""
-
     model_config = Frozen
 
     policy: PolicyId
@@ -66,17 +55,6 @@ def threshold_policy_communication(
     config: ExperimentConfig,
     client_count: PositiveCount,
 ) -> tuple[PolicyTrafficLedgerRow, ...]:
-    """Threshold-policy upload payloads, separate from model-training traffic.
-
-    The ledger covers the protocol-mandated uploads of the threshold-policy
-    payload accounting section: the FedCRG reference scores, the naive
-    full-budget score upload of the global and three-sigma comparators, and
-    the summary-statistic/F1 candidate vectors. Every other policy constructs
-    its threshold from local evidence or from reference scores already
-    uploaded, so it adds no upload payload. All counts are read from the
-    resolved experiment configuration; each policy's payload category comes
-    from the central policy registry.
-    """
     if client_count <= 0:
         raise ValueError("Policy traffic accounting requires a positive client count")
     split = config.dataset.split
@@ -113,8 +91,6 @@ def threshold_policy_communication(
 
 
 class BenignPolicyEvidence:
-    """Benign-only score evidence for one client across the R/G/C roles."""
-
     def __init__(
         self,
         client_id: ClientId,
@@ -137,8 +113,6 @@ class BenignPolicyEvidence:
 
 
 class SupervisedDevelopmentEvidence:
-    """Balanced 500-benign + 500-malicious development evidence for supervised comparators."""
-
     def __init__(
         self,
         benign: BenignPolicyEvidence,
@@ -176,8 +150,6 @@ class SupervisedDevelopmentEvidence:
 
 
 class FinalTestEvidence:
-    """Final-label evidence opened only after non-oracle thresholds are frozen."""
-
     def __init__(
         self,
         benign: BenignPolicyEvidence,
@@ -200,8 +172,6 @@ class FinalTestEvidence:
 
 
 class ClientPolicyThreshold:
-    """Selected threshold for one client/policy."""
-
     def __init__(self, policy: PolicyId, client_id: ClientId, threshold: Threshold | None) -> None:
         self.policy = policy
         self.client_id = client_id
@@ -209,16 +179,12 @@ class ClientPolicyThreshold:
 
 
 class UndefinedPolicyReason:
-    """Closed domain of undefined-threshold reasons."""
-
     def __init__(self, policy: PolicyId, reason: FailureCode) -> None:
         self.policy = policy
         self.reason = reason
 
 
 class PolicyThresholdSet:
-    """Thresholds frozen before final-test evidence is opened."""
-
     def __init__(
         self,
         entries: tuple[ClientPolicyThreshold, ...],
@@ -246,7 +212,6 @@ def _finite_vector(values: np.ndarray, name: Identifier) -> np.ndarray:
 
 
 def empirical_quantile(scores: np.ndarray, alpha: Alpha) -> Threshold:
-    """Empirical quantile of one finite vector."""
     values = np.sort(np.asarray(scores, dtype=np.float64), kind="stable")
     if values.ndim != 1 or len(values) == 0:
         raise ValueError("Quantile thresholds require a non-empty one-dimensional array")
@@ -255,12 +220,10 @@ def empirical_quantile(scores: np.ndarray, alpha: Alpha) -> Threshold:
 
 
 def reference_quantile(client: BenignPolicyEvidence) -> Threshold:
-    """Reference-quantile threshold comparator."""
     return client.evaluation.reference.value
 
 
 def global_quantile(clients: tuple[BenignPolicyEvidence, ...], alpha: Alpha) -> Threshold:
-    """Global-quantile threshold comparator."""
     counts = {len(client.full_policy_budget) for client in clients}
     if len(counts) != 1:
         raise ValueError("Global quantile requires equal per-client benign policy budgets")
@@ -269,12 +232,10 @@ def global_quantile(clients: tuple[BenignPolicyEvidence, ...], alpha: Alpha) -> 
 
 
 def local_quantile(client: BenignPolicyEvidence, alpha: Alpha) -> Threshold:
-    """Local-quantile threshold comparator."""
     return empirical_quantile(client.full_policy_budget, alpha)
 
 
 def readiness_only(client: BenignPolicyEvidence) -> Threshold:
-    """Readiness-admission comparator."""
     readiness = client.evaluation.readiness
     if (
         readiness.plan.state is CalibrationReadinessState.READY
@@ -286,7 +247,6 @@ def readiness_only(client: BenignPolicyEvidence) -> Threshold:
 
 
 def mismatch_only(client: BenignPolicyEvidence, alpha: Alpha) -> Threshold:
-    """Mismatch-admission comparator."""
     if client.evaluation.mismatch.outcome in {MismatchOutcome.LOW, MismatchOutcome.HIGH}:
         return empirical_quantile(client.calibration_scores, alpha)
     return client.evaluation.reference.value
@@ -303,7 +263,6 @@ def tune_shrinkage(
     alpha: Alpha,
     n0_candidates: tuple[SampleCount, ...],
 ) -> NonNegativeInt:
-    """Grid-search shrinkage strength over candidates."""
     if not n0_candidates:
         raise ValueError("Shrinkage tuning requires at least one candidate n0")
     best_n0 = n0_candidates[0]
@@ -326,7 +285,6 @@ def tune_shrinkage(
 
 
 def shrinkage(client: BenignPolicyEvidence, alpha: Alpha, n0: NonNegativeInt) -> Threshold:
-    """Shrinkage threshold comparator."""
     local = empirical_quantile(client.calibration_scores, alpha)
     n_calibration = len(client.calibration_scores)
     weight = n_calibration / (n_calibration + n0)
@@ -334,7 +292,6 @@ def shrinkage(client: BenignPolicyEvidence, alpha: Alpha, n0: NonNegativeInt) ->
 
 
 def three_sigma(clients: tuple[BenignPolicyEvidence, ...]) -> Threshold:
-    """Three-sigma threshold comparator."""
     pooled = np.concatenate(tuple(client.full_policy_budget for client in clients))
     mean = float(np.mean(pooled))
     population_std = float(np.sqrt(np.mean((pooled - mean) ** 2)))
@@ -342,7 +299,6 @@ def three_sigma(clients: tuple[BenignPolicyEvidence, ...]) -> Threshold:
 
 
 def f1_at_threshold(client: SupervisedDevelopmentEvidence, threshold: Threshold) -> Metric:
-    """F1 of one development evidence pair at a threshold."""
     value = f1(confusion_matrix(client.scores, client.labels, threshold))
     return -1.0 if value is None else value
 
@@ -352,7 +308,6 @@ def dev_local_global(
     global_threshold: Threshold,
     local_threshold: Threshold,
 ) -> Threshold:
-    """Best-of development F1 comparator."""
     global_score = f1_at_threshold(client, global_threshold)
     local_score = f1_at_threshold(client, local_threshold)
     return local_threshold if local_score > global_score else global_threshold
@@ -361,7 +316,6 @@ def dev_local_global(
 def mean_client_f1_at_threshold(
     clients: tuple[SupervisedDevelopmentEvidence, ...], threshold: Threshold
 ) -> Metric:
-    """Mean F1 across development clients at a threshold."""
     return float(np.mean([f1_at_threshold(client, threshold) for client in clients]))
 
 
@@ -394,7 +348,6 @@ def summary_statistic_threshold(
     clients: tuple[SupervisedDevelopmentEvidence, ...],
     candidate_count: CandidateCount,
 ) -> Threshold | None:
-    """Summary-statistic supervised comparator."""
     if candidate_count <= 0:
         raise ValueError("candidate_count must be positive")
     benign = _pooled_moments(clients, SupervisedClassLabel.BENIGN)
@@ -415,7 +368,6 @@ def supervised_global_f1(
     clients: tuple[SupervisedDevelopmentEvidence, ...],
     candidate_count: CandidateCount,
 ) -> Threshold:
-    """Supervised global F1 comparator."""
     if candidate_count <= 0:
         raise ValueError("candidate_count must be positive")
     minimum = min(float(np.min(client.scores)) for client in clients)
@@ -428,8 +380,6 @@ def supervised_global_f1(
 
 @dataclass(frozen=True, slots=True)
 class _OracleCandidate:
-    """One candidate threshold ranked by band error then development TPR."""
-
     band_error: Metric
     tpr_rank: Tpr | None
     order: NonNegativeInt
@@ -441,7 +391,6 @@ def oracle_choice(
     candidates: tuple[Threshold, Threshold, Threshold],
     band: OperatingBand,
 ) -> Threshold:
-    """Oracle threshold choice from final-test evidence."""
     ranked: list[_OracleCandidate] = []
     benign_labels = np.zeros(len(client.benign_test_scores), dtype=np.int64)
     attack_labels = np.ones(len(client.attack_test_scores), dtype=np.int64)
@@ -470,8 +419,6 @@ def oracle_choice(
 
 
 class PolicyStrategy(StrEnum):
-    """Evaluator dispatch key of one locked threshold policy."""
-
     REFERENCE = "reference"
     GLOBAL_QUANTILE = "global_quantile"
     LOCAL_QUANTILE = "local_quantile"
@@ -487,16 +434,12 @@ class PolicyStrategy(StrEnum):
 
 
 class ThresholdOrigin(StrEnum):
-    """Which evidence set produces the frozen threshold."""
-
     CALIBRATION = "calibration"
     DEVELOPMENT = "development"
     FINAL_TEST = "final_test"
 
 
 class PolicyUploadKind(StrEnum):
-    """Threshold-policy upload payload category for the communication ledger."""
-
     NONE = "none"
     REFERENCE_SCORES = "reference_scores"
     FULL_POLICY_BUDGET = "full_policy_budget"
@@ -505,17 +448,6 @@ class PolicyUploadKind(StrEnum):
 
 
 class PolicySpec(BaseModel):
-    """One typed definition of a locked threshold policy.
-
-    The registry is the single source for the information regime, the
-    deployability decision, the supervised status, the required evidence
-    bundles, the evaluator dispatch, the result semantics (whether the
-    reference threshold enters the final threshold composition, whether the
-    final threshold comes from the development set or the final-test set, and
-    whether the final-test set is required at all), and the communication-ledger
-    payload category. No other module maintains per-policy metadata.
-    """
-
     model_config = Frozen
 
     policy: PolicyId
@@ -707,19 +639,15 @@ SUPERVISED_POLICIES = frozenset(spec.policy for spec in POLICIES.values() if spe
 
 
 def information_regime(policy_id: PolicyId) -> InformationRegime:
-    """Information regime of one policy, from the central registry."""
     return POLICIES[policy_id].regime
 
 
 def is_deployable(policy_id: PolicyId) -> bool:
-    """Whether one policy may deploy client thresholds, from the central registry."""
     return POLICIES[policy_id].deployable
 
 
 @dataclass(frozen=True, slots=True)
 class _PreparedThresholds:
-    """Shared threshold inputs materialized once for the requested policies."""
-
     global_q: Threshold | None
     local_q: Mapping[ClientId, Threshold]
     shrinkage_n0: NonNegativeInt | None
@@ -735,11 +663,6 @@ def _evaluate(
     prepared: _PreparedThresholds,
     alpha: Alpha,
 ) -> Threshold | None:
-    """Dispatch one policy strategy to its threshold evaluator.
-
-    A None result is a legitimate undefined threshold (the summary-statistic
-    comparator); every other strategy must materialize its shared input.
-    """
     match strategy:
         case PolicyStrategy.REFERENCE:
             return reference_quantile(benign)
@@ -782,8 +705,6 @@ def _evaluate(
 
 
 class PolicyThresholdSelector:
-    """Select only requested non-oracle policies from their permitted evidence."""
-
     def select(
         self,
         benign_clients: tuple[BenignPolicyEvidence, ...],

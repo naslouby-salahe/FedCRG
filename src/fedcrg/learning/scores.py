@@ -1,11 +1,3 @@
-"""Immutable float64 score caches, calibration-role views, and score computation.
-
-Score caches are streaming, hash-finalized, and immutable before
-threshold-policy evaluation. Calibration roles (reference/mismatch/
-calibration/benign-guard) are deterministic views over the reservoir and are
-never serialized into the physical score cache.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -52,8 +44,6 @@ Frozen = ConfigDict(frozen=True)
 
 
 class ScoreCacheColumn(StrEnum):
-    """Reserved column names of the serialized score-cache parquet schema."""
-
     DATASET_ID = "dataset_id"
     CLIENT_ID = "client_id"
     PHASE = "phase"
@@ -83,8 +73,6 @@ _FORBIDDEN_DERIVED_ROLES = set(_CALIBRATION_ROLES)
 
 
 class RoleScoreInput(BaseModel):
-    """One role's scores plus row identities for scoring."""
-
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     role: DataRole
@@ -105,8 +93,6 @@ class RoleScoreInput(BaseModel):
 
 
 class ClientScoreInput(BaseModel):
-    """All role inputs for one client."""
-
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     client_id: ClientId
@@ -120,8 +106,6 @@ class ClientScoreInput(BaseModel):
 
 
 class RoleScores(BaseModel):
-    """Immutable float64 scores for one client/role partition."""
-
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     role: DataRole
@@ -158,8 +142,6 @@ class RoleScores(BaseModel):
 
 
 class RoleHash(BaseModel):
-    """Role identity and score-array hash."""
-
     model_config = Frozen
 
     role: DataRole
@@ -167,8 +149,6 @@ class RoleHash(BaseModel):
 
 
 class ClientRoleHashes(BaseModel):
-    """Per-role hashes for one client."""
-
     model_config = Frozen
 
     client_id: ClientId
@@ -176,8 +156,6 @@ class ClientRoleHashes(BaseModel):
 
 
 class ClientScoreSet(BaseModel):
-    """All role score sets for one client."""
-
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     client_id: ClientId
@@ -191,8 +169,6 @@ class ClientScoreSet(BaseModel):
 
 
 class ScoreManifest(BaseModel):
-    """Frozen score-cache manifest for one model seed."""
-
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     dataset: DatasetId
@@ -225,8 +201,6 @@ class ScoreManifest(BaseModel):
 
 
 class ClientCalibrationScores(BaseModel):
-    """One client's calibration-role score partition."""
-
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     client_id: ClientId
@@ -242,8 +216,6 @@ class ClientCalibrationScores(BaseModel):
 
 
 class CalibrationScoreViews(BaseModel):
-    """Seeded calibration-role views across clients."""
-
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     calibration_seed: CalibrationSeed
@@ -265,7 +237,6 @@ class CalibrationScoreViews(BaseModel):
 
 
 def truncate_view(role_scores: RoleScores, sample_count: SampleCount) -> RoleScores:
-    """Deterministic head-truncation of one role view."""
     if sample_count <= 0 or sample_count > len(role_scores.values):
         raise ValueError(
             f"Cannot take {sample_count} values from {len(role_scores.values)} {role_scores.role.value} scores"
@@ -280,8 +251,6 @@ def truncate_view(role_scores: RoleScores, sample_count: SampleCount) -> RoleSco
 
 
 class CalibrationAssignment:
-    """Deterministic R/G/C/guard positions over one client's reservoir."""
-
     def __init__(
         self,
         client_id: ClientId,
@@ -340,8 +309,6 @@ def _assignment_seed(
 
 
 class CalibrationScoreViewBuilder:
-    """Build deterministic calibration-role views over the frozen reservoir scores."""
-
     def build(
         self,
         scores: ScoreManifest,
@@ -389,8 +356,6 @@ class CalibrationScoreViewBuilder:
 
 
 class ScoreCacheMetadataRecord(BaseModel):
-    """One partition's identity and hash in cache metadata."""
-
     model_config = Frozen
 
     client_id: ClientId
@@ -400,8 +365,6 @@ class ScoreCacheMetadataRecord(BaseModel):
 
 
 class ScoreCacheMetadata(BaseModel):
-    """Frozen score-cache metadata document."""
-
     model_config = Frozen
 
     dataset: DatasetId
@@ -419,8 +382,6 @@ class ScoreCacheMetadata(BaseModel):
 
 @dataclass(frozen=True, slots=True)
 class ScoreCacheIdentity:
-    """Provenance fixed before score serialization starts."""
-
     dataset: DatasetId
     model_seed: ModelSeed
     model_hash: Sha256
@@ -432,8 +393,6 @@ class ScoreCacheIdentity:
 
 @dataclass(frozen=True, slots=True)
 class ScoreRoleCacheRecord:
-    """One role partition's identity and hash."""
-
     client_id: ClientId
     role: DataRole
     score_array_sha256: Sha256
@@ -442,8 +401,6 @@ class ScoreRoleCacheRecord:
 
 @dataclass(frozen=True, slots=True)
 class ScoreCacheDescriptor:
-    """Cache identity and per-partition records."""
-
     identity: ScoreCacheIdentity
     cache_sha256: Sha256
     client_ids: tuple[ClientId, ...]
@@ -451,8 +408,6 @@ class ScoreCacheDescriptor:
 
 
 class ScoreCache:
-    """Atomic, hash-finalized Parquet score-cache persistence."""
-
     def save(self, manifest: ScoreManifest, root: Path) -> ScoreManifest:
         validate_score_manifest(manifest)
         descriptor = self.save_stream(
@@ -754,7 +709,6 @@ class ScoreCache:
 
 
 def validate_score_manifest(manifest: ScoreManifest) -> None:
-    """Reject malformed or inconsistent score manifests."""
     if not manifest.clients:
         raise ValueError("Score manifest has no clients")
     for client in manifest.clients:
@@ -790,8 +744,6 @@ def validate_score_manifest(manifest: ScoreManifest) -> None:
 
 
 class ScoreComputer:
-    """Compute scores without exposing policy or calibration-seed concepts."""
-
     def compute(
         self,
         model: DetectorModel,

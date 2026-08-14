@@ -1,5 +1,3 @@
-"""Unit tests for the deployment decision engine."""
-
 from __future__ import annotations
 
 import numpy as np

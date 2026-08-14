@@ -1,5 +1,3 @@
-"""Unit tests for locked detector architecture contracts."""
-
 from __future__ import annotations
 
 import torch

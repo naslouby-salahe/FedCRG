@@ -1,5 +1,3 @@
-"""Unit tests for bidirectional mismatch evidence evaluation."""
-
 from __future__ import annotations
 
 import numpy as np

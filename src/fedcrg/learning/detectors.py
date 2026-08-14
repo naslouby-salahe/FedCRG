@@ -1,10 +1,3 @@
-"""Anomaly detector models: the federated autoencoder and Deep-SVDD.
-
-Both detectors are deliberately conventional score generators. FedCRG is a
-post-training operating-point governance layer; the architectures, optimizer,
-and reconstruction scores are not part of the FedCRG contribution.
-"""
-
 from __future__ import annotations
 
 import copy
@@ -19,8 +12,6 @@ from fedcrg.types import ByteCount, Dimension, ParameterCount, PositiveCount, Sh
 
 
 class DetectorModel(torch.nn.Module, ABC):
-    """Common detector contract: anomaly scores and state hashing."""
-
     @abstractmethod
     def anomaly_score(self, batch: torch.Tensor) -> torch.Tensor: ...
 
@@ -46,7 +37,6 @@ class DetectorModel(torch.nn.Module, ABC):
 
 
 def activation_module(activation: ActivationId) -> type[torch.nn.Module]:
-    """Resolve one activation module by identifier."""
     if activation is ActivationId.TANH:
         return torch.nn.Tanh
     raise ValueError(f"Unsupported activation: {activation.value}")
@@ -55,25 +45,16 @@ def activation_module(activation: ActivationId) -> type[torch.nn.Module]:
 def autoencoder_parameter_count(
     input_dim: Dimension, hidden_dims: tuple[Dimension, ...]
 ) -> ParameterCount:
-    """Derived trainable-parameter count of the symmetric biased autoencoder.
-
-    The full dimension chain is ``input -> hidden -> reversed(hidden) -> input``
-    and every layer is a biased linear map, so the count is
-    ``sum(d_l * d_{l+1} + d_{l+1})`` over adjacent layer pairs.
-    """
     encoder = (input_dim, *hidden_dims)
     chain = (*encoder, *tuple(reversed(encoder[:-1])))
     return sum(left * right + right for left, right in zip(chain[:-1], chain[1:], strict=True))
 
 
 def autoencoder_tensor_bytes(input_dim: Dimension, hidden_dims: tuple[Dimension, ...]) -> ByteCount:
-    """Derived float32 tensor payload of the symmetric autoencoder."""
     return autoencoder_parameter_count(input_dim, hidden_dims) * 4
 
 
 class Autoencoder(DetectorModel):
-    """Symmetric MLP autoencoder whose score is mean feature-wise reconstruction MSE."""
-
     def __init__(self, input_dim: Dimension, config: AutoencoderConfig) -> None:
         super().__init__()
         dims = (input_dim, *config.hidden_dims)
@@ -113,8 +94,6 @@ class Autoencoder(DetectorModel):
 
 
 class DeepSvdd(DetectorModel):
-    """Deep-SVDD detector with frozen equal-mean center."""
-
     center: torch.Tensor
 
     def __init__(self, input_dim: Dimension, config: DeepSvddConfig) -> None:
@@ -153,7 +132,6 @@ class DeepSvdd(DetectorModel):
 
 
 def create_detector(input_dim: Dimension, config: DetectorConfig) -> DetectorModel:
-    """Construct the detector declared by one configuration."""
     if isinstance(config, AutoencoderConfig):
         return Autoencoder(input_dim, config)
     return DeepSvdd(input_dim, config)

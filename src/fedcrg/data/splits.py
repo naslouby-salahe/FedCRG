@@ -1,12 +1,3 @@
-"""Deterministic split construction: base role cutting, attack-development
-allocation, calibration-role assignment, and split validation.
-
-Base roles (train/reservoir/benign_test/attack_dev/attack_test) are cut from
-one client's benign and attack frames by fixed positional slices plus a seeded
-attack-development draw. Calibration roles are a seeded permutation of the
-reservoir. Every stage validates row-id disjointness before returning.
-"""
-
 from __future__ import annotations
 
 import pandas as pd
@@ -43,8 +34,6 @@ _ATTACK_GROUP_ADAPTER = TypeAdapter(AttackGroupId)
 
 
 class RoleFrame(BaseModel):
-    """One role-labeled frame before split assignment."""
-
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     role: DataRole
@@ -52,8 +41,6 @@ class RoleFrame(BaseModel):
 
 
 class ClientSplits(BaseModel):
-    """Immutable per-client split frames for every role."""
-
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     client_id: ClientId
@@ -73,8 +60,6 @@ class ClientSplits(BaseModel):
 
 
 class RolePositions(BaseModel):
-    """One role's assigned row positions and their hash."""
-
     model_config = Frozen
 
     role: DataRole
@@ -83,8 +68,6 @@ class RolePositions(BaseModel):
 
 
 class CalibrationRoleAssignment(BaseModel):
-    """Seeded calibration-role assignment for one client."""
-
     model_config = Frozen
 
     client_id: ClientId
@@ -116,7 +99,6 @@ def validate_split_disjointness(
     splits: ClientSplits,
     row_id_column: PreparedColumn = PreparedColumn.ROW_ID,
 ) -> None:
-    """Reject any row-id overlap across split roles."""
     seen: set[RowId] = set()
     for role in DataRole:
         frame = splits.try_get(role)
@@ -133,8 +115,6 @@ def validate_split_disjointness(
 
 
 class CalibrationAssignmentBuilder:
-    """Deterministic calibration-role positions within one client's reservoir."""
-
     def build(
         self,
         frame: pd.DataFrame,
@@ -201,8 +181,6 @@ class CalibrationAssignmentBuilder:
 
 
 class AttackGroupCount(BaseModel):
-    """One attack group's row count."""
-
     model_config = Frozen
 
     group: AttackGroupId
@@ -210,8 +188,6 @@ class AttackGroupCount(BaseModel):
 
 
 class AttackGroupAllocation(BaseModel):
-    """Per-attack-group row allocation, keyed by attack group identity."""
-
     model_config = Frozen
 
     groups: tuple[AttackGroupCount, ...]
@@ -224,8 +200,6 @@ class AttackGroupAllocation(BaseModel):
 
 
 class BaseSplitBuilder:
-    """Cut deterministic base roles from one client's benign/attack frames."""
-
     def build(
         self,
         data: ClientData,
@@ -325,7 +299,6 @@ class BaseSplitBuilder:
         development_budget: PositiveCount,
         reserve_per_group: PositiveCount,
     ) -> AttackGroupAllocation:
-        """Per-group development counts under the dataset's locked allocation rule."""
         if dataset is DatasetId.DIAD:
             capacities = AttackGroupAllocation(
                 groups=tuple(
@@ -348,13 +321,6 @@ class BaseSplitBuilder:
         development_budget: PositiveCount,
         reserve_per_group: PositiveCount,
     ) -> AttackGroupAllocation:
-        """Equal floor allocation with the remainder distributed lexicographically.
-
-        Every present attack group receives ``floor(budget / m)`` development
-        records, then the remainder is distributed one record at a time in
-        lexicographic group order. A group that cannot retain the minimum
-        final-test evidence after that allocation blocks the run.
-        """
         if not groups:
             raise DataIntegrityError("Attack frame contains no attack groups")
         per_group, remainder = divmod(int(development_budget), len(groups))
@@ -383,13 +349,6 @@ class BaseSplitBuilder:
         capacities: AttackGroupAllocation,
         development_budget: PositiveCount,
     ) -> AttackGroupAllocation:
-        """Most-even per-group allocation bounded by each group's capacity.
-
-        At every step the lexicographically first group with the current
-        minimum development count below its capacity receives one record. The
-        result is the most even deterministic allocation possible subject to
-        the per-group capacity constraints.
-        """
         if not groups:
             raise DataIntegrityError("Attack development allocation requires groups")
         development: dict[AttackGroupId, NonNegativeCount] = {group: 0 for group in groups}

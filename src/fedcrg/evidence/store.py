@@ -1,6 +1,3 @@
-"""Evidence persistence: atomic JSON/JSONL writes, file hashing, manifest
-stores, and artifact verification."""
-
 from __future__ import annotations
 
 import json
@@ -58,7 +55,6 @@ def _jsonable(value: object) -> JsonValue:
 
 
 def atomic_write_json(path: Path, payload: object) -> None:
-    """Atomically persist one JSON-serializable payload."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_name(f".{path.name}.tmp-{uuid.uuid4().hex}")
     text = json.dumps(_jsonable(payload), indent=2, sort_keys=True) + "\n"
@@ -67,7 +63,6 @@ def atomic_write_json(path: Path, payload: object) -> None:
 
 
 def atomic_write_text(path: Path, content: str) -> None:
-    """Atomically persist one text payload."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_name(f".{path.name}.tmp-{uuid.uuid4().hex}")
     temp.write_text(content, encoding="utf-8")
@@ -75,7 +70,6 @@ def atomic_write_text(path: Path, content: str) -> None:
 
 
 def write_jsonl(path: Path, records: tuple[BaseModel, ...]) -> None:
-    """Atomically append one JSON-lines document."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_name(f".{path.name}.tmp-{uuid.uuid4().hex}")
     with temp.open("w", encoding="utf-8") as handle:
@@ -85,13 +79,11 @@ def write_jsonl(path: Path, records: tuple[BaseModel, ...]) -> None:
 
 
 def load_json_model(path: Path, model: type[ModelT]) -> ModelT:
-    """Load and validate one pydantic model from JSON."""
     raw: object = json.loads(path.read_text(encoding="utf-8"))
     return model.model_validate(raw)
 
 
 def load_yaml_mapping(path: Path) -> object:
-    """Load one configuration document before validation."""
     raw: object = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError(f"Configuration document must be a mapping: {path}")
@@ -99,8 +91,6 @@ def load_yaml_mapping(path: Path) -> object:
 
 
 class ModelStore(Generic[ModelT]):
-    """Generic atomic JSON persistence for one frozen pydantic schema."""
-
     model: type[ModelT]
 
     def save(self, path: Path, manifest: ModelT) -> None:
@@ -114,25 +104,14 @@ class ModelStore(Generic[ModelT]):
 
 
 class PreparedDatasetManifestStore(ModelStore[PreparedDatasetManifest]):
-    """Atomic store for prepared-dataset manifests."""
-
     model = PreparedDatasetManifest
 
 
 class TrainingManifestStore(ModelStore[TrainingManifest]):
-    """Atomic store for training manifests."""
-
     model = TrainingManifest
 
 
 class RunManifestStore(ModelStore[RunManifest]):
-    """Atomic store for run manifests.
-
-    Completed and failed runs are immutable: once a manifest is recorded as
-    COMPLETE or FAILED it cannot be overwritten by another status, so run
-    evidence cannot silently change after finalization.
-    """
-
     model = RunManifest
 
     _TERMINAL_STATUSES = frozenset({ExperimentStatus.COMPLETE.value, ExperimentStatus.FAILED.value})
@@ -158,20 +137,14 @@ class RunManifestStore(ModelStore[RunManifest]):
 
 
 class EligibilityManifestStore(ModelStore[EligibilityManifest]):
-    """Atomic store for eligibility manifests."""
-
     model = EligibilityManifest
 
 
 class CalibrationAssignmentManifestStore(ModelStore[CalibrationAssignmentManifest]):
-    """Atomic store for calibration-assignment manifests."""
-
     model = CalibrationAssignmentManifest
 
 
 class CacheReferenceStore(ModelStore[CacheReference]):
-    """Atomic store for cache references."""
-
     model = CacheReference
 
     @staticmethod
@@ -194,7 +167,6 @@ def build_run_id(
     calibration_seed: CalibrationSeed,
     policy: PolicyId,
 ) -> RunId:
-    """Build a path-safe run id from one fully resolved scientific configuration."""
     protocol = config.protocol
     detector = config.detector
     if detector is None:
@@ -214,16 +186,12 @@ def build_run_id(
 
 @dataclass(frozen=True, slots=True)
 class FileHashRecord:
-    """One file's relative path and SHA-256."""
-
     relative_path: Identifier
     sha256: Sha256
 
 
 @dataclass(frozen=True, slots=True)
 class VerificationResult:
-    """Outcome of an artifact verification audit."""
-
     valid: bool
     missing: tuple[Identifier, ...]
     mismatched: tuple[Identifier, ...]
@@ -237,8 +205,6 @@ class VerificationResult:
 
 
 class ArtifactVerifier:
-    """Verify file hashes and the provenance chain across run evidence."""
-
     def _path_for(self, layout: RunLayout, artifact: ArtifactType) -> Path | None:
         mapping = {
             ArtifactType.RESOLVED_CONFIG: layout.resolved_config,
@@ -323,7 +289,6 @@ class ArtifactVerifier:
 
 
 def capture_environment(repository_root: Path) -> GitEnvironment:
-    """Freeze repository and Python environment evidence."""
     import subprocess
 
     def run(*args: str) -> str:

@@ -1,12 +1,10 @@
-"""Unit tests for campaign status persistence and runner bookkeeping."""
-
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
 
-from fedcrg.config import Study
+from fedcrg.config import ExperimentConfig, Study
 from fedcrg.experiments.runner import (
     CampaignExecutor,
     CampaignStatus,
@@ -16,7 +14,7 @@ from fedcrg.experiments.runner import (
     WorkloadExecution,
     CampaignOutcomeRow,
 )
-from fedcrg.types import CampaignStage, ExperimentId, ExperimentStatus
+from fedcrg.types import CalibrationSeed, CampaignStage, ExperimentId, ExperimentStatus
 
 
 def _status() -> CampaignStatus:
@@ -63,7 +61,14 @@ def test_status_store_missing_campaign_raises(tmp_path: Path) -> None:
 
 
 class _FailingRunner(RunAllExperiments):
-    def execute(self, experiment_id, config, prepared_root):  # type: ignore[override]
+    def execute(
+        self,
+        experiment_id: ExperimentId,
+        config: ExperimentConfig,
+        prepared_root: Path,
+        *,
+        calibration_seeds: tuple[CalibrationSeed, ...] | None = None,
+    ) -> WorkloadExecution:
         if experiment_id is ExperimentId.PRIMARY_NBAIOT:
             raise RuntimeError("boom")
         return WorkloadExecution(experiment_id=experiment_id, models=(), run_directories=())

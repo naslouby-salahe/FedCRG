@@ -1,6 +1,3 @@
-"""Deterministic federated training: local epochs, equal-client aggregation,
-cosine learning-rate schedule, participation, and protocol diagnostics."""
-
 from __future__ import annotations
 
 import hashlib
@@ -43,8 +40,6 @@ _FLOAT64_BYTES = 8
 
 
 class ModelCommunicationLedger(BaseModel):
-    """Deterministic federated model-tensor communication accounting."""
-
     model_config = Frozen
 
     client_count: PositiveCount
@@ -59,13 +54,6 @@ def model_communication(
     rounds: RoundCount,
     trainable_parameters: ParameterCount,
 ) -> ModelCommunicationLedger:
-    """Model tensor payload and 30-round full-federation exchange.
-
-    Each round exchanges one server-to-client broadcast copy and one
-    client-to-server upload per client, so the federation total is
-    ``2 * client_count * rounds * payload`` with a float32 payload of
-    ``4 * trainable_parameters`` bytes.
-    """
     if client_count <= 0 or rounds <= 0 or trainable_parameters <= 0:
         raise ValueError("Communication accounting requires positive inputs")
     payload = trainable_parameters * _FLOAT32_BYTES
@@ -79,8 +67,6 @@ def model_communication(
 
 
 class PreprocessingCommunicationLedger(BaseModel):
-    """Deterministic federated min/max extrema exchange accounting."""
-
     model_config = Frozen
 
     client_count: PositiveCount
@@ -93,7 +79,6 @@ def preprocessing_communication(
     client_count: PositiveCount,
     feature_count: FeatureCount,
 ) -> PreprocessingCommunicationLedger:
-    """Per-feature extrema exchange: 2 float64 values per feature."""
     if client_count <= 0 or feature_count <= 0:
         raise ValueError("Communication accounting requires positive inputs")
     bytes_per_client = 2 * feature_count * _FLOAT64_BYTES
@@ -111,7 +96,6 @@ def cosine_learning_rate(
     initial: LearningRate,
     final: LearningRate,
 ) -> LearningRate:
-    """Cosine learning-rate schedule between locked endpoints."""
     if rounds <= 0 or not 0 <= round_index < rounds:
         raise ValueError("round_index must be inside the configured training horizon")
     if rounds == 1:
@@ -127,7 +111,6 @@ def epoch_seed(
     round_index: RoundIndex,
     epoch: EpochCount,
 ) -> RngSeed:
-    """Deterministic per-epoch RNG seed."""
     text = f"fedcrg|training|{model_seed}|{client_id}|{round_index}|{epoch}"
     digest = hashlib.sha256(text.encode("utf-8")).digest()
     return int.from_bytes(digest[:8], "big", signed=False) & 0x7FFFFFFFFFFFFFFF
@@ -137,7 +120,6 @@ StateDict = dict[str, torch.Tensor]
 
 
 def equal_client_mean(models: Sequence[DetectorModel]) -> StateDict:
-    """Equal-weight mean of client model parameters."""
     if not models:
         raise ValueError("At least one client model is required")
     states = [model.state_dict() for model in models]
@@ -165,8 +147,6 @@ def equal_client_mean(models: Sequence[DetectorModel]) -> StateDict:
 
 
 class ClientRoundResult(BaseModel):
-    """One client's local-round training outcome."""
-
     model_config = Frozen
 
     client_id: ClientId
@@ -177,8 +157,6 @@ class ClientRoundResult(BaseModel):
 
 
 class RoundResult(BaseModel):
-    """One federated round's aggregate outcome."""
-
     model_config = Frozen
 
     round_index: RoundIndex
@@ -195,8 +173,6 @@ class RoundResult(BaseModel):
 
 
 class TrainingResult(BaseModel):
-    """Frozen federated-training evidence for one model seed."""
-
     model_config = Frozen
 
     model_seed: ModelSeed
@@ -209,8 +185,6 @@ class TrainingResult(BaseModel):
 
 
 class FederatedClient:
-    """Own one local benign-training dataset and execute one round at a time."""
-
     def __init__(self, client_id: ClientId, dataset: TensorDataset, device: torch.device) -> None:
         self.client_id = client_id
         self.dataset = dataset
@@ -294,8 +268,6 @@ class FederatedClient:
 
 
 class ClientSampler:
-    """Select configured client participation without dependence on input ordering."""
-
     def __init__(
         self, client_ids: tuple[ClientId, ...], fraction: ClientFraction, seed: ModelSeed
     ) -> None:
@@ -315,8 +287,6 @@ class ClientSampler:
 
 
 class FederatedServer:
-    """Deterministic federated training orchestration."""
-
     def __init__(self, initial_model: DetectorModel) -> None:
         self.model = initial_model.clone()
 
@@ -329,8 +299,6 @@ class FederatedServer:
 
 
 class FederatedTrainer:
-    """Execute the frozen full-participation equal-client-mean training protocol."""
-
     diagnostic_round_index = 19
 
     def train(

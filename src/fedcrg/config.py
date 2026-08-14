@@ -1,21 +1,3 @@
-"""Validated scientific configuration for the FedCRG study.
-
-Three YAML documents are the single source of truth:
-
-- ``config/study.yaml``       protocol, statistics, randomness, detector/training
-                              profiles, and the policy registry;
-- ``config/datasets.yaml``    dataset contracts (identity, feature contract,
-                              eligibility, role sizing, seeds);
-- ``config/experiments.yaml`` the locked experiment catalogue.
-
-There is no inheritance graph and no deep-merge machinery. Python executes
-typed ``ExperimentSpec`` values resolved from these documents and never
-redefines the catalogue.
-
-Raw primitives appear only at the YAML parse boundary (before validation)
-and for free-text metadata such as descriptions and version strings.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -104,24 +86,18 @@ _CALIBRATION_SEED_ADAPTER = TypeAdapter(CalibrationSeed)
 
 @dataclass(frozen=True, slots=True)
 class NbaiotDevice:
-    """One fixed N-BaIoT device: client identity and directory-match tokens."""
-
     client_id: ClientId
     tokens: tuple[Identifier, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class DiadFeatureDerivation:
-    """Training-schema feature-derivation rules for the numeric-safe contract."""
-
     excluded_feature_exact: frozenset[Identifier]
     excluded_feature_name_markers: tuple[Identifier, ...]
     architecture_hidden_ratios: tuple[Rational, ...]
 
 
 class ProtocolConfig(BaseModel):
-    """Locked FedCRG decision-protocol parameters."""
-
     model_config = FrozenModel
 
     id: Literal[ProtocolId.FEDCRG] = ProtocolId.FEDCRG
@@ -142,8 +118,6 @@ class ProtocolConfig(BaseModel):
 
 
 class StatisticsConfig(BaseModel):
-    """Locked confirmatory statistical-analysis choices."""
-
     model_config = FrozenModel
 
     bootstrap_replicates: ReplicateCount
@@ -156,13 +130,10 @@ class StatisticsConfig(BaseModel):
 
     @property
     def utility_margin_allowance(self) -> MetricDifference:
-        """Signed allowance used by the locked non-inferiority comparison."""
         return -self.utility_margin
 
 
 class RandomnessConfig(BaseModel):
-    """Seed registry shared by real-data experiments."""
-
     model_config = FrozenModel
 
     model_seeds: tuple[ModelSeed, ...]
@@ -177,8 +148,6 @@ class RandomnessConfig(BaseModel):
 
 
 class TrainingConfig(BaseModel):
-    """Frozen federated-training specification with no hidden scientific defaults."""
-
     model_config = FrozenModel
 
     rounds: RoundCount
@@ -209,8 +178,6 @@ class TrainingConfig(BaseModel):
 
 
 class AutoencoderConfig(BaseModel):
-    """Frozen autoencoder architecture and initialization contract."""
-
     model_config = FrozenModel
 
     id: Literal[DetectorId.AUTOENCODER] = DetectorId.AUTOENCODER
@@ -221,8 +188,6 @@ class AutoencoderConfig(BaseModel):
 
 
 class DeepSvddConfig(BaseModel):
-    """Frozen Deep-SVDD encoder and center-mode contract."""
-
     model_config = FrozenModel
 
     id: Literal[DetectorId.DEEP_SVDD] = DetectorId.DEEP_SVDD
@@ -239,8 +204,6 @@ DetectorConfig = Annotated[AutoencoderConfig | DeepSvddConfig, Field(discriminat
 
 
 class StudyConfig(BaseModel):
-    """Everything study-wide: protocol, statistics, randomness, profiles, policies."""
-
     model_config = FrozenModel
 
     protocol: ProtocolConfig
@@ -257,7 +220,9 @@ class StudyConfig(BaseModel):
         if len(set(self.policies)) != len(self.policies):
             raise ValueError("Policy registry must be unique")
         if set(self.policies) != set(PolicyId):
-            raise ValueError("Policy registry must contain the complete registered policy catalogue")
+            raise ValueError(
+                "Policy registry must contain the complete registered policy catalogue"
+            )
         for profile_id, detector in self.detector_profiles.items():
             if detector.id is DetectorId.DEEP_SVDD and profile_id not in self.training_profiles:
                 raise ValueError(f"Detector profile {profile_id!r} has no training profile")
@@ -277,8 +242,6 @@ class StudyConfig(BaseModel):
 
 
 class ExpectedBenignCounts(RootModel[dict[ClientId, PositiveCount]]):
-    """Per-client expected benign row counts, keyed by the typed client id."""
-
     def count_for(self, client_id: ClientId) -> PositiveCount | None:
         return self.root.get(client_id)
 
@@ -287,8 +250,6 @@ class ExpectedBenignCounts(RootModel[dict[ClientId, PositiveCount]]):
 
 
 class SplitConfig(BaseModel):
-    """Per-client benign/attack role sizing for one dataset contract."""
-
     model_config = FrozenModel
 
     train_benign: PositiveCount
@@ -316,8 +277,6 @@ class SplitConfig(BaseModel):
 
 
 class DatasetConfig(BaseModel):
-    """Identity, feature contract, eligibility rule, and role sizing of one dataset."""
-
     model_config = FrozenModel
 
     id: DatasetId
@@ -401,8 +360,6 @@ class DatasetConfig(BaseModel):
 
 
 class DatasetCatalogue(RootModel[dict[DatasetId, DatasetConfig]]):
-    """Frozen dataset-contract registry keyed by dataset identity."""
-
     def contract(self, dataset_id: DatasetId) -> DatasetConfig:
         try:
             return self.root[dataset_id]
@@ -428,8 +385,6 @@ _AXIS_VALUE_TYPES: dict[ExperimentAxisId, type[AxisValue] | None] = {
 
 
 class ParameterAxis(BaseModel):
-    """An independent axis whose values may be crossed with other independent axes."""
-
     model_config = ConfigDict(frozen=True)
 
     id: ExperimentAxisId
@@ -453,8 +408,6 @@ class ParameterAxis(BaseModel):
 
 
 class ParameterSetting(BaseModel):
-    """One locked axis value in an experiment cell."""
-
     model_config = ConfigDict(frozen=True)
 
     axis: ExperimentAxisId
@@ -462,8 +415,6 @@ class ParameterSetting(BaseModel):
 
 
 class ParameterCell(BaseModel):
-    """A coupled combination that must be evaluated together, not Cartesian-crossed."""
-
     model_config = ConfigDict(frozen=True)
 
     settings: tuple[ParameterSetting, ...]
@@ -497,8 +448,6 @@ class ParameterCell(BaseModel):
 
 
 class WorkloadExpectation(BaseModel):
-    """Locked workload ledger for one experiment."""
-
     model_config = ConfigDict(frozen=True)
 
     monte_carlo_trials: NonNegativeCount = 0
@@ -507,8 +456,6 @@ class WorkloadExpectation(BaseModel):
 
 
 class ExperimentSpec(BaseModel):
-    """One locked catalogue entry; the only description of what an experiment contains."""
-
     model_config = FrozenModel
 
     id: ExperimentId
@@ -595,8 +542,6 @@ class ExperimentSpec(BaseModel):
 
 
 class ExperimentCatalogue(RootModel[tuple[ExperimentSpec, ...]]):
-    """The locked experiment registry; exactly one entry per ExperimentId."""
-
     @field_validator("root", mode="before")
     @classmethod
     def _coerce_root(cls, value: object) -> object:
@@ -627,8 +572,6 @@ class ExperimentCatalogue(RootModel[tuple[ExperimentSpec, ...]]):
 
 
 class DataSpecification(BaseModel):
-    """Seed-independent inputs that determine the prepared dataset cache."""
-
     model_config = FrozenModel
 
     dataset: DatasetConfig
@@ -636,8 +579,6 @@ class DataSpecification(BaseModel):
 
 
 class TrainingSpecification(BaseModel):
-    """Exact detector-training inputs; policy and protocol axes excluded."""
-
     model_config = FrozenModel
 
     data_spec_hash: Sha256
@@ -646,8 +587,6 @@ class TrainingSpecification(BaseModel):
 
 
 class ExperimentConfig(BaseModel):
-    """Fully resolved, validated execution configuration for one experiment cell."""
-
     model_config = FrozenModel
 
     id: ExperimentId
@@ -699,7 +638,6 @@ class ExperimentConfig(BaseModel):
         return self
 
     def serialized_payload(self) -> str:
-        """Stable scientific configuration, independent of output location."""
         payload = self.model_dump(mode="json", exclude={"outputs_root", "preprocessed_root"})
         return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
@@ -709,7 +647,6 @@ class ExperimentConfig(BaseModel):
 
     @property
     def data_spec_hash(self) -> Sha256:
-        """Hash only inputs that determine the seed-independent prepared dataset cache."""
         specification = DataSpecification(
             dataset=self.dataset,
             attack_split_seed=self.randomness.attack_split_seed,
@@ -721,7 +658,6 @@ class ExperimentConfig(BaseModel):
 
     @property
     def training_spec_hash(self) -> Sha256:
-        """Hash the exact detector-training specification, excluding policy/protocol axes."""
         if self.detector is None or self.training is None:
             return self.data_spec_hash
         specification = TrainingSpecification(
@@ -734,7 +670,6 @@ class ExperimentConfig(BaseModel):
 
 
 def load_yaml_mapping(path: Path) -> dict[str, JsonValue]:
-    """Load one configuration document before validation."""
     try:
         raw: object = yaml.safe_load(path.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
@@ -750,12 +685,10 @@ _DEFAULT_CONFIG_LAYOUT = ConfigLayout()
 
 
 def load_study(path: Path = _DEFAULT_CONFIG_LAYOUT.study) -> StudyConfig:
-    """Load and validate the study configuration."""
     return StudyConfig.model_validate(load_yaml_mapping(path))
 
 
 def load_dataset_registry(path: Path = _DEFAULT_CONFIG_LAYOUT.datasets) -> DatasetCatalogue:
-    """Load and validate the dataset contract registry."""
     root = load_yaml_mapping(path)
     datasets = root.get("datasets")
     if not isinstance(datasets, dict):
@@ -766,7 +699,6 @@ def load_dataset_registry(path: Path = _DEFAULT_CONFIG_LAYOUT.datasets) -> Datas
 def load_experiment_catalogue(
     path: Path = _DEFAULT_CONFIG_LAYOUT.experiments,
 ) -> ExperimentCatalogue:
-    """Load and validate the experiment catalogue."""
     root = load_yaml_mapping(path)
     experiments = root.get("experiments")
     if not isinstance(experiments, list):
@@ -781,7 +713,6 @@ def resolve_experiment_config(
     *,
     dataset_id: DatasetId | None = None,
 ) -> ExperimentConfig:
-    """Bind one catalogue entry to its dataset contract and study profiles."""
     chosen = dataset_id or (spec.datasets[0] if spec.datasets else spec.dataset)
     if chosen is None:
         raise ConfigurationError(f"Experiment {spec.id.value} declares no dataset")
@@ -812,8 +743,6 @@ def resolve_experiment_config(
 
 
 class Study:
-    """One loaded configuration set with catalogue lookup and resolution."""
-
     def __init__(
         self,
         study_config: StudyConfig,
@@ -863,7 +792,6 @@ class Study:
 
 
 def validate_experiment_config(config: ExperimentConfig) -> None:
-    """Cross-component invariants that span resolved configuration."""
     if config.dataset.id is not DatasetId.SYNTHETIC and not config.randomness.model_seeds:
         raise ConfigurationError("Real-data experiments require at least one model seed")
     if config.detector is not None and config.training is not None:

@@ -1,12 +1,3 @@
-"""N-BaIoT dataset adapter: nine fixed UCI device directories loaded in
-preserved source-file row order.
-
-The locked 115-feature contract, the raw UCI source-header order, and the
-device directory table are owned by ``config/datasets.yaml``; this adapter
-loads files that match that contract and renames raw headers to the frozen
-feature names.
-"""
-
 from __future__ import annotations
 
 import re
@@ -31,15 +22,11 @@ from fedcrg.types import (
 
 
 class NbaiotAttackFamily(StrEnum):
-    """Closed domain of N-BaIoT attack families."""
-
     MIRAI = "mirai"
     GAFGYT = "gafgyt"
 
 
 class NbaiotFileMarker(StrEnum):
-    """Filename markers of the locked N-BaIoT source layout."""
-
     BENIGN = "benign"
     BASHLITE = "bashlite"
 
@@ -51,13 +38,10 @@ _FAMILY_MARKERS: dict[NbaiotAttackFamily, tuple[NbaiotAttackFamily | NbaiotFileM
 
 
 def _normalized_name(path: Path) -> Identifier:
-    """Lower-case alphanumeric normalization of one directory name."""
     return re.sub(r"[^a-z0-9]", "", str(path).lower())
 
 
 class NBaiotAdapter(DatasetAdapter):
-    """Load the nine named UCI devices in preserved source-file row order."""
-
     def __init__(self, root: Path, dataset: DatasetConfig) -> None:
         super().__init__(root)
         if dataset.id is not DatasetId.NBAIOT:

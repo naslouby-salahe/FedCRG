@@ -1,5 +1,3 @@
-"""Unit tests for policy selection: information regime and deployability."""
-
 from __future__ import annotations
 
 from pydantic import TypeAdapter

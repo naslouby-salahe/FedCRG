@@ -1,5 +1,3 @@
-"""Integration tests for the immutable run-output layout."""
-
 from __future__ import annotations
 
 from pathlib import Path

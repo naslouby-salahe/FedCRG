@@ -1,13 +1,3 @@
-"""DIAD dataset adapter and the DIAD feature contract.
-
-Client identity comes from the normalized ``device_mac`` column; ``device_mac``
-itself never enters the model tensor. Rows are ordered by (source file, source
-row index) because the packet schema carries no parseable capture-time field,
-so chronology is source-order only. Attack family is the official top-level
-category. The locked 86-feature contract, the client-id derivation, and the
-training-schema feature-derivation rules are owned by ``config/datasets.yaml``.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -44,20 +34,14 @@ Frozen = ConfigDict(frozen=True)
 
 
 class DiadSourceColumn(StrEnum):
-    """Raw source columns of the DIAD packet schema."""
-
     DEVICE_MAC = "device_mac"
 
 
 class DiadTopLevelCategory(StrEnum):
-    """Top-level source directory categories of the DIAD packet release."""
-
     BENIGN_TRAFFIC = "benigntraffic"
 
 
 class DiadAdapter(DatasetAdapter):
-    """Load the CIC IoT-DIAD 2024 packet-based release into per-device clients."""
-
     def __init__(self, root: Path, dataset: DatasetConfig) -> None:
         super().__init__(root)
         if dataset.id is not DatasetId.DIAD:
@@ -89,7 +73,6 @@ class DiadAdapter(DatasetAdapter):
         return f"diad_{digest}"
 
     def _map_devices(self) -> dict[ClientId, tuple[MacAddress, ...]]:
-        """Scan every source CSV for distinct normalized device MACs."""
         if self._devices is not None:
             return self._devices
         macs: dict[ClientId, set[MacAddress]] = {}
@@ -193,8 +176,6 @@ class DiadAdapter(DatasetAdapter):
 
 
 class ClientTrainingRowHash(BaseModel):
-    """Stable hash of one client's training row-id sequence."""
-
     model_config = Frozen
 
     client_id: ClientId
@@ -202,8 +183,6 @@ class ClientTrainingRowHash(BaseModel):
 
 
 class ClientTrainingFrame(BaseModel):
-    """One eligible client's training-role frame, keyed by client identity."""
-
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     client_id: ClientId
@@ -211,8 +190,6 @@ class ClientTrainingFrame(BaseModel):
 
 
 class NumericSafeFeatureContract(BaseModel):
-    """Frozen training-schema-only feature derivation result."""
-
     model_config = Frozen
 
     features: tuple[FeatureName, ...]
@@ -239,8 +216,6 @@ def derive_numeric_safe_features(
     training_frames: tuple[ClientTrainingFrame, ...],
     derivation: DiadFeatureDerivation,
 ) -> NumericSafeFeatureContract:
-    """Freeze the training-schema-derived feature list from eligible training rows."""
-
     if not training_frames:
         raise ValueError("The derived feature contract requires eligible-client training frames")
     common = set.intersection(*(set(item.frame.columns) for item in training_frames))

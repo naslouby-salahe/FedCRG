@@ -1,5 +1,3 @@
-"""Smoke-test the real train -> score -> evaluate cache pipeline end-to-end."""
-
 from __future__ import annotations
 
 from pathlib import Path

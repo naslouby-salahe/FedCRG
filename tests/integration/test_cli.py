@@ -1,5 +1,3 @@
-"""Integration tests for the CLI surface."""
-
 from __future__ import annotations
 
 from click.testing import CliRunner

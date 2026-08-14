@@ -1,5 +1,3 @@
-"""Integration tests for the run-application lifecycle."""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -22,8 +20,6 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def _config(root: Path) -> ExperimentConfig:
-    # readiness_sample_size has no required_evidence in the catalogue, so the
-    # run lifecycle completes verification with only the prepare-written files.
     return primary_experiment_config(root, ExperimentId.READINESS_SAMPLE_SIZE)
 
 
@@ -43,7 +39,6 @@ def test_run_application_creates_immutable_complete_run(tmp_path: Path) -> None:
     assert (layout.verification / "hashes.json").exists()
     stored = RunManifestStore().load(layout.manifest)
     assert stored.status is ExperimentStatus.COMPLETE
-    # A completed run manifest is immutable.
     with pytest.raises(ImmutableRunError):
         RunManifestStore().save(
             layout.manifest,

@@ -1,9 +1,3 @@
-"""Contract tests for the target repository architecture.
-
-These tests define the target tree and forbid the obsolete architecture from
-returning. They are the enforcement contract for the restructure.
-"""
-
 from __future__ import annotations
 
 from pathlib import Path

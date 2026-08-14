@@ -1,13 +1,3 @@
-"""Finite-sample operating-point governance: the federation reference
-threshold, calibration readiness with the realized local threshold, reference
-mismatch evidence, and the five-state deployment decision.
-
-Observed score values never participate in rank optimization. The readiness
-plan is keyed only by the pre-data statistical contract ``(n, a, b,
-assurance)``; the realized calibration scores enter only when selecting the
-r*-th order statistic after the rank has been fixed.
-"""
-
 from __future__ import annotations
 
 import json
@@ -51,8 +41,6 @@ Frozen = ConfigDict(frozen=True)
 
 
 class ReferenceThreshold(BaseModel):
-    """Federation-wide reference operating point from equal-count pooled R."""
-
     model_config = Frozen
 
     value: Threshold
@@ -63,8 +51,6 @@ class ReferenceThreshold(BaseModel):
 
 
 class ReadinessPlan(BaseModel):
-    """Pre-data order-statistic plan for one ``(n, a, b, assurance)`` contract."""
-
     model_config = Frozen
 
     sample_count: SampleCount
@@ -76,8 +62,6 @@ class ReadinessPlan(BaseModel):
 
 
 class ContinuityDiagnostics(BaseModel):
-    """Score-shape diagnostics at the selected local order statistic."""
-
     model_config = Frozen
 
     unique_score_fraction: Fraction
@@ -87,8 +71,6 @@ class ContinuityDiagnostics(BaseModel):
 
 
 class CalibrationReadiness(BaseModel):
-    """Readiness outcome for one client: the realized local threshold and ties."""
-
     model_config = Frozen
 
     plan: ReadinessPlan
@@ -101,8 +83,6 @@ class CalibrationReadiness(BaseModel):
 
 
 class MismatchEvidence(BaseModel):
-    """Exact-binomial evidence that the reference threshold is materially wrong."""
-
     model_config = Frozen
 
     sample_count: SampleCount
@@ -117,8 +97,6 @@ class MismatchEvidence(BaseModel):
 
 
 class ThresholdDecision(BaseModel):
-    """Final deployment decision for one client."""
-
     model_config = Frozen
 
     state: DecisionState
@@ -129,8 +107,6 @@ class ThresholdDecision(BaseModel):
 
 
 class ClientEvaluationResult(BaseModel):
-    """Complete per-client governance evidence bundle."""
-
     model_config = Frozen
 
     client_id: ClientId
@@ -141,7 +117,6 @@ class ClientEvaluationResult(BaseModel):
 
 
 def reference_rank(sample_count: SampleCount, alpha: Alpha) -> PositiveCount:
-    """q_ref = min(N_R, ceil((N_R + 1)(1 - alpha)))."""
     if sample_count <= 0:
         raise ValueError("sample_count must be positive")
     return min(sample_count, math.ceil((sample_count + 1) * (1.0 - alpha)))
@@ -151,7 +126,6 @@ def build_reference_threshold(
     scores_by_client: Mapping[ClientId, np.ndarray],
     alpha: Alpha,
 ) -> ReferenceThreshold:
-    """Pool equal-count per-client reference scores and take the locked rank."""
     if not scores_by_client:
         raise ValueError("At least one client must contribute reference scores")
     lengths = {len(np.asarray(scores)) for scores in scores_by_client.values()}
@@ -177,7 +151,6 @@ def build_reference_threshold(
 def coverage_probability(
     rank: PositiveCount, sample_count: SampleCount, band: OperatingBand
 ) -> CoverageProbability:
-    """P_r = I_b(n+1-r, r) - I_a(n+1-r, r) in float64."""
     if not 1 <= rank <= sample_count:
         raise ValueError("rank must be inside [1, sample_count]")
     upper_shape = sample_count + 1 - rank
@@ -188,8 +161,6 @@ def coverage_probability(
 
 
 class ReadinessPlanBuilder:
-    """Choose the order-statistic rank using protocol constants only."""
-
     def build(
         self, sample_count: SampleCount, band: OperatingBand, assurance: Assurance
     ) -> ReadinessPlan:
@@ -223,8 +194,6 @@ class ReadinessPlanBuilder:
 
 
 class ReadinessPlanCache:
-    """Persistent pre-data plan table consumed by real-data policy evaluation."""
-
     def __init__(
         self,
         path: Path | None = None,
@@ -285,7 +254,6 @@ class ReadinessPlanCache:
             self._plans[expected_key] = plan
 
     def save(self, path: Path | None = None) -> None:
-        """Persist the frozen plan table atomically."""
         from fedcrg.evidence.store import atomic_write_json
 
         target = path or self.path
@@ -304,8 +272,6 @@ class ReadinessPlanCache:
 
 
 class CalibrationReadinessEvaluator:
-    """Select the precomputed order statistic and audit continuity at that point."""
-
     def evaluate(self, scores: np.ndarray, plan: ReadinessPlan) -> CalibrationReadiness:
         values = np.asarray(scores, dtype=np.float64)
         if values.ndim != 1 or len(values) != plan.sample_count:
@@ -323,7 +289,6 @@ class CalibrationReadinessEvaluator:
 def continuity_diagnostics(
     scores: np.ndarray, selected_rank: PositiveCount
 ) -> ContinuityDiagnostics:
-    """Tie and continuity diagnostics at one rank."""
     values = np.asarray(scores, dtype=np.float64)
     if values.ndim != 1 or len(values) == 0:
         raise ValueError("Continuity diagnostics require a non-empty score vector")
@@ -346,7 +311,6 @@ def continuity_diagnostics(
 def familywise_readiness_assurance(
     client_count: PositiveCount, familywise_alpha: Probability
 ) -> Assurance:
-    """Bonferroni per-client assurance 1 - alpha/K for a familywise target."""
     if client_count <= 0:
         raise ValueError("client_count must be positive")
     if not 0.0 < familywise_alpha < 1.0:
@@ -357,7 +321,6 @@ def familywise_readiness_assurance(
 def clopper_pearson_interval(
     counts: BinomialCounts, confidence: ConfidenceLevel
 ) -> ConfidenceInterval:
-    """Exact two-sided Clopper-Pearson interval for the benign exceedance rate."""
     if not 0.0 < confidence < 1.0:
         raise ValueError("confidence must be in (0, 1)")
     tail = (1.0 - confidence) / 2.0
@@ -375,7 +338,6 @@ def clopper_pearson_interval(
 def minimum_bidirectional_sample_count(
     lower_band: Fpr, confidence: ConfidenceLevel
 ) -> SampleCount | None:
-    """Smallest n with 1 - ((1-confidence)/2)^(1/n) < a; None when a == 0."""
     if not 0.0 <= lower_band < 1.0:
         raise ValueError("lower_band must be in [0, 1)")
     if not 0.0 < confidence < 1.0:
@@ -392,8 +354,6 @@ def minimum_bidirectional_sample_count(
 
 
 class ReferenceMismatchEvaluator:
-    """Exact reference-mismatch evidence evaluator."""
-
     def evaluate(
         self,
         scores: np.ndarray,
@@ -437,8 +397,6 @@ class ReferenceMismatchEvaluator:
 
 
 class FleetMismatchDecision(BaseModel):
-    """Fleet-level mismatch decision for one client."""
-
     model_config = Frozen
 
     client_id: ClientId
@@ -448,8 +406,6 @@ class FleetMismatchDecision(BaseModel):
 
 
 class DirectionalHypothesis(BaseModel):
-    """One directional mismatch hypothesis: client + claimed direction."""
-
     model_config = Frozen
 
     client_id: ClientId
@@ -471,7 +427,6 @@ def bonferroni_fleet_sensitivity(
     *,
     familywise_alpha: Probability,
 ) -> tuple[FleetMismatchDecision, ...]:
-    """Bonferroni fleet-level sensitivity analysis."""
     if not counts_by_client:
         return ()
     confidence = 1.0 - familywise_alpha / len(counts_by_client)
@@ -521,7 +476,6 @@ def holm_directional_fleet_sensitivity(
     *,
     familywise_alpha: Probability,
 ) -> tuple[FleetMismatchDecision, ...]:
-    """Holm-Bonferroni directional fleet sensitivity."""
     hypotheses: list[DirectionalHypothesis] = []
     diagnostics: dict[ClientId, tuple[PValue | None, PValue]] = {}
     for client_id in sorted(counts_by_client):
@@ -562,8 +516,6 @@ def holm_directional_fleet_sensitivity(
 
 
 class DeploymentDecision:
-    """Combine independent evidence without reinterpreting inconclusive states."""
-
     def decide(
         self,
         reference: ReferenceThreshold,

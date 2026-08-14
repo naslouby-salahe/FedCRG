@@ -1,11 +1,3 @@
-"""Shared dataset abstractions: discovery, the adapter contract, deterministic
-hashing/RNG primitives, and client eligibility evaluation.
-
-Every row id is a stable hash of dataset/client/source/index, so identity
-survives re-runs and reordering. Eligibility rules gate a client before any
-detector or threshold outcome exists.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -44,8 +36,6 @@ Frozen = ConfigDict(frozen=True)
 
 
 class DatasetDiscovery:
-    """Resolve dataset files without embedding workstation-specific paths."""
-
     @staticmethod
     def require_root(root: Path) -> Path:
         resolved = root.expanduser().resolve()
@@ -71,8 +61,6 @@ class DatasetDiscovery:
 
 
 class ClientData(BaseModel):
-    """Benign and attack frames for one discovered client."""
-
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     dataset: DatasetId
@@ -83,8 +71,6 @@ class ClientData(BaseModel):
 
 
 class DatasetAdapter(ABC):
-    """Discover clients and load per-client source frames."""
-
     def __init__(self, root: Path) -> None:
         self.root = root.expanduser().resolve()
 
@@ -107,14 +93,12 @@ class DatasetAdapter(ABC):
 
 
 def hash_row_ids(values: Iterable[RowId | str]) -> Sha256:
-    """SHA-256 over a stable row-id sequence."""
     normalized = sorted(str(value) for value in values)
     payload = "\n".join(normalized).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
 
 
 def hash_seed(text: str) -> RngSeed:
-    """Deterministic 64-bit RNG seed from one text source."""
     digest = hashlib.sha256(text.encode("utf-8")).digest()
     return int.from_bytes(digest, byteorder="big", signed=False) & 0xFFFFFFFFFFFFFFFF
 
@@ -122,7 +106,6 @@ def hash_seed(text: str) -> RngSeed:
 def stable_row_id(
     dataset: DatasetId, client_id: ClientId, source: str, source_index: Position
 ) -> RowId:
-    """Stable hash-based row identifier for one source position."""
     payload = f"{dataset.value}{client_id}{source}{source_index}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
@@ -132,7 +115,6 @@ def calibration_rng(
     client_id: ClientId,
     seed: CalibrationSeed,
 ) -> np.random.Generator:
-    """Deterministic per-client calibration RNG."""
     text = f"fedcrg|{dataset.value}|calibration|{int(seed)}|{client_id}"
     return np.random.Generator(np.random.PCG64(hash_seed(text)))
 
@@ -143,20 +125,12 @@ def attack_rng(
     group: AttackGroupId,
     seed: ModelSeed,
 ) -> np.random.Generator:
-    """Deterministic per-client attack-split RNG.
-
-    The seed is derived per (dataset, client, attack group) so development
-    sampling never depends on loop ordering or on the process-randomized
-    ``hash()`` function, and different clients never share one sampling stream.
-    """
     namespace = "diad" if dataset is DatasetId.DIAD else dataset.value
     text = f"fedcrg|{namespace}|attackdev|{int(seed)}|{client_id}|{group}"
     return np.random.Generator(np.random.PCG64(hash_seed(text)))
 
 
 class EligibilityRecord(BaseModel):
-    """Eligibility audit outcome for one client."""
-
     model_config = Frozen
 
     client_id: ClientId
@@ -170,8 +144,6 @@ class EligibilityRecord(BaseModel):
 
 
 class EligibilityManifest(BaseModel):
-    """Frozen eligibility audit across all discovered clients."""
-
     model_config = Frozen
 
     dataset_id: DatasetId
@@ -191,8 +163,6 @@ _DIAD_PRECEDENCE = (
 
 
 class ClientEligibilityEvaluator:
-    """Evaluate dataset-contract rules before detector or threshold outcomes exist."""
-
     @staticmethod
     def model_features(config: DatasetConfig) -> tuple[FeatureName, ...]:
         if config.id is not DatasetId.DIAD:

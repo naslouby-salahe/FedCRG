@@ -1,5 +1,3 @@
-"""Regression tests for locked decision semantics."""
-
 from __future__ import annotations
 
 from pydantic import TypeAdapter

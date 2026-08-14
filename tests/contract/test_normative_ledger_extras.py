@@ -1,9 +1,3 @@
-"""Contract: DIAD water-fill normative vectors and AUROC/AUPRC invariance.
-
-Covers the DIAD water-fill development allocations and the AUROC/AUPRC
-policy-invariance rule that the unit-level suites do not lock directly.
-"""
-
 from __future__ import annotations
 
 import numpy as np

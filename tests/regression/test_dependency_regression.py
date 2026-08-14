@@ -1,5 +1,3 @@
-"""Regression tests for experiment dependency ordering."""
-
 from __future__ import annotations
 
 from fedcrg.experiments.runner import DependencyResolver

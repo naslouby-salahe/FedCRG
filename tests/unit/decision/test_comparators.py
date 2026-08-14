@@ -1,5 +1,3 @@
-"""Unit tests for result models and the complete threshold-selection ledger."""
-
 from __future__ import annotations
 
 import numpy as np

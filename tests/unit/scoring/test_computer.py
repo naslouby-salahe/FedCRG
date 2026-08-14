@@ -1,5 +1,3 @@
-"""Unit tests for the score computer's float64 manifest contract."""
-
 from __future__ import annotations
 
 import hashlib

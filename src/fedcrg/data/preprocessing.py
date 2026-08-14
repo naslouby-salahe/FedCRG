@@ -1,11 +1,3 @@
-"""Frozen train-only preprocessing: per-client statistics, aggregation, and
-the fitted transform applied at materialization time.
-
-Statistics are computed locally per client on the train role only, then only
-the train-set extrema are aggregated globally, so no client's raw feature
-values leave its own computation.
-"""
-
 from __future__ import annotations
 
 import numpy as np
@@ -33,7 +25,6 @@ _METADATA = {column.value for column in PreparedColumn}
 
 
 def model_feature_columns(frame: pd.DataFrame, expected: PositiveCount) -> tuple[FeatureName, ...]:
-    """Resolve the model-feature column tuple for one dataset."""
     columns = tuple(column for column in frame.columns if column not in _METADATA)
     if len(columns) != expected:
         raise DataIntegrityError(f"Expected {expected} model features, found {len(columns)}")
@@ -41,8 +32,6 @@ def model_feature_columns(frame: pd.DataFrame, expected: PositiveCount) -> tuple
 
 
 class ClientPreprocessingParameters(BaseModel):
-    """Frozen per-client preprocessing parameterization."""
-
     model_config = Frozen
 
     client_id: ClientId
@@ -51,8 +40,6 @@ class ClientPreprocessingParameters(BaseModel):
 
 
 class PreprocessingModel(BaseModel):
-    """Frozen train-only preprocessing model."""
-
     model_config = Frozen
 
     dataset: DatasetId
@@ -63,7 +50,6 @@ class PreprocessingModel(BaseModel):
 
     @property
     def constant_features(self) -> tuple[bool, ...]:
-        """Per-feature flag of zero global span (M == m), recorded for the audit."""
         return tuple(
             minimum == maximum
             for minimum, maximum in zip(self.global_minima, self.global_maxima, strict=True)
@@ -100,8 +86,6 @@ class PreprocessingModel(BaseModel):
 
 
 class ClientPreprocessingStatistics(BaseModel):
-    """Frozen per-client preprocessing statistics."""
-
     model_config = Frozen
 
     client_id: ClientId
@@ -113,8 +97,6 @@ class ClientPreprocessingStatistics(BaseModel):
 
 
 class TrainOnlyPreprocessing:
-    """Compute per-client statistics locally, then aggregate only train-set extrema."""
-
     def validate_training_rows(
         self,
         splits: ClientSplits,

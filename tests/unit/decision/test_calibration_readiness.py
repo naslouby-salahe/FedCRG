@@ -1,5 +1,3 @@
-"""Unit tests for calibration-readiness evaluation and plan building."""
-
 from __future__ import annotations
 
 import numpy as np

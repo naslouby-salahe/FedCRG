@@ -1,5 +1,3 @@
-"""Unit tests for the DIAD packet-based acquisition adapter."""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -47,7 +45,6 @@ def _write_diad_layout(root: Path) -> None:
     _packet_frame("A1:B2:C3:D4:E5:F6", 6, offset=20.0).to_csv(
         root / "BruteForce" / "BruteForce.csv", index=False
     )
-    # A second benign file for the same device (case-insensitive MAC identity).
     _packet_frame("3c:52:82:ab:cd:01", 3, offset=30.0).to_csv(
         root / "BenignTraffic" / "BenignTraffic1.csv", index=False
     )
@@ -69,7 +66,6 @@ def test_diad_adapter_loads_benign_and_attack_roles(tmp_path: Path) -> None:
     adapter = DiadAdapter(tmp_path, _DIAD_DATASET)
     first = adapter.discover_clients()[0]
     data = adapter.load_client(first)
-    # 8 + 3 benign rows (MAC normalized case-insensitively) and 5 attack rows.
     assert len(data.benign) == 11
     assert len(data.attack) == 5
     assert sorted(data.attack["attack_group"].unique()) == ["mirai"]

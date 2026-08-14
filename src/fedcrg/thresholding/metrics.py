@@ -1,12 +1,3 @@
-"""Evaluation metrics and per-client evidence composition.
-
-Reliability metrics (band error, high excess, band violation, absolute FPR
-error), utility metrics (attack-balanced macro TPR, ranking AUROC/AUPRC),
-strict-threshold classification metrics with explicit undefined semantics,
-equal-client federation aggregation, and the per-client governance
-composition that produces one ``ClientEvaluationResult`` per client.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
@@ -52,8 +43,6 @@ Frozen = ConfigDict(frozen=True)
 
 
 class ConfusionMatrix(BaseModel):
-    """Four-cell confusion matrix over one threshold."""
-
     model_config = Frozen
 
     tp: ExceedanceCount
@@ -65,7 +54,6 @@ class ConfusionMatrix(BaseModel):
 def confusion_matrix(
     scores: np.ndarray, labels: np.ndarray, threshold: Threshold
 ) -> ConfusionMatrix:
-    """Build a confusion matrix for one threshold."""
     values = np.asarray(scores, dtype=np.float64)
     targets = np.asarray(labels, dtype=np.int64)
     if values.shape != targets.shape or values.ndim != 1:
@@ -90,27 +78,22 @@ def _ratio(numerator: NonNegativeCount, denominator: NonNegativeCount) -> Fracti
 
 
 def fpr(cm: ConfusionMatrix) -> Fpr | None:
-    """False-positive rate from a confusion matrix."""
     return _ratio(cm.fp, cm.fp + cm.tn)
 
 
 def tpr(cm: ConfusionMatrix) -> Tpr | None:
-    """True-positive rate from a confusion matrix."""
     return _ratio(cm.tp, cm.tp + cm.fn)
 
 
 def precision(cm: ConfusionMatrix) -> Fpr | None:
-    """Precision from a confusion matrix."""
     return _ratio(cm.tp, cm.tp + cm.fp)
 
 
 def recall(cm: ConfusionMatrix) -> Tpr | None:
-    """Recall from a confusion matrix."""
     return tpr(cm)
 
 
 def f1(cm: ConfusionMatrix) -> Metric | None:
-    """F1 score from a confusion matrix."""
     p = precision(cm)
     r = recall(cm)
     if p is None or r is None or p + r == 0.0:
@@ -119,7 +102,6 @@ def f1(cm: ConfusionMatrix) -> Metric | None:
 
 
 def balanced_accuracy(cm: ConfusionMatrix) -> Fpr | None:
-    """Balanced accuracy from a confusion matrix."""
     sensitivity = tpr(cm)
     specificity = _ratio(cm.tn, cm.tn + cm.fp)
     if sensitivity is None or specificity is None:
@@ -128,7 +110,6 @@ def balanced_accuracy(cm: ConfusionMatrix) -> Fpr | None:
 
 
 def band_error(fpr_value: Fpr, band: OperatingBand) -> Fraction:
-    """Signed distance of one FPR to the operating band."""
     if fpr_value < band.lower:
         return band.lower - fpr_value
     if fpr_value > band.upper:
@@ -137,17 +118,14 @@ def band_error(fpr_value: Fpr, band: OperatingBand) -> Fraction:
 
 
 def high_excess(fpr_value: Fpr, band: OperatingBand) -> Fraction:
-    """FPR excess above the operating-band upper edge."""
     return max(0.0, fpr_value - band.upper)
 
 
 def band_violation(fpr_value: Fpr, band: OperatingBand) -> Fraction:
-    """Whether one FPR falls outside the operating band."""
     return float(not band.contains(fpr_value))
 
 
 def absolute_fpr_error(fpr_value: Fpr, alpha: Alpha) -> Fraction:
-    """Absolute FPR deviation from the target alpha."""
     return abs(fpr_value - alpha)
 
 
@@ -157,7 +135,6 @@ def attack_balanced_tpr(
     attack_groups: np.ndarray,
     threshold: Threshold,
 ) -> Tpr | None:
-    """Macro TPR over attack groups at one threshold."""
     values = np.asarray(scores, dtype=np.float64)
     targets = np.asarray(labels, dtype=np.int64)
     groups_array = np.asarray(attack_groups, dtype=object)
@@ -174,18 +151,14 @@ def attack_balanced_tpr(
 
 
 def auroc(scores: np.ndarray, labels: np.ndarray) -> Fpr:
-    """Area under the ROC curve."""
     return float(roc_auc_score(labels, scores))
 
 
 def auprc(scores: np.ndarray, labels: np.ndarray) -> Fpr:
-    """Area under the precision-recall curve."""
     return float(average_precision_score(labels, scores))
 
 
 class ClientMetrics(BaseModel):
-    """Frozen evaluation metrics for one client/policy."""
-
     model_config = Frozen
 
     benign_n: PositiveCount
@@ -211,8 +184,6 @@ class ClientMetrics(BaseModel):
 
 
 class PolicyEvaluation(BaseModel):
-    """One client/policy evaluation outcome."""
-
     model_config = Frozen
 
     client_id: ClientId
@@ -223,8 +194,6 @@ class PolicyEvaluation(BaseModel):
 
 
 class FederationMetrics(BaseModel):
-    """Frozen federation-level reliability and utility metrics."""
-
     model_config = Frozen
 
     policy: PolicyId
@@ -243,8 +212,6 @@ class FederationMetrics(BaseModel):
 
 
 class EvaluationBundle(BaseModel):
-    """All client, federation, and protocol results of one cell."""
-
     model_config = Frozen
 
     clients: tuple[PolicyEvaluation, ...]
@@ -254,8 +221,6 @@ class EvaluationBundle(BaseModel):
 
 
 class AdmissionSummary(BaseModel):
-    """Composition of reference, readiness, mismatch, and decision."""
-
     model_config = Frozen
 
     client_count: PositiveCount
@@ -269,7 +234,6 @@ class AdmissionSummary(BaseModel):
 
 
 def summarize_admission(results: tuple[ClientEvaluationResult, ...]) -> AdmissionSummary:
-    """Summarize protocol results into an admission document."""
     if not results:
         raise ValueError("Admission summary requires clients")
     n = len(results)
@@ -315,7 +279,6 @@ def aggregate_policy(
     policy: PolicyId,
     evaluations: tuple[PolicyEvaluation, ...],
 ) -> FederationMetrics:
-    """Federation-level metrics for one policy across clients."""
     rows = [
         row.metrics
         for row in evaluations
@@ -352,7 +315,6 @@ def aggregate_policy(
 def assert_ranking_metric_invariance(
     evaluations: tuple[PolicyEvaluation, ...], tolerance: Tolerance
 ) -> None:
-    """Verify AUROC/AUPRC invariance across policies."""
     by_client: dict[ClientId, list[PolicyEvaluation]] = {}
     for row in evaluations:
         if row.metrics is not None:
@@ -367,8 +329,6 @@ def assert_ranking_metric_invariance(
 
 
 class ClientEvaluation:
-    """Compose reference estimation, readiness, mismatch evidence, and decision."""
-
     def __init__(
         self,
         readiness_evaluator: CalibrationReadinessEvaluator | None = None,

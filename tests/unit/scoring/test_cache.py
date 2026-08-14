@@ -1,5 +1,3 @@
-"""Unit tests for the score-cache round trip and tamper detection."""
-
 from __future__ import annotations
 
 import hashlib

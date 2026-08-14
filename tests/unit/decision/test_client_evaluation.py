@@ -1,5 +1,3 @@
-"""Unit tests for the per-client governance evaluation pipeline."""
-
 from __future__ import annotations
 
 import numpy as np
@@ -23,8 +21,6 @@ _CLIENT_B = _CLIENT_ID_ADAPTER.validate_python("client-b")
 _HIGH_CALIBRATION = np.linspace(0.5, 1.0, 2000)
 _LOW_CALIBRATION = np.linspace(0.0, 0.4, 100)
 _HIGH_MISMATCH = np.linspace(0.8, 0.9, 736)
-# 7 of 736 scores above the 0.75 reference: the Clopper-Pearson interval
-# (approximately (0.004, 0.020)) straddles the (0.005, 0.015) operating band.
 _NO_MATERIAL_MISMATCH = np.concatenate((np.full(729, 0.6), np.full(7, 0.8)))
 
 

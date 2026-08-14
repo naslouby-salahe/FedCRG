@@ -37,8 +37,6 @@ def test_top_level_outputs_are_reserved_by_responsibility(tmp_path: Path) -> Non
         "campaigns",
         "reports",
     }
-    # Vocabulary contract rather than a directory-existence assertion: generated
-    # folders do not need to exist in a clean checkout.
     documented = {
         "logs",
         "monitoring",

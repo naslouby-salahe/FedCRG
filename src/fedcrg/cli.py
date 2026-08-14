@@ -1,13 +1,3 @@
-"""FedCRG research command-line interface.
-
-One click entry point covering configuration validation, dataset
-preprocessing, experiment planning and execution, campaign orchestration,
-status inspection, resource monitoring, reports, and publication results
-bundles. CLI options are the input boundary: values are converted to typed
-identities before any scientific call, and every printed payload is a
-validated Pydantic model serialized with ``model_dump_json``.
-"""
-
 from __future__ import annotations
 
 import platform
@@ -84,8 +74,6 @@ _DATASET_EXPERIMENTS: dict[DatasetId, ExperimentId] = {
 
 
 class DoctorPayload(BaseModel):
-    """Runtime and CUDA pin printed by the doctor command."""
-
     model_config = ConfigDict(frozen=True)
 
     python: Version
@@ -99,8 +87,6 @@ class DoctorPayload(BaseModel):
 
 
 class ValidationPayload(BaseModel):
-    """Typed result of the experiment validate command."""
-
     model_config = ConfigDict(frozen=True)
 
     valid: bool
@@ -110,8 +96,6 @@ class ValidationPayload(BaseModel):
 
 
 class PlanPayload(BaseModel):
-    """Typed result of the experiment plan command."""
-
     model_config = ConfigDict(frozen=True)
 
     experiment: ExperimentId
@@ -124,8 +108,6 @@ class PlanPayload(BaseModel):
 
 
 class PreprocessPayload(BaseModel):
-    """Prepared-cache location and identity pin."""
-
     model_config = ConfigDict(frozen=True)
 
     dataset: DatasetId
@@ -135,8 +117,6 @@ class PreprocessPayload(BaseModel):
 
 
 class RunPayload(BaseModel):
-    """Summary of one executed experiment workload."""
-
     model_config = ConfigDict(frozen=True)
 
     experiment: ExperimentId
@@ -146,8 +126,6 @@ class RunPayload(BaseModel):
 
 
 class CampaignPayload(BaseModel):
-    """Typed campaign status printed by the campaign command."""
-
     model_config = ConfigDict(frozen=True)
 
     campaign_id: CampaignId
@@ -160,8 +138,6 @@ class CampaignPayload(BaseModel):
 
 
 class RunStatusCounts(BaseModel):
-    """Aggregated run-status counters (structural counters, not configuration)."""
-
     model_config = ConfigDict()
 
     total: NonNegativeCount = 0
@@ -171,8 +147,6 @@ class RunStatusCounts(BaseModel):
 
 
 class ExperimentStatusRow(BaseModel):
-    """Run-status summary for one experiment."""
-
     model_config = ConfigDict(frozen=True)
 
     experiment: ExperimentId
@@ -183,8 +157,6 @@ class ExperimentStatusRow(BaseModel):
 
 
 class StatusPayload(BaseModel):
-    """Typed status printed by the status command."""
-
     model_config = ConfigDict(frozen=True)
 
     campaign_id: CampaignId | None
@@ -193,8 +165,6 @@ class StatusPayload(BaseModel):
 
 
 class ReportPayload(BaseModel):
-    """Typed report build summary."""
-
     model_config = ConfigDict(frozen=True)
 
     campaign_id: CampaignId
@@ -203,16 +173,12 @@ class ReportPayload(BaseModel):
 
 
 class ResultsBuildPayload(BaseModel):
-    """Results bundle build summary."""
-
     model_config = ConfigDict(frozen=True)
 
     results_path: PathString
 
 
 class ResultsVerifyPayload(BaseModel):
-    """Results bundle verification summary."""
-
     model_config = ConfigDict(frozen=True)
 
     valid: bool
@@ -220,7 +186,6 @@ class ResultsVerifyPayload(BaseModel):
 
 
 def _study(ctx: click.Context) -> Study:
-    """Return the study configuration loaded by the group callback."""
     study = ctx.obj
     assert isinstance(study, Study)
     return study
@@ -231,14 +196,12 @@ def _print(payload: BaseModel) -> None:
 
 
 def _precompute_protocol_tables(study: Study, experiment_id: ExperimentId) -> None:
-    """Freeze the readiness/mismatch protocol tables required by policy evaluation."""
     spec = study.spec(experiment_id)
     config = study.resolve(experiment_id)
     ProtocolTablePrecomputer().precompute(config, spec)
 
 
 def _purge_experiment_evidence(experiment_id: ExperimentId, outputs_root: Path) -> None:
-    """Remove regenerable run evidence for one experiment (explicit overwrite)."""
     runs_root = OutputsLayout(outputs_root).runs
     if not runs_root.is_dir():
         return
@@ -247,9 +210,7 @@ def _purge_experiment_evidence(experiment_id: ExperimentId, outputs_root: Path) 
         if not run_config_path.is_file():
             continue
         try:
-            run_config = RunConfig.model_validate_json(
-                run_config_path.read_text(encoding="utf-8")
-            )
+            run_config = RunConfig.model_validate_json(run_config_path.read_text(encoding="utf-8"))
         except (OSError, ValidationError):
             continue
         if run_config.experiment_id is experiment_id:
@@ -260,7 +221,6 @@ def _purge_experiment_evidence(experiment_id: ExperimentId, outputs_root: Path) 
 @click.version_option(package_name="fedcrg")
 @click.pass_context
 def cli(ctx: click.Context) -> None:
-    """FedCRG reproducible research tooling."""
     study = Study.load()
     ctx.obj = study
     configure_logging(logs_root=OutputsLayout(study.paths.outputs_root).logs)
@@ -268,7 +228,6 @@ def cli(ctx: click.Context) -> None:
 
 @cli.command(name="doctor")
 def doctor() -> None:
-    """Print installed library versions and CUDA availability as JSON."""
     cuda_available = torch.cuda.is_available()
     _print(
         DoctorPayload(
@@ -288,7 +247,6 @@ def doctor() -> None:
 @click.argument("experiment_id", type=click.Choice([item.value for item in ExperimentId]))
 @click.pass_context
 def validate(ctx: click.Context, experiment_id: str) -> None:
-    """Validate one resolved experiment configuration."""
     study = _study(ctx)
     experiment = ExperimentId(experiment_id)
     spec = study.spec(experiment)
@@ -311,7 +269,6 @@ def validate(ctx: click.Context, experiment_id: str) -> None:
 @click.argument("experiment_id", type=click.Choice([item.value for item in ExperimentId]))
 @click.pass_context
 def plan(ctx: click.Context, experiment_id: str) -> None:
-    """Print the execution plan for one experiment."""
     study = _study(ctx)
     experiment = ExperimentId(experiment_id)
     spec = study.spec(experiment)
@@ -338,11 +295,6 @@ def plan(ctx: click.Context, experiment_id: str) -> None:
 @click.option("--overwrite", is_flag=True, help="Rebuild the prepared cache explicitly.")
 @click.pass_context
 def preprocess(ctx: click.Context, dataset_id: str | None, overwrite: bool) -> None:
-    """Preprocess raw datasets into data/preprocessed/ (reuse-first).
-
-    Without a dataset argument every raw dataset with a preprocessing
-    pipeline is prepared.
-    """
     study = _study(ctx)
     if dataset_id is None:
         datasets = tuple(_DATASET_EXPERIMENTS)
@@ -379,7 +331,6 @@ def preprocess(ctx: click.Context, dataset_id: str | None, overwrite: bool) -> N
 @click.option("--overwrite", is_flag=True, help="Re-run and replace regenerable evidence.")
 @click.pass_context
 def run(ctx: click.Context, experiment_id: str, overwrite: bool) -> None:
-    """Execute one pre-registered experiment."""
     study = _study(ctx)
     experiment = ExperimentId(experiment_id)
     spec = study.spec(experiment)
@@ -422,7 +373,6 @@ def run(ctx: click.Context, experiment_id: str, overwrite: bool) -> None:
 @click.option("--overwrite", is_flag=True, help="Restart the campaign from scratch.")
 @click.pass_context
 def campaign(ctx: click.Context, overwrite: bool) -> None:
-    """Execute the full experiment campaign from prepared data."""
     study = _study(ctx)
     campaign_id = study.campaign_id
     outputs_root = study.paths.outputs_root
@@ -468,7 +418,6 @@ def campaign(ctx: click.Context, overwrite: bool) -> None:
 )
 @click.pass_context
 def status(ctx: click.Context, experiment_id: str | None) -> None:
-    """Show run status for one experiment (or all experiments)."""
     study = _study(ctx)
     outputs_root = study.paths.outputs_root
     layout = OutputsLayout(outputs_root)
@@ -533,7 +482,6 @@ def status(ctx: click.Context, experiment_id: str | None) -> None:
 )
 @click.pass_context
 def monitor(ctx: click.Context, interval: float, samples: int | None) -> None:
-    """Stream CPU/RAM/GPU telemetry and persist it under outputs/monitoring/."""
     study = _study(ctx)
     telemetry_path = OutputsLayout(study.paths.outputs_root).telemetry_file
     monitor = ResourceMonitor()
@@ -552,7 +500,6 @@ def monitor(ctx: click.Context, interval: float, samples: int | None) -> None:
 @cli.command(name="report")
 @click.pass_context
 def report(ctx: click.Context) -> None:
-    """Build the repository report and publication package from frozen evidence."""
     study = _study(ctx)
     config = study.resolve(ExperimentId.PRIMARY_NBAIOT)
     outputs_root = study.paths.outputs_root
@@ -569,13 +516,12 @@ def report(ctx: click.Context) -> None:
 
 @cli.group(name="results")
 def results_group() -> None:
-    """Build and verify publication bundles under results/<campaign-id>/."""
+    pass
 
 
 @results_group.command(name="build")
 @click.pass_context
 def results_build(ctx: click.Context) -> None:
-    """Build the publication bundle from immutable evidence."""
     study = _study(ctx)
     path = build_results_bundle(
         study.campaign_id,
@@ -588,7 +534,6 @@ def results_build(ctx: click.Context) -> None:
 @results_group.command(name="verify")
 @click.pass_context
 def results_verify(ctx: click.Context) -> None:
-    """Verify that a publication bundle is complete, consistent, and hash-valid."""
     study = _study(ctx)
     verification = verify_results_bundle(
         study.campaign_id,

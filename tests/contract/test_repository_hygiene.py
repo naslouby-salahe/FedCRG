@@ -39,8 +39,6 @@ def test_production_source_has_no_personal_absolute_paths() -> None:
 def test_production_source_has_no_semicolon_compressed_statements() -> None:
     for path in _python_files():
         source = path.read_text(encoding="utf-8")
-        # Collect line numbers that belong to string literals (docstrings and
-        # prose), where a semicolon is text, not a statement separator.
         string_lines: set[int] = set()
         try:
             tokens = tokenize.generate_tokens(io.StringIO(source).readline)

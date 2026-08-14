@@ -1,5 +1,3 @@
-"""Unit tests for communication ledgers and split-stability summaries."""
-
 from __future__ import annotations
 
 from fedcrg.config import Study

@@ -1,10 +1,3 @@
-"""Reproducible reports and publication bundles built only from immutable evidence.
-
-Run reports, the repository report, publication tables and figures, and the
-results bundle are projections of frozen run artifacts: no detector is loaded,
-no model is retrained, and missing evidence remains explicitly incomplete.
-"""
-
 from __future__ import annotations
 
 import json
@@ -92,8 +85,6 @@ _FPR_ADAPTER = TypeAdapter(Fpr)
 
 
 class PublicationTableFilename(StrEnum):
-    """Reserved manuscript-table filenames under a publication's tables/ root."""
-
     PROTOCOL_CONSTANTS = "table_1_protocol_constants.csv"
     DATASET_INVENTORY = "table_2_dataset_inventory.csv"
     PRIMARY_POLICY_RESULTS = "table_3_primary_policy_results.csv"
@@ -103,8 +94,6 @@ class PublicationTableFilename(StrEnum):
 
 
 class RepositoryReportFilename(StrEnum):
-    """Reserved filenames under the repository report's reports/latest/ root."""
-
     POLICY_FEDERATION_RESULTS = "policy_federation_results.csv"
     PRIMARY_CONTRASTS = "primary_contrasts.json"
     SPLIT_SENSITIVITY = "split_sensitivity.csv"
@@ -143,7 +132,6 @@ def _jsonl_count(path: Path) -> NonNegativeCount:
 
 
 def build_run_report(run_dir: Path) -> Path:
-    """Markdown summary of one immutable policy run."""
     layout = RunLayout(run_dir)
     manifest = RunManifest.model_validate_json(layout.manifest.read_text(encoding="utf-8"))
     verification = ArtifactVerifier().record(layout, _definition_for(manifest))
@@ -192,13 +180,10 @@ def build_run_report(run_dir: Path) -> Path:
 
 
 def _definition_for(manifest: RunManifest):
-    """Resolve the catalogue definition recorded in the run manifest."""
     return Study.load().catalogue.spec(manifest.experiment_id)
 
 
 class AdmissionStateRow(BaseModel):
-    """One admission-state table row."""
-
     model_config = Frozen
 
     run_id: RunId
@@ -223,8 +208,6 @@ class AdmissionStateRow(BaseModel):
 
 
 class ContrastTableRow(BaseModel):
-    """One contrast table row."""
-
     model_config = Frozen
 
     comparator: PolicyId
@@ -238,8 +221,6 @@ class ContrastTableRow(BaseModel):
 
 
 class ProtocolConstantRow(BaseModel):
-    """One protocol-constant table row."""
-
     model_config = Frozen
 
     constant: Identifier
@@ -247,8 +228,6 @@ class ProtocolConstantRow(BaseModel):
 
 
 class DatasetInventoryRow(BaseModel):
-    """One dataset-inventory table row."""
-
     model_config = Frozen
 
     client_id: ClientId
@@ -257,8 +236,6 @@ class DatasetInventoryRow(BaseModel):
 
 
 class RoleCountRow(BaseModel):
-    """Role row-count and hash within a dataset row."""
-
     model_config = Frozen
 
     role: DataRole
@@ -267,8 +244,6 @@ class RoleCountRow(BaseModel):
 
 
 class FederationResultsRow(BaseModel):
-    """One federation-results table row."""
-
     model_config = Frozen
 
     run_id: RunId
@@ -279,8 +254,6 @@ class FederationResultsRow(BaseModel):
 
 
 class PublicationTableBuilder:
-    """Deterministic manuscript-table builders from frozen artifacts."""
-
     def primary_policy_results(self, run_dirs: tuple[Path, ...], output: Path) -> Path:
         records = load_federation_results(run_dirs)
         rows = [record.model_dump(mode="json") for record in records]
@@ -418,8 +391,6 @@ class PublicationTableBuilder:
 
 @dataclass(frozen=True, slots=True)
 class PublicationPackage:
-    """Tables, figures, and manifest of one publication."""
-
     tables: tuple[PublicationArtifact, ...]
     figures: tuple[PublicationArtifact, ...]
     manifest: Path
@@ -431,8 +402,6 @@ class PublicationPackage:
 
 @dataclass(frozen=True, slots=True)
 class PublicationArtifact:
-    """One generated table or figure with availability."""
-
     name: Description
     path: Path | None
     available: bool
@@ -440,8 +409,6 @@ class PublicationArtifact:
 
 
 class PublicationPackageBuilder:
-    """Generate the registered tables and figures without manual outcomes."""
-
     def __init__(self, tables: PublicationTableBuilder | None = None) -> None:
         self.tables = tables or PublicationTableBuilder()
 
@@ -631,7 +598,6 @@ class PublicationPackageBuilder:
 
 
 def build_decision_architecture_figure(output: Path) -> Path:
-    """Render the evidence-admission flow without implementation shorthand names."""
     figure, axis = plt.subplots(figsize=(12, 7))
     axis.set_xlim(0, 12)
     axis.set_ylim(0, 8)
@@ -706,7 +672,6 @@ def build_readiness_frontier_figure(
     band: OperatingBand,
     assurance: Assurance,
 ) -> Path:
-    """Render the finite-sample readiness frontier (n_C vs exact in-band probability)."""
     from fedcrg.thresholding.readiness import ReadinessPlanBuilder
 
     probabilities = [
@@ -749,7 +714,6 @@ def build_mismatch_power_map_figure(
     band: OperatingBand,
     confidence: ConfidenceLevel,
 ) -> Path:
-    """Render the reference-mismatch evidence/power map (n_G x true reference FPR)."""
     from scipy.stats import binom
 
     from fedcrg.thresholding.readiness import clopper_pearson_interval
@@ -800,7 +764,6 @@ def build_phase_transition_figure(
     assurance: Assurance,
     confidence: ConfidenceLevel,
 ) -> Path:
-    """Render the calibration-size phase transition (readiness and mismatch evidence)."""
     from fedcrg.thresholding.readiness import (
         ReadinessPlanBuilder,
         minimum_bidirectional_sample_count,
@@ -830,7 +793,6 @@ def build_phase_transition_figure(
 
 
 def _require_bundle_table(results_root: Path, filename: Identifier) -> pd.DataFrame:
-    """Load one publication table; results-driven figures never fabricate data."""
     path = ResultsBundleLayout(results_root).tables / filename
     if not path.is_file():
         raise FileNotFoundError(
@@ -840,14 +802,14 @@ def _require_bundle_table(results_root: Path, filename: Identifier) -> pd.DataFr
 
 
 def _band_guide_lines() -> tuple[Fpr, Fpr, Fpr]:
-    """The locked operating band guide lines from the study protocol."""
     protocol = Study.load().study_config.protocol
     return protocol.band.lower, protocol.alpha, protocol.band.upper
 
 
 def build_per_client_operating_points_figure(output: Path, results_root: Path) -> Path:
-    """Render per-client FPR operating points against the locked band lines."""
-    frame = _require_bundle_table(results_root, PublicationTableFilename.PRIMARY_POLICY_RESULTS.value)
+    frame = _require_bundle_table(
+        results_root, PublicationTableFilename.PRIMARY_POLICY_RESULTS.value
+    )
     if "client_id" not in frame.columns or "fpr" not in frame.columns:
         raise ValueError("primary policy results table lacks client_id/fpr columns")
     figure, axis = plt.subplots(figsize=(9, 5))
@@ -867,8 +829,9 @@ def build_per_client_operating_points_figure(output: Path, results_root: Path) -
 
 
 def build_reliability_utility_frontier_figure(output: Path, results_root: Path) -> Path:
-    """Render the reliability-utility frontier (MEBE vs ABMacroTPR per policy)."""
-    frame = _require_bundle_table(results_root, PublicationTableFilename.PRIMARY_POLICY_RESULTS.value)
+    frame = _require_bundle_table(
+        results_root, PublicationTableFilename.PRIMARY_POLICY_RESULTS.value
+    )
     required = {"policy_id", "mebe", "attack_balanced_macro_tpr"}
     if not required.issubset(frame.columns):
         raise ValueError("primary policy results table lacks MEBE/ABMacroTPR columns")
@@ -890,7 +853,6 @@ def build_reliability_utility_frontier_figure(output: Path, results_root: Path) 
 
 
 def build_assumption_stress_figure(output: Path, results_root: Path) -> Path:
-    """Render assumption-stress coverage from the campaign statistics bundle."""
     statistics_root = ResultsBundleLayout(results_root).statistics
     if not statistics_root.is_dir():
         raise FileNotFoundError(
@@ -920,7 +882,6 @@ def build_assumption_stress_figure(output: Path, results_root: Path) -> Path:
 
 
 def build_external_replication_figure(output: Path, results_root: Path) -> Path:
-    """Render external-replication FPR operating points from the DIAD bundle."""
     frame = _require_bundle_table(results_root, PublicationTableFilename.EXTERNAL_REPLICATION.value)
     if "client_id" not in frame.columns or "fpr" not in frame.columns:
         raise ValueError("external replication table lacks client_id/fpr columns")
@@ -941,12 +902,10 @@ def build_external_replication_figure(output: Path, results_root: Path) -> Path:
 def _catalogue_axis_values(
     spec_id: ExperimentId, axis_id: ExperimentAxisId
 ) -> tuple[AxisValue, ...]:
-    """Resolve one locked experiment-grid axis from the catalogue."""
     return tuple(Study.load().catalogue.spec(spec_id).axis(axis_id).values)
 
 
 def build_readiness_frontier_from_catalogue(output: Path) -> Path:
-    """Render the readiness frontier using the locked readiness sweep."""
     counts = tuple(
         int(value)
         for value in _catalogue_axis_values(
@@ -960,7 +919,6 @@ def build_readiness_frontier_from_catalogue(output: Path) -> Path:
 
 
 def build_mismatch_power_map_from_catalogue(output: Path) -> Path:
-    """Render the mismatch power map using the locked evidence-budget grids."""
     sample_counts = tuple(
         int(value)
         for value in _catalogue_axis_values(
@@ -978,7 +936,6 @@ def build_mismatch_power_map_from_catalogue(output: Path) -> Path:
 
 
 def build_phase_transition_from_catalogue(output: Path) -> Path:
-    """Render the calibration-size phase transition from the locked sweeps."""
     calibration_counts = tuple(
         int(value)
         for value in _catalogue_axis_values(
@@ -1003,7 +960,6 @@ def build_phase_transition_from_catalogue(output: Path) -> Path:
 
 
 def build_repository_report(outputs_root: Path, config: ExperimentConfig) -> Path:
-    """Publication-oriented evidence index from every completed run."""
     reports_root = OutputsLayout(outputs_root).reports / LayoutDirectory.LATEST.value
     reports_root.mkdir(parents=True, exist_ok=True)
     run_dirs = _completed_runs(outputs_root)
@@ -1065,7 +1021,6 @@ def build_publication(
     prepared_manifest: Path | None = None,
     destination: Path | None = None,
 ) -> Path:
-    """Build the publication package and return its manifest."""
     package = PublicationPackageBuilder().build(
         config=config,
         outputs_root=outputs_root,
@@ -1076,8 +1031,6 @@ def build_publication(
 
 
 class ResultsManifest(BaseModel):
-    """Frozen results-bundle manifest."""
-
     model_config = Frozen
 
     campaign_id: CampaignId
@@ -1094,15 +1047,11 @@ class ResultsManifest(BaseModel):
 
 @dataclass(frozen=True, slots=True)
 class ResultsVerification:
-    """Validity and problems of one bundle verification."""
-
     valid: bool
     problems: tuple[Identifier, ...]
 
 
 class ResultsBuilder:
-    """Assemble the publication bundle for one campaign from immutable evidence."""
-
     def build(
         self,
         *,
@@ -1126,9 +1075,6 @@ class ResultsBuilder:
         self._write_provenance(outputs_root, config, layout)
         self._copy_tables_and_figures(outputs_root, layout)
 
-        # The manifest itself must be covered by the checksum ledger, so it is
-        # written before the ledger is computed (checksums.json is the only
-        # file excluded from its own ledger).
         complete = self._evidence_complete(study, outputs_root)
         checksums = self._checksums(layout)
         manifest = self._manifest(
@@ -1146,13 +1092,6 @@ class ResultsBuilder:
 
     @staticmethod
     def _evidence_complete(study: Study, outputs_root: Path) -> bool:
-        """True when every registered real-data experiment cell has a completed run.
-
-        The bundle manifest must never claim completeness for missing evidence:
-        a partial programme stays explicitly incomplete until every
-        (model seed, calibration seed, policy) cell of every real-data
-        experiment exists as a completed run directory.
-        """
         runs = _completed_runs(outputs_root)
         for spec in study.catalogue.all():
             if spec.category is ExperimentType.SYNTHETIC:
@@ -1304,8 +1243,6 @@ class ResultsBuilder:
 
 
 class ResultsVerifier:
-    """Verify that a publication bundle satisfies the required structure and integrity."""
-
     def verify(
         self,
         campaign_id: CampaignId,
@@ -1350,7 +1287,6 @@ def build_results_bundle(
     outputs_root: Path,
     results_root: Path,
 ) -> Path:
-    """Assemble one immutable results bundle."""
     return ResultsBuilder().build(
         campaign_id=campaign_id,
         outputs_root=outputs_root,
@@ -1362,7 +1298,6 @@ def verify_results_bundle(
     campaign_id: CampaignId,
     results_root: Path,
 ) -> ResultsVerification:
-    """Verify one results bundle's structure and checksums."""
     return ResultsVerifier().verify(
         campaign_id,
         results_root=results_root,

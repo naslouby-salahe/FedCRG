@@ -1,5 +1,3 @@
-"""Integration tests for prepared-cache materialization and reuse."""
-
 from __future__ import annotations
 
 from pathlib import Path

@@ -1,11 +1,3 @@
-"""Output-layout and prepared-column contract.
-
-No production module may hardcode an outputs/ path fragment or a prepared-data
-column name: every reserved path is owned by ``OutputsLayout`` in
-``paths.py``, and every prepared column is a member of the
-``PreparedColumn`` enum in ``types.py``.
-"""
-
 from __future__ import annotations
 
 import ast
@@ -15,8 +7,6 @@ ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src" / "fedcrg"
 
 _PATH_OWNER = "paths.py"
-# The owner module may name the literal fragments once; everyone else must use
-# the layout properties.
 _FORBIDDEN_FRAGMENTS = (
     '"runs"',
     '"cache"',

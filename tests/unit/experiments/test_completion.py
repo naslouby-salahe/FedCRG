@@ -1,5 +1,3 @@
-"""Unit tests for synthetic-experiment workload ledger enforcement."""
-
 from __future__ import annotations
 
 from pathlib import Path

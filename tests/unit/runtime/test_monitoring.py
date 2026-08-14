@@ -1,5 +1,3 @@
-"""Unit tests for runtime resource monitoring and telemetry persistence."""
-
 from __future__ import annotations
 
 import json

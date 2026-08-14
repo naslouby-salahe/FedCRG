@@ -1,11 +1,3 @@
-"""Contract: row identities and source provenance are machine-independent.
-
-The raw-data root may be reached through a symlink or differ between
-checkouts; row ids must hash the source path RELATIVE to the dataset root,
-never the absolute resolved path, so a clean checkout reproduces identical
-prepared artifacts (roadmap 7.1.4, 14.4).
-"""
-
 from __future__ import annotations
 
 from pathlib import Path

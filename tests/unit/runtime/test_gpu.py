@@ -1,5 +1,3 @@
-"""Unit tests for CUDA device resolution and the required-device guard."""
-
 from __future__ import annotations
 
 import torch

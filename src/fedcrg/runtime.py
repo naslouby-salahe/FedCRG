@@ -1,11 +1,3 @@
-"""Runtime support: structured logging, resource telemetry, CUDA handling,
-and terminal status rendering.
-
-Long-running campaigns persist logs under ``outputs/logs/`` and resource
-telemetry under ``outputs/monitoring/``; the console renders progress from
-the same structured state rather than scattering ``print()`` calls.
-"""
-
 from __future__ import annotations
 
 import json
@@ -43,8 +35,6 @@ _LOG_FILENAME = "fedcrg.log"
 
 
 class CampaignStatusColumn(StrEnum):
-    """Column names of the rendered campaign status table."""
-
     STATUS = "status"
     COMPLETED = "completed"
     TOTAL = "total"
@@ -53,14 +43,11 @@ class CampaignStatusColumn(StrEnum):
 
 
 class CacheOutcome(StrEnum):
-    """Closed domain of rendered cache reuse outcomes."""
-
     HIT = "hit"
     MISS = "miss"
 
 
 def configure_logging(logs_root: Path | None = None, level: LogLevel | None = None) -> None:
-    """Configure root logging with a stderr console handler and an optional file handler."""
     resolved_level = (level or os.environ.get("FEDCRG_LOG_LEVEL", "INFO")).upper()
     handlers: list[logging.Handler] = [logging.StreamHandler(sys.stderr)]
     if logs_root is not None:
@@ -78,13 +65,11 @@ def configure_logging(logs_root: Path | None = None, level: LogLevel | None = No
 
 
 def get_logger(name: Identifier) -> logging.Logger:
-    """Module logger under the FedCRG hierarchy."""
     return logging.getLogger(name)
 
 
 @contextmanager
 def log_stage(logger: logging.Logger, message: Identifier, **fields: object) -> Generator[None]:
-    """Emit one structured stage transition."""
     suffix = " ".join(f"{key}={value}" for key, value in fields.items())
     logger.info("start %s %s", message, suffix)
     started = time.monotonic()
@@ -99,15 +84,12 @@ def log_stage(logger: logging.Logger, message: Identifier, **fields: object) -> 
 
 @dataclass(frozen=True, slots=True)
 class CudaDeviceInfo:
-    """CUDA device identity and capacity pin."""
-
     available: bool
     device_name: Identifier | None = None
     vram_capacity_bytes: ByteCount | None = None
 
 
 def cuda_device_info() -> CudaDeviceInfo:
-    """Probe the active CUDA device."""
     if not torch.cuda.is_available():
         return CudaDeviceInfo(available=False)
     index = torch.cuda.current_device()
@@ -120,7 +102,6 @@ def cuda_device_info() -> CudaDeviceInfo:
 
 
 def resolve_compute_device(device: ComputeDeviceId) -> torch.device:
-    """Resolve the configured device, refusing silent CPU fallback for CUDA work."""
     if device is ComputeDeviceId.CUDA and not torch.cuda.is_available():
         raise RuntimeError(
             "The frozen experiment configuration requires CUDA, but no CUDA device is "
@@ -130,7 +111,6 @@ def resolve_compute_device(device: ComputeDeviceId) -> torch.device:
 
 
 def log_device_capabilities(logger: logging.Logger) -> None:
-    """Log the active CUDA device capabilities."""
     info = cuda_device_info()
     if not info.available:
         logger.info("cuda unavailable device=cpu")
@@ -143,7 +123,6 @@ def log_device_capabilities(logger: logging.Logger) -> None:
 
 
 def log_peak_vram(logger: logging.Logger) -> None:
-    """Log the observed peak VRAM allocation."""
     if not torch.cuda.is_available():
         return
     index = torch.cuda.current_device()
@@ -155,8 +134,6 @@ def log_peak_vram(logger: logging.Logger) -> None:
 
 @dataclass(frozen=True, slots=True)
 class CudaTelemetry:
-    """Frozen CUDA resource telemetry sample."""
-
     available: bool
     device_count: NonNegativeCount = 0
     device_name: Identifier | None = None
@@ -168,8 +145,6 @@ class CudaTelemetry:
 
 @dataclass(frozen=True, slots=True)
 class ResourceSample:
-    """Frozen resource telemetry sample."""
-
     timestamp: Timestamp
     process_ram_bytes: ByteCount
     available_system_ram_bytes: ByteCount
@@ -179,8 +154,6 @@ class ResourceSample:
 
 
 class ResourceMonitor:
-    """Sample process/system resources and CUDA state on demand."""
-
     def __init__(self, process: psutil.Process | None = None) -> None:
         self._process = process or psutil.Process()
 
@@ -227,7 +200,6 @@ class ResourceMonitor:
 
 
 def write_telemetry(sample: ResourceSample, output: Path) -> None:
-    """Append one sample to outputs/monitoring/telemetry.jsonl."""
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(asdict(sample)) + "\n")
@@ -251,7 +223,6 @@ def _telemetry_text(sample: ResourceSample) -> Identifier:
 
 
 def render_telemetry(sample: ResourceSample) -> Identifier:
-    """Render one resource telemetry line."""
     return _telemetry_text(sample)
 
 
@@ -263,7 +234,6 @@ def render_campaign_status(
     current_experiment: Identifier | None,
     elapsed_seconds: Duration,
 ) -> None:
-    """Render campaign progress for the terminal."""
     console = Console()
     table = Table(title=f"campaign {campaign_id}")
     table.add_column(CampaignStatusColumn.STATUS.value)
@@ -287,7 +257,6 @@ def render_cache_status(
     target: Identifier,
     detail: Identifier | None = None,
 ) -> None:
-    """Render cache reuse status for the terminal."""
     console = Console()
     outcome = CacheOutcome.HIT if hit else CacheOutcome.MISS
     suffix = f" ({detail})" if detail else ""

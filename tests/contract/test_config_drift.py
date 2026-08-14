@@ -1,14 +1,3 @@
-"""Config-vs-source drift contract.
-
-Configured scientific values must not be duplicated as literals in production
-source. The test parses the three configuration documents, collects configured
-scientific values, scans production AST literals, and reports any configured
-value repeated directly in source.
-
-Mathematical constants that are inherent to an algorithm are the only
-allowlist entries and each is documented by scientific reason.
-"""
-
 from __future__ import annotations
 
 import ast
@@ -19,8 +8,6 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src" / "fedcrg"
 
-# (relative path, value, reason) — genuine mathematical/algorithmic constants,
-# each documented by scientific reason.
 _ALLOWED_SOURCE_LITERALS: dict[tuple[str, object], str] = {
     ("types.py", 1.0e-12): "tight comparison tolerance for exact numeric contracts",
     ("types.py", 1.0e-10): "exact beta-function tolerance locked by the protocol",
@@ -90,7 +77,6 @@ def _configured_values() -> set[object]:
                 for item in node:
                     walk(item)
             elif isinstance(node, (int, float)) and not isinstance(node, bool):
-                # Trivial 0/1 sentinels are universal bounds, not scientific values.
                 if node in (0, 0.0, 1, 1.0):
                     return
                 values.add(node)
@@ -105,12 +91,6 @@ def _configured_values() -> set[object]:
 
 
 def _source_literals() -> dict[tuple[str, object], list[int]]:
-    """Collect numeric literals from scientific contexts only.
-
-    Structural AST contexts are skipped because their numbers are not
-    scientific values: slice bounds (``[:5]``), ``range`` arguments, and
-    keyword values such as subprocess ``timeout=``.
-    """
     occurrences: dict[tuple[str, object], list[int]] = {}
     for path in sorted(SRC.rglob("*.py")):
         relative = path.relative_to(SRC).as_posix()
@@ -174,11 +154,6 @@ def _is_structural_context(parent: ast.AST | None, node: ast.Constant) -> bool:
     return False
 
 
-# Presentation-only matplotlib calls: their arguments (figure dimensions,
-# legend columns, label rotation) are presentation parameters, never
-# scientific configuration. Data-carrying calls (plot, scatter, bar, axhline,
-# axvline, imshow, annotate) are deliberately NOT exempt so band lines and
-# data coordinates remain drift-checked.
 _PRESENTATION_CALLS = {
     "figsize",
     "legend",
@@ -198,7 +173,6 @@ _PRESENTATION_CALLS = {
 
 
 def _is_presentation_context(tree: ast.AST, node: ast.Constant) -> bool:
-    """True when a literal belongs to a pure-presentation matplotlib call."""
     parent = _parent_of(tree, node)
     while parent is not None:
         if isinstance(parent, ast.Call):
@@ -236,7 +210,6 @@ def test_experiment_axes_not_duplicated_in_python() -> None:
                 axis_values.update(values)
         for cell in experiment.get("coupled_cells") or []:
             axis_values.update(cell.values())
-    # Trivial 0/1 sentinels are universal bounds, not scientific axis values.
     axis_values.discard(0)
     axis_values.discard(0.0)
     axis_values.discard(1)
@@ -266,13 +239,6 @@ def test_experiment_axes_not_duplicated_in_python() -> None:
 
 
 def _is_seed_position(parent: ast.AST | None, node: ast.Constant) -> bool:
-    """True when a literal is used AS a seed, not merely equal to a seed value.
-
-    Catches the real drift patterns: seed-named keyword arguments, positional
-    arguments to seed-named calls, and all-integer collections (the seed-list
-    pattern). Non-seed uses such as figure dimensions (figsize=(11, 4.2)) are
-    exempt because the float element makes the collection non-seed-like.
-    """
     if parent is None:
         return False
     if isinstance(parent, ast.keyword) and parent.arg is not None and "seed" in parent.arg:

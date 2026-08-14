@@ -1,5 +1,3 @@
-"""Behavior contract: results-bundle build, verification, and tamper detection."""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -14,9 +12,7 @@ def _write_fake_evidence(outputs_root: Path) -> None:
     layout = OutputsLayout(outputs_root)
     run_layout = layout.run("run_1")
     run_layout.metrics.mkdir(parents=True)
-    run_layout.metric_records.write_text(
-        '{"run_id": "run_1", "fpr": 0.01}\n', encoding="utf-8"
-    )
+    run_layout.metric_records.write_text('{"run_id": "run_1", "fpr": 0.01}\n', encoding="utf-8")
     layout.cache_analysis.mkdir(parents=True)
     layout.readiness_plans_file.write_text('{"plans": []}\n', encoding="utf-8")
     publication = layout.publication

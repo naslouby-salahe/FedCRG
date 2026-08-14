@@ -1,11 +1,3 @@
-"""Contract: the central policy registry is complete and internally consistent.
-
-Every PolicyId member must have exactly one PolicySpec; the registry must be
-the single source for the information regime, deployability, supervised
-status, required evidence bundles, threshold origin, and ledger payload of
-every policy. The study configuration's policy list must match the registry.
-"""
-
 from __future__ import annotations
 
 from fedcrg.config import Study

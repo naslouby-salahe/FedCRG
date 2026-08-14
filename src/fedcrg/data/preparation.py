@@ -1,12 +1,3 @@
-"""Dataset preparation: immutable prepared-cache materialization and reuse.
-
-The pipeline is reuse-first: an existing prepared cache for the same data
-specification is validated and returned without rewriting any artifact, and a
-valid cache is never reconstructed. Preparation stages eligibility, base
-splits, per-client imputation statistics, and calibration assignments under
-one immutable staging root, then atomically promotes it.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -85,8 +76,6 @@ _BASE_ROLES = (
 
 
 class PrepareData:
-    """Materialize one immutable, seed-independent cache per data specification."""
-
     def __init__(
         self,
         splitter: CalibrationAssignmentBuilder | None = None,
@@ -115,7 +104,6 @@ class PrepareData:
 
     @staticmethod
     def _source_identity_hash(sources: tuple[SourceFileManifest, ...]) -> Sha256:
-        """Deterministic identity of the raw source files that produce one cache."""
         payload = "\n".join(
             f"{item.relative_path.as_posix()}:{item.sha256}" for item in sorted(sources, key=str)
         ).encode("utf-8")
@@ -130,7 +118,6 @@ class PrepareData:
         )
 
     def cache_root(self, config: ExperimentConfig, manifest: PreparedDatasetManifest) -> Path:
-        """Resolve the cache directory that holds one prepared manifest."""
         return self.prepared_root(config, self._source_identity_hash(manifest.source_files))
 
     def ensure_prepared(
@@ -140,13 +127,6 @@ class PrepareData:
         adapter_override: DatasetAdapter | None = None,
         include_source_order_assignment: bool = True,
     ) -> PreparedDatasetManifest:
-        """Return the frozen prepared cache, reusing a valid existing one.
-
-        The cache identity covers both the data specification and the raw
-        source-file identities, so a changed source file produces a new cache
-        rather than silently reusing stale artifacts. A cache whose identity
-        matches but whose artifacts fail validation is rebuilt.
-        """
         adapter = adapter_override or self.adapter(
             config.dataset,
             data_root / config.dataset.source_directory,
@@ -276,9 +256,7 @@ class PrepareData:
                     preprocessing,
                     include_source_order_assignment,
                 )
-                atomic_write_json(
-                    PreparedDatasetLayout(staging_root).preprocessing, preprocessing
-                )
+                atomic_write_json(PreparedDatasetLayout(staging_root).preprocessing, preprocessing)
                 self._write_dataset_manifest(
                     staging_root,
                     config,
@@ -552,7 +530,9 @@ class PrepareData:
         manifest: EligibilityManifest,
     ) -> None:
         layout = PreparedDatasetLayout(root)
-        path = layout.diad_eligibility if config.dataset.id is DatasetId.DIAD else layout.eligibility
+        path = (
+            layout.diad_eligibility if config.dataset.id is DatasetId.DIAD else layout.eligibility
+        )
         atomic_write_json(path, manifest)
 
     def _write_dataset_manifest(

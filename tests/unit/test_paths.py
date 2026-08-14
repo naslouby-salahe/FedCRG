@@ -1,5 +1,3 @@
-"""Unit tests for the filesystem layout module."""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -49,6 +47,8 @@ def test_outputs_layout_returns_model_and_score_cache_layouts(tmp_path: Path) ->
     from tests._fixtures import primary_experiment_config
 
     config = primary_experiment_config(tmp_path)
+    assert config.detector is not None
+    detector_id = config.detector.id
     layout = OutputsLayout(config.outputs_root)
 
     model_cache = layout.model_cache(config, 11)
@@ -56,7 +56,7 @@ def test_outputs_layout_returns_model_and_score_cache_layouts(tmp_path: Path) ->
     assert model_cache.root == (
         layout.cache_models
         / config.dataset.id.value
-        / config.detector.id.value  # type: ignore[union-attr]
+        / detector_id.value
         / "m11"
         / config.training_spec_hash[:16]
     )
@@ -68,7 +68,7 @@ def test_outputs_layout_returns_model_and_score_cache_layouts(tmp_path: Path) ->
     assert score_cache.root == (
         layout.cache_scores
         / config.dataset.id.value
-        / config.detector.id.value  # type: ignore[union-attr]
+        / detector_id.value
         / "m11"
         / config.training_spec_hash[:16]
     )

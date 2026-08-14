@@ -1,13 +1,3 @@
-"""No-hidden-scientific-defaults contract.
-
-Scientific configuration values must not silently appear because Python
-supplied a default: function argument defaults, dataclass defaults, Pydantic
-defaults, CLI defaults, ``.get(..., default)`` fallbacks, and ``or <value>``
-fallback logic are audited. Structural/runtime conveniences (``None``,
-empty collections, boolean flags, output paths) are allowed because they
-cannot alter scientific interpretation.
-"""
-
 from __future__ import annotations
 
 import ast
@@ -16,13 +6,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src" / "fedcrg"
 
-# Module/class names that legitimately own scientific constants by design.
 _ALLOWED_OWNERS = {
     "types.py",
     "config.py",
 }
 
-# Parameter names that are structural, not scientific.
 _STRUCTURAL_PARAMS = {
     "outputs_root",
     "preprocessed_root",
@@ -31,7 +19,7 @@ _STRUCTURAL_PARAMS = {
     "data_root",
     "path",
     "output",
-    "seed",  # seeds are configured elsewhere; a raw int default would be caught
+    "seed",
 }
 
 

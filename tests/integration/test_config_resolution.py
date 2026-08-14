@@ -1,5 +1,3 @@
-"""Integration tests for primary configuration resolution and validation."""
-
 from __future__ import annotations
 
 from fedcrg.config import Study, validate_experiment_config

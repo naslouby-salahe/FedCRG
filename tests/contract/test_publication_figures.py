@@ -1,11 +1,3 @@
-"""Contract: publication figures are deterministic and honest.
-
-The formula-driven figures (readiness frontier, mismatch power map, phase
-transition) must render byte-identically for identical inputs; the
-results-driven figures must refuse to fabricate output when the required
-bundle tables are absent.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable

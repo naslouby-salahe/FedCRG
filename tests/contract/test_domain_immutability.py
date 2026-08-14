@@ -8,9 +8,6 @@ SRC = ROOT / "src" / "fedcrg"
 
 _OUTER_BOUNDARIES = {
     "artifacts/json_io.py",
-    # Self-describing JSON envelopes for heterogeneous per-experiment-type cell
-    # payloads produced across many sensitivity/benchmark call sites; this is the
-    # write boundary itself, not internal domain state.
     "artifacts/records.py",
 }
 _MUTABLE_NAMES = {"dict", "list", "set", "Dict", "List", "Set"}

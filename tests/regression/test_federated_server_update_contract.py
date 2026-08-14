@@ -1,5 +1,3 @@
-"""Regression tests for the federated model-update contract."""
-
 from __future__ import annotations
 
 from typing import cast
@@ -18,8 +16,6 @@ _CLIENT = _CLIENT_ID_ADAPTER.validate_python("client-a")
 
 
 class TinyDetector(DetectorModel):
-    """Two scalar parameters wrapped in a single-parameter tensor."""
-
     def __init__(self) -> None:
         super().__init__()
         self.parameter_tensor = torch.nn.Parameter(torch.zeros(2))

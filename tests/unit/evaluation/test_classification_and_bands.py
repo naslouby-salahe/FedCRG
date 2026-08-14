@@ -1,5 +1,3 @@
-"""Unit tests for confusion matrices and operating-band metrics."""
-
 from __future__ import annotations
 
 import numpy as np

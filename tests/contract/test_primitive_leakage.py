@@ -1,28 +1,3 @@
-"""AST-based primitive-leakage contract.
-
-Scans every production annotation and flags raw ``float``/``int``/``str``/
-``object``/``Any``/bare ``dict``/bare ``list``/weak generic mappings outside an
-explicit, architecturally justified boundary allowlist.
-
-Typed generics (``dict[ClientId, PositiveCount]``, ``tuple[PolicyId, ...]``)
-are strong types and are never flagged; only bare unsubscripted containers and
-raw scalar/object/Any leaves are violations.
-
-The allowlist is documented by architectural reason, not by convenience:
-- ``np.ndarray``/``torch.Tensor`` are library boundaries; arrays are legitimate
-  primitive carriers and are never flagged.
-- YAML/JSON parse functions accept and return ``object`` before validation;
-  that is the JSON/YAML boundary.
-- ``__len__`` returns ``int`` because the Python data model requires it.
-- Free-text metadata fields (descriptions, version strings) have no meaningful
-  constrained type.
-- Atomic serialization helpers produce ``str`` output by definition.
-- Internal low-level arithmetic inside a scientifically clear implementation
-  may use float64 scalars.
-
-Any ``Any`` usage anywhere is a hard failure and cannot be allowlisted.
-"""
-
 from __future__ import annotations
 
 import ast
@@ -33,7 +8,6 @@ SRC = ROOT / "src" / "fedcrg"
 
 _PRIMITIVE_LEAF = {"float", "int", "str", "object", "Any"}
 
-# (relative path, enclosing class or function, member name) -> architectural reason.
 _ALLOWED_ANNOTATIONS: dict[tuple[str, str, str], str] = {
     ("config.py", "load_yaml_mapping", "return"): "YAML parse boundary before validation",
     ("evidence/store.py", "atomic_write_text", "content"): "serialization output is str",
@@ -68,7 +42,6 @@ _ALLOWED_ANNOTATIONS: dict[tuple[str, str, str], str] = {
     ): "matplotlib figure text boundary",
 }
 
-# Pydantic before-validators receive and return unvalidated YAML/JSON input.
 _COERCE_VALIDATORS = (
     "_coerce_client_keys",
     "_coerce_keys",
@@ -105,21 +78,12 @@ _ALLOWED_ANNOTATIONS[("data/diad.py", "_normalized_mac", "value")] = (
     "raw dataset text boundary before MAC normalization"
 )
 
-# No free-text exception: every model field must carry a meaningful constrained
-# type (Version, Description, Identifier, Sha256, ...) rather than a bare str.
-
 
 def _python_files() -> tuple[Path, ...]:
     return tuple(sorted(SRC.rglob("*.py")))
 
 
 def _annotation_leaves(annotation: ast.expr) -> set[str]:
-    """Collect bare primitive names referenced inside one annotation.
-
-    A raw ``str`` used as a dict/Mapping key is still a primitive leak; the key
-    must be a constrained identifier type, not ``str``. Weak generic values
-    (``object``/``Any``) are caught by ``test_no_weak_generic_mappings``.
-    """
     leaves: set[str] = set()
     for node in ast.walk(annotation):
         if isinstance(node, ast.Name) and node.id in _PRIMITIVE_LEAF:
@@ -144,9 +108,6 @@ def test_no_any_in_production_source() -> None:
 
 
 def test_no_weak_generic_mappings() -> None:
-    """Weak generic annotations (object/Any values, `-> object` returns) are
-    banned everywhere except the documented YAML/JSON-before-validation
-    boundary, whose members are listed in _ALLOWED_ANNOTATIONS."""
     violations: list[str] = []
     for path in _python_files():
         relative = path.relative_to(SRC).as_posix()
@@ -161,8 +122,6 @@ def test_no_weak_generic_mappings() -> None:
                             f"{ast.unparse(node.returns)}"
                         )
             if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-                # Function-local annotations (e.g. `raw: object = json.loads(...)`)
-                # are the JSON boundary; only module/class-level fields are flagged.
                 if isinstance(
                     _enclosing_scope(tree, node), (ast.FunctionDef, ast.AsyncFunctionDef)
                 ):
@@ -178,7 +137,6 @@ def test_no_weak_generic_mappings() -> None:
 
 
 def _enclosing_scope(tree: ast.AST, node: ast.AST) -> ast.AST | None:
-    """Nearest enclosing FunctionDef/AsyncFunctionDef/ClassDef (or None)."""
     for parent in ast.walk(tree):
         for child in ast.iter_child_nodes(parent):
             if child is node:
@@ -189,8 +147,6 @@ def _enclosing_scope(tree: ast.AST, node: ast.AST) -> ast.AST | None:
 
 
 def _annotation_is_weak(annotation: ast.expr) -> bool:
-    """True when an annotation is a weak generic (dict[str, object/Any],
-    Mapping[str, object/Any], -> object, -> Any)."""
     source = ast.unparse(annotation)
     if source in {"object", "Any"}:
         return True
@@ -204,11 +160,6 @@ def _annotation_is_weak(annotation: ast.expr) -> bool:
 
 
 def _is_click_handler(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
-    """True when the function is a click command handler.
-
-    CLI input arrives before validation; click passes raw strings/ints to the
-    handler, which converts them to typed values immediately.
-    """
     for decorator in node.decorator_list:
         name = ""
         if isinstance(decorator, ast.Call):
@@ -223,11 +174,6 @@ def _is_click_handler(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
 
 
 def _is_json_parse(value: ast.expr | None) -> bool:
-    """True when the assigned expression is json.loads(...) / yaml.safe_load(...).
-
-    This is the narrow function-local primitive boundary: the raw JSON/YAML
-    parse result is `object` only until the typed model validates it.
-    """
     if not isinstance(value, ast.Call):
         return False
     function = value.func
@@ -291,8 +237,6 @@ def _collect_annotation_violations() -> list[str]:
                     return
                 leaves = sorted(_annotation_leaves(node.annotation))
                 if in_function:
-                    # The only function-local primitive exemption is the raw
-                    # JSON/YAML parse boundary (raw: object = json.loads(...)).
                     if leaves == ["object"] and _is_json_parse(node.value):
                         return
                     for leaf in leaves:
@@ -315,10 +259,6 @@ def test_no_primitive_leaks_outside_approved_boundaries() -> None:
 
 
 def test_no_bare_dict_or_list_annotations() -> None:
-    """Only unsubscripted ``dict``/``list``/``Mapping`` leaves are bare containers.
-
-    ``dict[ClientId, PositiveCount]`` is a strong typed mapping, not a leak.
-    """
     violations: list[str] = []
     for path in _python_files():
         relative = path.relative_to(SRC).as_posix()

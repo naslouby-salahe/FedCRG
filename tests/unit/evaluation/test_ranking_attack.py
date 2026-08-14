@@ -1,5 +1,3 @@
-"""Unit tests for ranking and attack-balanced metrics."""
-
 from __future__ import annotations
 
 import numpy as np

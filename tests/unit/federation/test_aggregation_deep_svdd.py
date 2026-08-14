@@ -1,5 +1,3 @@
-"""Unit tests for aggregation, Deep-SVDD, and detector construction."""
-
 from __future__ import annotations
 
 import torch

@@ -15,8 +15,7 @@ def _external_config() -> ExperimentConfig:
     return Study.load().resolve(ExperimentId.EXTERNAL_DIAD)
 
 
-def _r14_derived_config() -> ExperimentConfig:
-    """Derive the R14 training-schema-only config after the feature freeze."""
+def _training_schema_derived_config() -> ExperimentConfig:
     external = _external_config()
     derived_dataset = DatasetConfig.model_validate(
         external.dataset.model_dump(mode="python")
@@ -36,12 +35,12 @@ def _r14_derived_config() -> ExperimentConfig:
 
 def test_run_id_maps_distinct_configs_to_distinct_evidence_directories() -> None:
     external = _external_config()
-    r14 = _r14_derived_config()
+    derived = _training_schema_derived_config()
 
     confirmatory_id = build_run_id(external, 11, 2000, PolicyId.FEDCRG)
-    sensitivity_id = build_run_id(r14, 11, 2000, PolicyId.FEDCRG)
+    sensitivity_id = build_run_id(derived, 11, 2000, PolicyId.FEDCRG)
 
-    assert external.config_hash != r14.config_hash
+    assert external.config_hash != derived.config_hash
     assert confirmatory_id != sensitivity_id
 
 

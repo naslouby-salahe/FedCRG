@@ -1,5 +1,3 @@
-"""Unit tests for train-only preprocessing statistics and transform."""
-
 from __future__ import annotations
 
 import numpy as np

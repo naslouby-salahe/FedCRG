@@ -1,13 +1,3 @@
-"""Shared explicit test fixtures for the frozen primary scientific configuration.
-
-These values mirror the frozen primary YAML profiles so unit tests never depend
-on runtime resolution while also never declaring scientific defaults in
-production code. They are regression fixtures for the locked primary contract.
-The locked dataset contracts (feature names, source headers, device table,
-DIAD derivation rules) are owned by ``config/datasets.yaml`` and are loaded
-once here so the fixtures cannot drift from the single source of truth.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -70,7 +60,6 @@ _DIAD_PIPELINE_ROLE_ROWS = {
 
 
 def diad_pipeline_config(root: Path) -> ExperimentConfig:
-    """Tiny frozen DIAD pipeline configuration for cache-path integration tests."""
     return ExperimentConfig(
         id=ExperimentId.DIAD_FEATURE_SENSITIVITY,
         protocol=primary_protocol(),
@@ -126,7 +115,6 @@ def _diad_row_id(client: str, role: DataRole, index: int) -> str:
 
 
 def diad_role_frame(client: str, role: DataRole, rows: int, offset: float) -> pd.DataFrame:
-    """Deterministic synthetic role frame for the tiny DIAD pipeline fixture."""
     x = np.linspace(0.0 + offset, 1.0 + offset, rows)
     data: dict[str, object] = {
         name: x + index for index, name in enumerate(_DIAD_PIPELINE_FEATURES)
@@ -138,7 +126,6 @@ def diad_role_frame(client: str, role: DataRole, rows: int, offset: float) -> pd
 
 
 def write_prepared_diad(root: Path, config: ExperimentConfig) -> Path:
-    """Materialize a valid tiny DIAD prepared cache with two synthetic clients."""
     root.mkdir(parents=True)
     client_manifests: list[ClientDatasetManifest] = []
     for client_index, client_name in enumerate(("diad_test0001", "diad_test0002")):
@@ -260,7 +247,6 @@ def nbaiot_dataset_config(
     min_attack_test_per_group: int = 2,
     expected_benign: int = 40,
 ) -> DatasetConfig:
-    """Small N-BaIoT contract with configurable split sizing for unit tests."""
     return DatasetConfig(
         id=DatasetId.NBAIOT,
         feature_contract=DatasetFeatureContractId.NBAIOT_LOCKED_115,
@@ -294,7 +280,6 @@ def nbaiot_dataset_config(
 def primary_experiment_config(
     root: Path, experiment_id: ExperimentId = ExperimentId.PRIMARY_NBAIOT
 ) -> ExperimentConfig:
-    """Resolved primary-shaped experiment configuration rooted at ``root``."""
     return ExperimentConfig(
         id=experiment_id,
         protocol=primary_protocol(),

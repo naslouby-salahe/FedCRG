@@ -1,5 +1,3 @@
-"""Unit tests for the federation-wide reference threshold estimator."""
-
 from __future__ import annotations
 
 import numpy as np

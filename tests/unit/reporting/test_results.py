@@ -1,5 +1,3 @@
-"""Unit tests for the publication results builder and verifier."""
-
 from __future__ import annotations
 
 import json
@@ -13,9 +11,7 @@ def _write_fake_evidence(outputs_root: Path) -> None:
     layout = OutputsLayout(outputs_root)
     run_layout = layout.run("run_1")
     run_layout.metrics.mkdir(parents=True)
-    run_layout.metric_records.write_text(
-        '{"run_id": "run_1", "fpr": 0.01}\n', encoding="utf-8"
-    )
+    run_layout.metric_records.write_text('{"run_id": "run_1", "fpr": 0.01}\n', encoding="utf-8")
     layout.cache_analysis.mkdir(parents=True)
     layout.readiness_plans_file.write_text('{"plans": []}\n', encoding="utf-8")
     publication = layout.publication
@@ -46,8 +42,6 @@ def test_results_builder_creates_bundle_and_marks_partial_evidence_incomplete(
 
     manifest = json.loads((destination / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["campaign_id"] == "c1"
-    # The fake evidence has no completed run cells, so the bundle must honestly
-    # report itself as incomplete rather than claiming completeness.
     assert manifest["complete"] is False
     checksums = json.loads((destination / "checksums.json").read_text(encoding="utf-8"))
     assert manifest["file_count"] == len(checksums)

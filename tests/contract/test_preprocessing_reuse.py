@@ -1,10 +1,3 @@
-"""Behavior contract: prepared-cache reuse validation and rebuild triggers.
-
-A cache whose identity matches but whose artifacts fail any validation step
-must be rebuilt with a warning; a valid cache must be reused verbatim. These
-tests exercise every documented invalidation trigger.
-"""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -27,8 +20,6 @@ _FEATURE_COLUMNS = [f"f{i}" for i in range(1, 116)]
 
 
 class FakeAdapter(DatasetAdapter):
-    """Nine clients whose raw source is a single CSV per client under data_root."""
-
     def __init__(self, root: Path) -> None:
         super().__init__(root)
         for client in NBAIOT_CLIENT_IDS:
@@ -175,9 +166,6 @@ def test_changed_source_file_triggers_rebuild(prepared: PreparedState) -> None:
 def test_missing_source_file_is_never_silently_reused(prepared: PreparedState) -> None:
     config, raw, preparer, adapter, _cache, _first = prepared
     (raw / "nb01" / "benign_traffic.csv").unlink()
-    # A missing raw source invalidates the cache; with the data gone the
-    # rebuild cannot succeed, so the operation must fail loudly rather than
-    # silently reusing the stale cache.
     with pytest.raises((DataIntegrityError, FileNotFoundError)):
         preparer.ensure_prepared(config, raw, adapter_override=adapter)
 
@@ -185,19 +173,15 @@ def test_missing_source_file_is_never_silently_reused(prepared: PreparedState) -
 def test_preprocessing_parameters_are_fitted_on_training_rows_only(
     prepared: PreparedState,
 ) -> None:
-    """Fit-row hashes must equal the hash of each client's TRAIN role rows only."""
     import json
 
     _config, _raw, _preparer, _adapter, cache, _first = prepared
-    payload = json.loads(
-        (PreparedDatasetLayout(cache).preprocessing).read_text(encoding="utf-8")
-    )
+    payload = json.loads((PreparedDatasetLayout(cache).preprocessing).read_text(encoding="utf-8"))
     for client in payload["clients"]:
         train_path = cache / client["client_id"] / "train.csv"
         train = pd.read_csv(train_path)
         expected = hash_row_ids(train["row_id"].astype(str).tolist())
         assert client["training_row_sha256"] == expected
-        # A role that is NOT the training role must not be the fit source.
         reservoir = pd.read_csv(cache / client["client_id"] / "reservoir.csv")
         assert hash_row_ids(reservoir["row_id"].astype(str).tolist()) != expected
 

@@ -1,5 +1,3 @@
-"""Unit tests for the console renderers used during long runs."""
-
 from __future__ import annotations
 
 from fedcrg.runtime import render_cache_status, render_campaign_status

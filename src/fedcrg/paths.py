@@ -1,12 +1,3 @@
-"""Filesystem layout: the single place that knows how repository and runtime
-paths are constructed.
-
-Business/scientific code asks a layout object for a path; it never
-reconstructs a known repository path itself. This module only calculates
-paths — it never reads, writes, hashes, or validates files, and it owns no
-scientific logic.
-"""
-
 from __future__ import annotations
 
 from enum import StrEnum
@@ -24,8 +15,6 @@ FrozenModel = ConfigDict(frozen=True, extra="forbid", use_enum_values=False)
 
 
 class LayoutDirectory(StrEnum):
-    """Reserved directory names of the immutable output layout."""
-
     OUTPUTS = "outputs"
     RUNS = "runs"
     DATA = "data"
@@ -53,8 +42,6 @@ class LayoutDirectory(StrEnum):
 
 
 class LayoutArtifact(StrEnum):
-    """Reserved artifact filenames of the immutable output layout."""
-
     MANIFEST = "manifest.json"
     RUN_CONFIG = "run_config.json"
     RESOLVED_CONFIG = "resolved_config.yaml"
@@ -87,8 +74,6 @@ class LayoutArtifact(StrEnum):
 
 
 class StudyPaths(BaseModel):
-    """Repository layout roots; the CLI accepts no path options."""
-
     model_config = FrozenModel
 
     data_root: Path
@@ -98,8 +83,6 @@ class StudyPaths(BaseModel):
 
 
 class ConfigLayout:
-    """Location of the three frozen configuration documents."""
-
     def __init__(self, config_root: Path = Path("config")) -> None:
         self.config_root = config_root
 
@@ -117,8 +100,6 @@ class ConfigLayout:
 
 
 class PreparedDatasetLayout:
-    """One prepared-cache root: manifests, eligibility, staging, and calibration splits."""
-
     def __init__(self, root: Path) -> None:
         self.root = root
 
@@ -156,7 +137,6 @@ class PreparedDatasetLayout:
 
 
 def prepared_dataset_family_root(preprocessed_root: Path, dataset_id: DatasetId) -> Path:
-    """The prepared-cache root shared by every specification of one dataset."""
     return preprocessed_root / dataset_id.value
 
 
@@ -166,7 +146,6 @@ def prepared_dataset_root(
     data_spec_hash: Sha256,
     source_identity_hash: Sha256,
 ) -> Path:
-    """The immutable prepared-cache root for one data specification and source identity."""
     return (
         prepared_dataset_family_root(preprocessed_root, dataset_id)
         / f"{data_spec_hash[:16]}-{source_identity_hash[:16]}"
@@ -174,8 +153,6 @@ def prepared_dataset_root(
 
 
 class ModelCacheLayout:
-    """One frozen-model cache root: the model file and its training manifest."""
-
     def __init__(self, root: Path) -> None:
         self.root = root
 
@@ -189,8 +166,6 @@ class ModelCacheLayout:
 
 
 class ScoreCacheLayout:
-    """One frozen-score cache root: the manifest and the score-cache artifact."""
-
     def __init__(self, root: Path) -> None:
         self.root = root
 
@@ -204,8 +179,6 @@ class ScoreCacheLayout:
 
 
 class RunLayout:
-    """Immutable per-run output directory layout."""
-
     def __init__(self, root: Path) -> None:
         self.root = root
 
@@ -339,8 +312,6 @@ class RunLayout:
 
 
 class PublicationLayout:
-    """One publication package root: tables, figures, and its manifest."""
-
     def __init__(self, root: Path) -> None:
         self.root = root
 
@@ -358,8 +329,6 @@ class PublicationLayout:
 
 
 class ResultsBundleLayout:
-    """Reserved publication-bundle artifact names under results/<campaign-id>/."""
-
     def __init__(self, root: Path) -> None:
         self.root = root
 
@@ -433,12 +402,10 @@ class ResultsBundleLayout:
 
 
 def campaign_results_root(results_root: Path, campaign_id: CampaignId) -> Path:
-    """The immutable results-bundle root for one campaign."""
     return results_root / str(campaign_id)
 
 
 def campaign_status_path(campaigns_root: Path, campaign_id: CampaignId) -> Path:
-    """The persisted campaign-status snapshot path for one campaign."""
     value = str(campaign_id)
     if not value or "/" in value or ".." in value:
         raise ValueError(f"Invalid campaign id: {value!r}")
@@ -446,9 +413,6 @@ def campaign_status_path(campaigns_root: Path, campaign_id: CampaignId) -> Path:
 
 
 class OutputsLayout:
-    """Reserved outputs/ directory tree: runs, caches, campaigns, logs,
-    monitoring, reports, environment and telemetry files."""
-
     def __init__(self, outputs_root: Path = Path(LayoutDirectory.OUTPUTS.value)) -> None:
         self.outputs_root = outputs_root
 

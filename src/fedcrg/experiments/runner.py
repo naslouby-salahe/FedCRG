@@ -1,8 +1,3 @@
-"""Execution spine: experiment plans, lifecycle transitions, dependency order,
-frozen model training, immutable score caches, policy-cell materialization,
-preflight audits, workload completion, and campaign orchestration.
-"""
-
 from __future__ import annotations
 
 import shutil
@@ -128,8 +123,6 @@ _ANALYSIS_CATEGORIES = frozenset({ExperimentType.SYNTHETIC, ExperimentType.BENCH
 
 
 class PreflightReport(BaseModel):
-    """Outcome of the research preflight audit."""
-
     model_config = Frozen
 
     valid: bool
@@ -145,8 +138,6 @@ def _tensor_sha256(tensor: torch.Tensor) -> Sha256:
 
 
 class ExperimentPlan(BaseModel):
-    """One validated execution plan for a policy cell."""
-
     model_config = Frozen
 
     definition: ExperimentSpec
@@ -173,14 +164,11 @@ _ALLOWED_TRANSITIONS: dict[ExperimentStatus, tuple[ExperimentStatus, ...]] = {
 
 
 def assert_transition(current: ExperimentStatus, target: ExperimentStatus) -> None:
-    """Reject a lifecycle transition outside the locked table."""
     if target not in _ALLOWED_TRANSITIONS[current]:
         raise ValueError(f"Invalid experiment transition: {current.value} -> {target.value}")
 
 
 class DependencyResolver:
-    """Evaluate dependencies and produce a deterministic topological order."""
-
     def __init__(self, study: Study | None = None) -> None:
         self.study = study or Study.load()
 
@@ -215,8 +203,6 @@ class DependencyResolver:
 
 
 class ExperimentPlanner:
-    """Construct one execution plan from a validated configuration."""
-
     def __init__(self, study: Study | None = None) -> None:
         self.study = study or Study.load()
 
@@ -252,8 +238,6 @@ class ExperimentPlanner:
 
 
 class RunExperiment:
-    """Manage one policy-cell lifecycle without owning scientific computation."""
-
     def __init__(
         self,
         planner: ExperimentPlanner | None = None,
@@ -376,12 +360,10 @@ class RunExperiment:
 
 
 def _oracle_candidate_missing(client_id: ClientId) -> Threshold:
-    """Raise when an oracle candidate threshold was not prepared by selection."""
     raise RuntimeError(f"Oracle candidate threshold is unavailable for {client_id}")
 
 
 def feature_columns(frame: pd.DataFrame, expected_count: PositiveCount) -> tuple[FeatureName, ...]:
-    """Resolve model-feature columns of a prepared frame."""
     metadata = {column.value for column in PreparedColumn}
     columns = tuple(
         column
@@ -399,8 +381,6 @@ def feature_columns(frame: pd.DataFrame, expected_count: PositiveCount) -> tuple
 
 
 class TrainDetector:
-    """Train one frozen detector per training spec/model seed and never policy-tune it."""
-
     def __init__(
         self,
         trainer: FederatedTrainer | None = None,
@@ -578,8 +558,6 @@ class TrainDetector:
 
 
 class ComputeScores:
-    """Generate one hash-finalized immutable score cache per frozen model seed."""
-
     def __init__(
         self,
         computer: ScoreComputer | None = None,
@@ -743,8 +721,6 @@ _BASE_SCORE_ROLES = (
 
 
 class EvaluatePolicies:
-    """Freeze thresholds before opening final-test evidence."""
-
     def __init__(
         self,
         selector: PolicyThresholdSelector | None = None,
@@ -779,8 +755,6 @@ class EvaluatePolicies:
     ) -> EvaluationBundle:
         descriptor = self.score_cache.load_descriptor(score_root)
         self._validate_score_identity(config, descriptor)
-        # Real-data evaluation consumes the frozen pre-data readiness-plan table;
-        # a missing table is a missing precomputation step, not an on-the-fly gap.
         plans_path = OutputsLayout(config.outputs_root).readiness_plans_file
         self.protocol = ClientEvaluation(readiness_cache=ReadinessPlanCache(plans_path))
         manifest = self.score_cache.load(score_root)
@@ -1089,8 +1063,6 @@ class EvaluatePolicies:
 
 @dataclass(frozen=True, slots=True)
 class FrozenCacheInputs:
-    """Frozen upstream cache paths for one model seed."""
-
     prepared_root: Path
     model_path: Path
     training_manifest: Path
@@ -1098,8 +1070,6 @@ class FrozenCacheInputs:
 
 
 class PolicyCellMaterializer:
-    """Create policy evidence while sharing one frozen federation evaluation."""
-
     def __init__(
         self,
         evaluator: EvaluatePolicies | None = None,
@@ -1256,15 +1226,11 @@ class PolicyCellMaterializer:
 
 @dataclass(frozen=True, slots=True)
 class PolicyRunDirectory:
-    """One policy run directory within a federation cell."""
-
     policy: PolicyId
     path: Path
 
 
 class FederationCellResult(BaseModel):
-    """Run directories produced for one federation cell."""
-
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     experiment_id: ExperimentId
@@ -1280,8 +1246,6 @@ class FederationCellResult(BaseModel):
 
 
 class FederationCellMaterializer:
-    """Evaluate the federation once, then write every requested policy cell."""
-
     def __init__(
         self,
         policy_cells: PolicyCellMaterializer | None = None,
@@ -1351,8 +1315,6 @@ class FederationCellMaterializer:
 
 
 class FrozenModelEvidence(BaseModel):
-    """Frozen model and score cache evidence for one seed."""
-
     model_config = Frozen
 
     model_seed: ModelSeed
@@ -1362,8 +1324,6 @@ class FrozenModelEvidence(BaseModel):
 
 
 class WorkloadExecution(BaseModel):
-    """Executed model evidence and run directories for one experiment."""
-
     model_config = Frozen
 
     experiment_id: ExperimentId
@@ -1372,8 +1332,6 @@ class WorkloadExecution(BaseModel):
 
 
 class ResearchExecution(BaseModel):
-    """Preflight report and executed workload."""
-
     model_config = Frozen
 
     preflight: PreflightReport
@@ -1381,8 +1339,6 @@ class ResearchExecution(BaseModel):
 
 
 class RunAllExperiments:
-    """Execute the single spine from prepared data to completed policy runs."""
-
     def __init__(
         self,
         trainer: TrainDetector | None = None,
@@ -1461,8 +1417,6 @@ class RunAllExperiments:
 
 
 class CampaignOutcomeRow(BaseModel):
-    """One completed or failed campaign experiment outcome."""
-
     model_config = Frozen
 
     experiment_id: ExperimentId
@@ -1476,8 +1430,6 @@ class CampaignOutcomeRow(BaseModel):
 
 
 class CampaignWorkItem(BaseModel):
-    """One ordered campaign work item."""
-
     model_config = Frozen
 
     experiment_id: ExperimentId
@@ -1486,8 +1438,6 @@ class CampaignWorkItem(BaseModel):
 
 
 class CampaignStatus(BaseModel):
-    """Persistent restart-safe campaign status snapshot."""
-
     model_config = ConfigDict(frozen=True)
 
     campaign_id: CampaignId
@@ -1525,8 +1475,6 @@ class CampaignStatus(BaseModel):
 
 
 class CampaignStatusStore:
-    """Persist campaign status as an atomically written JSON snapshot."""
-
     def __init__(
         self,
         campaigns_root: Path | None = None,
@@ -1551,8 +1499,6 @@ class CampaignStatusStore:
 
 
 class CampaignExecutor:
-    """Execute ordered work items with persistent restart-safe status."""
-
     def __init__(
         self,
         study: Study | None = None,
