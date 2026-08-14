@@ -15,10 +15,6 @@ from fedcrg.types import CalibrationReadinessState, OperatingBand
 from tests._fixtures import primary_protocol
 
 
-def _scores(n: int = 1500) -> np.ndarray:
-    return np.linspace(0.0, 1.0, n)
-
-
 def test_readiness_plan_matches_normative_shape() -> None:
     protocol = primary_protocol()
     plan = ReadinessPlanBuilder().build(2000, protocol.band, protocol.readiness_assurance)

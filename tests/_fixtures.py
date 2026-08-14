@@ -7,7 +7,12 @@ production code. They are regression fixtures for the locked primary contract.
 
 from __future__ import annotations
 
-from pathlib import Path
+import hashlib
+from datetime import UTC, datetime
+from pathlib import Path, PurePosixPath
+
+import numpy as np
+import pandas as pd
 
 from fedcrg.config import (
     AutoencoderConfig,
@@ -20,11 +25,19 @@ from fedcrg.config import (
     StatisticsConfig,
     TrainingConfig,
 )
+from fedcrg.data.datasets import hash_row_ids
+from fedcrg.evidence.models import (
+    ClientDatasetManifest,
+    PreparedDatasetManifest,
+    RoleArtifactManifest,
+)
+from fedcrg.evidence.store import PreparedDatasetManifestStore, atomic_write_json, sha256_file
 from fedcrg.types import (
     ActivationId,
     AggregationId,
     ClientId,
     ComputeDeviceId,
+    DataRole,
     DatasetFeatureContractId,
     DatasetId,
     DetectorId,
@@ -36,6 +49,125 @@ from fedcrg.types import (
 from pydantic import TypeAdapter
 
 _CLIENT_ID_ADAPTER = TypeAdapter(ClientId)
+
+_DIAD_PIPELINE_FEATURES = ("f1", "f2", "f3", "f4")
+_DIAD_PIPELINE_ROLE_ROWS = {
+    DataRole.TRAIN: 4,
+    DataRole.RESERVOIR: 2172,
+    DataRole.BENIGN_TEST: 20,
+    DataRole.ATTACK_DEV: 10,
+    DataRole.ATTACK_TEST: 20,
+}
+
+
+def diad_pipeline_config(root: Path) -> ExperimentConfig:
+    """Tiny frozen DIAD pipeline configuration for cache-path integration tests."""
+    return ExperimentConfig(
+        id=ExperimentId.DIAD_FEATURE_SENSITIVITY,
+        protocol=primary_protocol(),
+        dataset=DatasetConfig(
+            id=DatasetId.DIAD,
+            feature_contract=DatasetFeatureContractId.DIAD_TRAINING_NUMERIC_SAFE,
+            source_version="1",
+            parser_version="1",
+            feature_count=4,
+            feature_names=_DIAD_PIPELINE_FEATURES,
+            expected_source_clients=115,
+            minimum_clients=10,
+            minimum_benign_rows=7800,
+            minimum_malicious_rows=1000,
+            expected_benign_counts=ExpectedBenignCounts({}),
+            split=SplitConfig(
+                train_benign=4,
+                reference_benign=10,
+                mismatch_benign=736,
+                calibration_benign=1416,
+                benign_guard=10,
+                min_benign_test=20,
+                attack_dev=10,
+                min_attack_test=20,
+                min_attack_test_per_group=5,
+            ),
+            calibration_seeds=(1000,),
+            primary_calibration_seed=1000,
+        ),
+        detector=AutoencoderConfig(hidden_dims=(3, 2, 1, 1), xavier_tanh_gain=5.0 / 3.0),
+        training=primary_training().model_copy(
+            update={
+                "rounds": 1,
+                "local_epochs": 1,
+                "batch_size": 4,
+                "learning_rate_initial": 1e-3,
+                "learning_rate_final": 1e-3,
+                "device": ComputeDeviceId.CPU,
+            }
+        ),
+        randomness=primary_randomness().model_copy(update={"model_seeds": (11,)}),
+        statistics=primary_statistics(),
+        policies=(PolicyId.REFERENCE_QUANTILE, PolicyId.LOCAL_QUANTILE, PolicyId.FEDCRG),
+        outputs_root=root,
+        preprocessed_root=root / "preprocessed",
+    )
+
+
+def _diad_row_id(client: str, role: DataRole, index: int) -> str:
+    return hashlib.sha256(f"{client}-{role.value}-{index}".encode()).hexdigest()
+
+
+def diad_role_frame(client: str, role: DataRole, rows: int, offset: float) -> pd.DataFrame:
+    """Deterministic synthetic role frame for the tiny DIAD pipeline fixture."""
+    x = np.linspace(0.0 + offset, 1.0 + offset, rows)
+    data: dict[str, object] = {
+        name: x + index for index, name in enumerate(_DIAD_PIPELINE_FEATURES)
+    }
+    data["row_id"] = [str(_diad_row_id(client, role, i)) for i in range(rows)]
+    if role in {DataRole.ATTACK_DEV, DataRole.ATTACK_TEST}:
+        data["attack_group"] = ["atk"] * rows
+    return pd.DataFrame(data)
+
+
+def write_prepared_diad(root: Path, config: ExperimentConfig) -> Path:
+    """Materialize a valid tiny DIAD prepared cache with two synthetic clients."""
+    root.mkdir(parents=True)
+    client_manifests: list[ClientDatasetManifest] = []
+    for client_index, client_name in enumerate(("diad_test0001", "diad_test0002")):
+        client_root = root / "clients" / client_name
+        client_root.mkdir(parents=True)
+        role_manifests: list[RoleArtifactManifest] = []
+        for role, rows in _DIAD_PIPELINE_ROLE_ROWS.items():
+            frame = diad_role_frame(client_name, role, rows, float(client_index))
+            path = client_root / f"{role.value}.csv"
+            frame.to_csv(path, index=False)
+            role_manifests.append(
+                RoleArtifactManifest(
+                    role=role,
+                    rows=rows,
+                    row_id_sha256=hash_row_ids(frame["row_id"].tolist()),
+                    relative_path=PurePosixPath(path.relative_to(root).as_posix()),
+                    file_sha256=sha256_file(path),
+                )
+            )
+        client_manifests.append(
+            ClientDatasetManifest(client_id=client_name, roles=tuple(role_manifests))
+        )
+
+    manifest = PreparedDatasetManifest(
+        dataset_id=config.dataset.id,
+        source_version=config.dataset.source_version,
+        parser_version=config.dataset.parser_version,
+        data_spec_hash=config.data_spec_hash,
+        feature_names=_DIAD_PIPELINE_FEATURES,
+        clients=tuple(client_manifests),
+        source_files=(),
+        calibration_assignments=(),
+        external_replication_supported=True,
+        dataset_level_code=None,
+        created_at=datetime.now(UTC),
+        deterministic_payload_sha256="b" * 64,
+    )
+    PreparedDatasetManifestStore().save(root / "manifest.json", manifest)
+    atomic_write_json(root / "preprocessing.json", {"note": "test fixture, values already scaled"})
+    return root
 
 
 def primary_protocol() -> ProtocolConfig:

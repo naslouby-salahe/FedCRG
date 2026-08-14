@@ -16,7 +16,7 @@ from fedcrg.data.datasets import (
     DIAD_FEATURES,
     DataIntegrityError,
     NBaiotAdapter,
-    _NBAIOT_DEVICES,
+    NBAIOT_DEVICES,
 )
 from fedcrg.types import (
     ChronologyStatus,
@@ -28,14 +28,14 @@ from fedcrg.types import (
 )
 
 _CLIENT_ID_ADAPTER = TypeAdapter(ClientId)
-_NBAIOT_CLIENT_IDS = tuple(_CLIENT_ID_ADAPTER.validate_python(value) for value in _NBAIOT_DEVICES)
+_NBAIOT_CLIENT_IDS = tuple(_CLIENT_ID_ADAPTER.validate_python(value) for value in NBAIOT_DEVICES)
 
 
 def test_nbaiot_adapter_maps_exact_nine_clients_and_preserves_provenance(
     tmp_path: Path,
 ) -> None:
     columns = [f"f{i}" for i in range(115)]
-    for tokens in _NBAIOT_DEVICES.values():
+    for tokens in NBAIOT_DEVICES.values():
         root = tmp_path / "_".join(tokens)
         (root / "gafgyt").mkdir(parents=True)
         pd.DataFrame(np.zeros((2, 115)), columns=columns).to_csv(
@@ -56,7 +56,7 @@ def test_nbaiot_adapter_maps_exact_nine_clients_and_preserves_provenance(
 
 def test_nbaiot_adapter_rejects_unknown_client(tmp_path: Path) -> None:
     columns = [f"f{i}" for i in range(115)]
-    for tokens in _NBAIOT_DEVICES.values():
+    for tokens in NBAIOT_DEVICES.values():
         root = tmp_path / "_".join(tokens)
         (root / "gafgyt").mkdir(parents=True)
         pd.DataFrame(np.zeros((1, 115)), columns=columns).to_csv(

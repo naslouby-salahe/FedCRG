@@ -33,7 +33,11 @@ _LOW_MISMATCH = np.linspace(0.1, 0.2, 736)
 _NO_MATERIAL_MISMATCH = np.concatenate((np.full(729, 0.6), np.full(7, 0.8)))
 
 
-def _evaluate(calibration_scores, mismatch_scores, plan: ReadinessPlan) -> ThresholdDecision:
+def _evaluate(
+    calibration_scores: np.ndarray,
+    mismatch_scores: np.ndarray,
+    plan: ReadinessPlan,
+) -> ThresholdDecision:
     protocol = primary_protocol()
     evaluator = CalibrationReadinessEvaluator()
     readiness = evaluator.evaluate(np.asarray(calibration_scores, dtype=np.float64), plan)

@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 
 from fedcrg.config import ExperimentConfig
-from fedcrg.evidence.store import RunManifestStore
-from fedcrg.experiments.runner import RunExperiment
+from fedcrg.evidence.store import RunLayout, RunManifestStore
+from fedcrg.experiments.runner import ExperimentPlan, RunExperiment
 from fedcrg.types import (
     ExperimentId,
     ExperimentStatus,
@@ -54,7 +54,7 @@ def test_run_application_records_failed_status(tmp_path: Path) -> None:
     config = _config(tmp_path)
     service = RunExperiment()
 
-    def fail(plan, run_layout) -> None:
+    def fail(plan: ExperimentPlan, run_layout: RunLayout) -> None:
         raise RuntimeError("boom")
 
     with pytest.raises(RuntimeError, match="boom"):

@@ -442,7 +442,7 @@ class RunSyntheticExperiments:
         return tuple(value for value in values if isinstance(value, ContaminationDirection))
 
     @staticmethod
-    def _write(
+    def write(
         output: Path,
         spec: ExperimentSpec,
         cells: tuple[SyntheticCell, ...],
@@ -508,7 +508,7 @@ class RunSyntheticExperiments:
             for distribution in self._distributions(spec)
             for sample_count in self._int_values(spec, ExperimentAxisId.CALIBRATION_N)
         )
-        return self._write(output, spec, cells, len(cells) * repetitions)
+        return self.write(output, spec, cells, len(cells) * repetitions)
 
     def _run_s2(self, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path:
         repetitions = self._int_values(spec, ExperimentAxisId.REPETITIONS)[0]
@@ -529,7 +529,7 @@ class RunSyntheticExperiments:
                         seed=int(config.randomness.synthetic_seed + sample_count),
                     )
                 )
-        return self._write(output, spec, tuple(rows), len(rows) * repetitions)
+        return self.write(output, spec, tuple(rows), len(rows) * repetitions)
 
     def _run_s3(self, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path:
         repetitions = self._int_values(spec, ExperimentAxisId.REPETITIONS)[0]
@@ -545,7 +545,7 @@ class RunSyntheticExperiments:
             for phi in self._float_values(spec, ExperimentAxisId.PHI)
             for sample_count in self._int_values(spec, ExperimentAxisId.CALIBRATION_N)
         )
-        return self._write(output, spec, cells, len(cells) * repetitions)
+        return self.write(output, spec, cells, len(cells) * repetitions)
 
     def _run_s4(self, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path:
         repetitions = self._int_values(spec, ExperimentAxisId.REPETITIONS)[0]
@@ -560,7 +560,7 @@ class RunSyntheticExperiments:
             )
             for shift in self._float_values(spec, ExperimentAxisId.MEAN_SHIFT)
         )
-        return self._write(output, spec, cells, len(cells) * repetitions)
+        return self.write(output, spec, cells, len(cells) * repetitions)
 
     def _run_s5(self, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path:
         repetitions = self._int_values(spec, ExperimentAxisId.REPETITIONS)[0]
@@ -577,7 +577,7 @@ class RunSyntheticExperiments:
             for fraction in self._float_values(spec, ExperimentAxisId.FRACTION)
             for direction in self._directions(spec)
         )
-        return self._write(output, spec, cells, len(cells) * repetitions)
+        return self.write(output, spec, cells, len(cells) * repetitions)
 
     def _run_s6(self, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path:
         cells = tuple(
@@ -590,7 +590,7 @@ class RunSyntheticExperiments:
             for sample_count in self._int_values(spec, ExperimentAxisId.MISMATCH_N)
             for true_fpr in self._float_values(spec, ExperimentAxisId.TRUE_FPR)
         )
-        return self._write(output, spec, cells, 0)
+        return self.write(output, spec, cells, 0)
 
 
 class FederationResultRecord(BaseModel):

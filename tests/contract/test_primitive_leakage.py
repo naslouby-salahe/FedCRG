@@ -130,10 +130,6 @@ def _annotation_leaves(annotation: ast.expr) -> set[str]:
     return leaves
 
 
-def _is_dunder(name: str) -> bool:
-    return name.startswith("__") and name.endswith("__")
-
-
 def _is_dunder_len(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     return node.name == "__len__"
 

@@ -1463,7 +1463,9 @@ class RunAllExperiments:
         )
 
 
-class _CampaignOutcomeRow(BaseModel):
+class CampaignOutcomeRow(BaseModel):
+    """One completed or failed campaign experiment outcome."""
+
     model_config = Frozen
 
     experiment_id: ExperimentId
@@ -1496,7 +1498,7 @@ class CampaignStatus(BaseModel):
     updated_at: Timestamp
     current_experiment: ExperimentId | None = None
     current_stage: CampaignStage | None = None
-    experiments: tuple[_CampaignOutcomeRow, ...] = ()
+    experiments: tuple[CampaignOutcomeRow, ...] = ()
     results_path: PathString | None = None
     elapsed_seconds: Duration = 0.0
 
@@ -1584,7 +1586,7 @@ class CampaignExecutor:
             status = CampaignStatus(campaign_id=campaign_id, created_at=now, updated_at=now)
 
         completed: set[ExperimentId] = set(status.completed_experiments)
-        rows: list[_CampaignOutcomeRow] = list(status.experiments)
+        rows: list[CampaignOutcomeRow] = list(status.experiments)
         started = time.monotonic()
         for item in work_items:
             if item.experiment_id in completed:
@@ -1642,8 +1644,8 @@ class CampaignExecutor:
         return build_results_bundle(campaign_id, outputs_root, results_root).as_posix()
 
 
-def _completed_row(experiment_id: ExperimentId, finished_at: Timestamp) -> _CampaignOutcomeRow:
-    return _CampaignOutcomeRow(
+def _completed_row(experiment_id: ExperimentId, finished_at: Timestamp) -> CampaignOutcomeRow:
+    return CampaignOutcomeRow(
         experiment_id=experiment_id,
         status=ExperimentStatus.COMPLETE,
         finished_at=finished_at,
@@ -1652,8 +1654,8 @@ def _completed_row(experiment_id: ExperimentId, finished_at: Timestamp) -> _Camp
 
 def _failed_row(
     experiment_id: ExperimentId, problem: Identifier, finished_at: Timestamp
-) -> _CampaignOutcomeRow:
-    return _CampaignOutcomeRow(
+) -> CampaignOutcomeRow:
+    return CampaignOutcomeRow(
         experiment_id=experiment_id,
         status=ExperimentStatus.FAILED,
         problem=problem,

@@ -17,6 +17,7 @@ from pydantic import TypeAdapter
 from fedcrg.config import ExperimentConfig
 from fedcrg.data.datasets import ClientData, DatasetAdapter
 from fedcrg.data.preprocessing import PrepareData
+from fedcrg.evidence.models import PreparedDatasetManifest
 from fedcrg.evidence.store import PreparedLayout
 from fedcrg.types import ClientId, DataIntegrityError, DatasetId
 from tests._fixtures import NBAIOT_CLIENT_IDS, nbaiot_dataset_config, primary_experiment_config
@@ -86,8 +87,13 @@ def _config(root: Path) -> ExperimentConfig:
     return primary_experiment_config(root).model_copy(update={"dataset": dataset})
 
 
+PreparedState = tuple[
+    ExperimentConfig, Path, PrepareData, DatasetAdapter, Path, PreparedDatasetManifest
+]
+
+
 @pytest.fixture()
-def prepared(tmp_path: Path):
+def prepared(tmp_path: Path) -> PreparedState:
     config = _config(tmp_path / "outputs")
     raw = tmp_path / "raw"
     raw.mkdir()
@@ -98,18 +104,18 @@ def prepared(tmp_path: Path):
     return config, raw, preparer, adapter, cache, first
 
 
-def _rebuild_marks_new_manifest(old, new) -> bool:
+def _rebuild_marks_new_manifest(old: PreparedDatasetManifest, new: PreparedDatasetManifest) -> bool:
     return new.created_at != old.created_at
 
 
-def test_valid_cache_is_reused_verbatim(prepared) -> None:
-    config, raw, preparer, adapter, cache, first = prepared
+def test_valid_cache_is_reused_verbatim(prepared: PreparedState) -> None:
+    config, raw, preparer, adapter, _cache, first = prepared
     second = preparer.ensure_prepared(config, raw, adapter_override=adapter)
     assert second == first
     assert not _rebuild_marks_new_manifest(first, second)
 
 
-def test_missing_manifest_triggers_rebuild(prepared) -> None:
+def test_missing_manifest_triggers_rebuild(prepared: PreparedState) -> None:
     config, raw, preparer, adapter, cache, first = prepared
     (cache / PreparedLayout.manifest_filename).unlink()
     second = preparer.ensure_prepared(config, raw, adapter_override=adapter)
@@ -117,7 +123,7 @@ def test_missing_manifest_triggers_rebuild(prepared) -> None:
     assert (cache / PreparedLayout.manifest_filename).is_file()
 
 
-def test_tampered_manifest_data_spec_hash_triggers_rebuild(prepared) -> None:
+def test_tampered_manifest_data_spec_hash_triggers_rebuild(prepared: PreparedState) -> None:
     import json
 
     config, raw, preparer, adapter, cache, first = prepared
@@ -129,7 +135,7 @@ def test_tampered_manifest_data_spec_hash_triggers_rebuild(prepared) -> None:
     assert _rebuild_marks_new_manifest(first, second)
 
 
-def test_missing_role_artifact_triggers_rebuild(prepared) -> None:
+def test_missing_role_artifact_triggers_rebuild(prepared: PreparedState) -> None:
     config, raw, preparer, adapter, cache, first = prepared
     (cache / "nb01" / "train.csv").unlink()
     second = preparer.ensure_prepared(config, raw, adapter_override=adapter)
@@ -137,7 +143,7 @@ def test_missing_role_artifact_triggers_rebuild(prepared) -> None:
     assert (cache / "nb01" / "train.csv").is_file()
 
 
-def test_changed_role_artifact_triggers_rebuild(prepared) -> None:
+def test_changed_role_artifact_triggers_rebuild(prepared: PreparedState) -> None:
     config, raw, preparer, adapter, cache, first = prepared
     artifact = cache / "nb01" / "train.csv"
     artifact.write_text("corrupted,content\n", encoding="utf-8")
@@ -145,7 +151,7 @@ def test_changed_role_artifact_triggers_rebuild(prepared) -> None:
     assert _rebuild_marks_new_manifest(first, second)
 
 
-def test_missing_calibration_assignment_triggers_rebuild(prepared) -> None:
+def test_missing_calibration_assignment_triggers_rebuild(prepared: PreparedState) -> None:
     config, raw, preparer, adapter, cache, first = prepared
     import shutil
 
@@ -156,8 +162,8 @@ def test_missing_calibration_assignment_triggers_rebuild(prepared) -> None:
     assert assignment_dir.is_dir()
 
 
-def test_changed_source_file_triggers_rebuild(prepared) -> None:
-    config, raw, preparer, adapter, cache, first = prepared
+def test_changed_source_file_triggers_rebuild(prepared: PreparedState) -> None:
+    config, raw, preparer, adapter, _cache, first = prepared
     source = raw / "nb01" / "benign_traffic.csv"
     frame = pd.read_csv(source)
     frame["f1"] = frame["f1"] + 1000.0
@@ -166,8 +172,8 @@ def test_changed_source_file_triggers_rebuild(prepared) -> None:
     assert _rebuild_marks_new_manifest(first, second)
 
 
-def test_missing_source_file_is_never_silently_reused(prepared) -> None:
-    config, raw, preparer, adapter, cache, first = prepared
+def test_missing_source_file_is_never_silently_reused(prepared: PreparedState) -> None:
+    config, raw, preparer, adapter, _cache, _first = prepared
     (raw / "nb01" / "benign_traffic.csv").unlink()
     # A missing raw source invalidates the cache; with the data gone the
     # rebuild cannot succeed, so the operation must fail loudly rather than

@@ -421,7 +421,7 @@ class CalibrationAssignmentBuilder:
         )
 
 
-_NBAIOT_DEVICES = {
+NBAIOT_DEVICES = {
     "nb01": ("danmini", "doorbell"),
     "nb02": ("ennio", "doorbell"),
     "nb03": ("ecobee", "thermostat"),
@@ -457,7 +457,7 @@ class NBaiotAdapter(DatasetAdapter):
             return self._directories
         directories = DatasetDiscovery.directories(self.root)
         mapping: dict[ClientId, Path] = {}
-        for client_value, tokens in _NBAIOT_DEVICES.items():
+        for client_value, tokens in NBAIOT_DEVICES.items():
             client_id = str(client_value)
             matches = [
                 directory
@@ -470,11 +470,11 @@ class NBaiotAdapter(DatasetAdapter):
                     f"{len(matches)} fixed device directories"
                 )
             mapping[client_id] = matches[0]
-        if len({str(path) for path in mapping.values()}) != len(_NBAIOT_DEVICES):
+        if len({str(path) for path in mapping.values()}) != len(NBAIOT_DEVICES):
             raise DataIntegrityError(
                 f"{FailureCode.DATASET_COUNT_MISMATCH.value}: fixed device mapping is not one-to-one"
             )
-        if len(directories) != len(_NBAIOT_DEVICES):
+        if len(directories) != len(NBAIOT_DEVICES):
             raise DataIntegrityError(
                 f"{FailureCode.DATASET_COUNT_MISMATCH.value}: expected nine device directories, "
                 f"found {len(directories)}"

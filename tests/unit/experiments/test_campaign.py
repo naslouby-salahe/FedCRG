@@ -14,7 +14,7 @@ from fedcrg.experiments.runner import (
     CampaignWorkItem,
     RunAllExperiments,
     WorkloadExecution,
-    _CampaignOutcomeRow,
+    CampaignOutcomeRow,
 )
 from fedcrg.types import CampaignStage, ExperimentId, ExperimentStatus
 
@@ -27,7 +27,7 @@ def _status() -> CampaignStatus:
         current_experiment=ExperimentId.PRIMARY_NBAIOT,
         current_stage=CampaignStage.RUNNING,
         experiments=(
-            _CampaignOutcomeRow(
+            CampaignOutcomeRow(
                 experiment_id=ExperimentId.PRIMARY_NBAIOT,
                 status=ExperimentStatus.COMPLETE,
                 finished_at="2026-08-13T00:00:01+0000",
