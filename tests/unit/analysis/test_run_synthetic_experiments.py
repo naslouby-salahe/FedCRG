@@ -138,8 +138,9 @@ def test_write_rejects_trial_ledger_mismatch(tmp_path: Path) -> None:
         {ExperimentAxisId.CALIBRATION_N: (10,)},
         workload=WorkloadExpectation(monte_carlo_trials=999),
     )
+    runner = RunSyntheticExperiments()
     with pytest.raises(RuntimeError):
-        RunSyntheticExperiments().write(tmp_path / "out.json", spec, (), 1)
+        runner.write(tmp_path / "out.json", spec, (), 1)
 
 
 def test_write_rejects_cell_ledger_mismatch(tmp_path: Path) -> None:
@@ -148,16 +149,16 @@ def test_write_rejects_cell_ledger_mismatch(tmp_path: Path) -> None:
         {ExperimentAxisId.MISMATCH_N: (10,), ExperimentAxisId.TRUE_FPR: (0.01,)},
         workload=WorkloadExpectation(exact_cells=5),
     )
+    runner = RunSyntheticExperiments()
     with pytest.raises(RuntimeError):
-        RunSyntheticExperiments().write(tmp_path / "out.json", spec, (), 0)
+        runner.write(tmp_path / "out.json", spec, (), 0)
 
 
 def test_run_rejects_unsupported_experiment_id(tmp_path: Path, base_config) -> None:
     spec = _spec(ExperimentId.PRIMARY_NBAIOT, {}, category=ExperimentType.PRIMARY)
+    runner = RunSyntheticExperiments()
     with pytest.raises(ValueError):
-        RunSyntheticExperiments().run(
-            ExperimentId.PRIMARY_NBAIOT, spec, base_config, tmp_path / "out.json"
-        )
+        runner.run(ExperimentId.PRIMARY_NBAIOT, spec, base_config, tmp_path / "out.json")
 
 
 def test_run_readiness_theorem_produces_one_cell_per_distribution_and_sample_size(

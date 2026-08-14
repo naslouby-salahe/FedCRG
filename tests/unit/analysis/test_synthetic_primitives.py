@@ -231,13 +231,15 @@ def test_exact_mismatch_power_has_no_high_declaration_region_when_band_upper_is_
 
 
 def test_exact_mismatch_power_rejects_invalid_sample_count() -> None:
+    band = OperatingBand(lower=0.005, upper=0.015)
     with pytest.raises(ValueError):
-        exact_mismatch_power(0, 0.01, OperatingBand(lower=0.005, upper=0.015), 0.95)
+        exact_mismatch_power(0, 0.01, band, 0.95)
 
 
 def test_exact_mismatch_power_rejects_invalid_true_fpr() -> None:
+    band = OperatingBand(lower=0.005, upper=0.015)
     with pytest.raises(ValueError):
-        exact_mismatch_power(50, 1.5, OperatingBand(lower=0.005, upper=0.015), 0.95)
+        exact_mismatch_power(50, 1.5, band, 0.95)
 
 
 def test_temporal_dependence_stress_returns_a_robustness_cell(synthetic_config) -> None:

@@ -15,14 +15,16 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           python-version: ${{ matrix.python-version }}
-      - run: uv sync --locked --extra dev
+      - run: uv sync --locked --no-build --no-install-project --extra dev
+      - run: uv build --wheel -o dist
+      - run: uv pip install --no-build --no-deps dist/*.whl
       - name: Format check
-        run: uv run ruff format --check src tests
+        run: uv run --no-sync --no-build ruff format --check src tests
       - name: Lint
-        run: uv run ruff check src tests
+        run: uv run --no-sync --no-build ruff check src tests
       - name: Type check
-        run: uv run pyright src/fedcrg
+        run: uv run --no-sync --no-build pyright src/fedcrg
       - name: Repository audit
-        run: uv run python tools/audit_repository.py
+        run: uv run --no-sync --no-build python tools/audit_repository.py
       - name: Tests (parallel)
-        run: uv run pytest -n auto --cov=fedcrg --cov-report=term-missing
+        run: uv run --no-sync --no-build pytest -n auto --cov=fedcrg --cov-report=term-missing

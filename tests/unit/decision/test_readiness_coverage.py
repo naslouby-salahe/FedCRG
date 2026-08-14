@@ -51,8 +51,9 @@ def test_reference_rank_rejects_nonpositive_sample_count() -> None:
 
 
 def test_build_reference_threshold_rejects_empty_client_arrays() -> None:
+    scores = {_client("client-a"): np.array([])}
     with pytest.raises(ValueError):
-        build_reference_threshold({_client("client-a"): np.array([])}, 0.01)
+        build_reference_threshold(scores, 0.01)
 
 
 def test_coverage_probability_matches_readiness_plan_builder() -> None:
@@ -121,8 +122,9 @@ def test_readiness_plan_cache_save_uses_explicit_path_override(tmp_path: Path) -
 def test_calibration_readiness_evaluator_rejects_nonfinite_scores() -> None:
     plan = ReadinessPlanBuilder().build(2000, _BAND, 0.95)
     scores = np.concatenate((np.full(1999, 0.5), [float("nan")]))
+    evaluator = CalibrationReadinessEvaluator()
     with pytest.raises(ValueError):
-        CalibrationReadinessEvaluator().evaluate(scores, plan)
+        evaluator.evaluate(scores, plan)
 
 
 def test_continuity_diagnostics_rejects_empty_scores() -> None:
@@ -162,10 +164,11 @@ def test_familywise_readiness_assurance_rejects_out_of_range_alpha() -> None:
 
 
 def test_clopper_pearson_interval_rejects_out_of_range_confidence() -> None:
+    counts = BinomialCounts(x=1, n=10)
     with pytest.raises(ValueError):
-        clopper_pearson_interval(BinomialCounts(x=1, n=10), 0.0)
+        clopper_pearson_interval(counts, 0.0)
     with pytest.raises(ValueError):
-        clopper_pearson_interval(BinomialCounts(x=1, n=10), 1.0)
+        clopper_pearson_interval(counts, 1.0)
 
 
 def test_clopper_pearson_interval_pins_boundaries_at_extreme_counts() -> None:
