@@ -29,7 +29,7 @@ from fedcrg.types import (
 Frozen = ConfigDict(frozen=True)
 
 _METADATA = {column.value for column in PreparedColumn}
-_DIAD_FINITE_RATE_MINIMUM = 0.99
+_DIAD_FINITE_RATE_MINIMUM = 0.99 #TODO: should be in config
 
 
 def model_feature_columns(frame: pd.DataFrame, expected: PositiveCount) -> tuple[FeatureName, ...]:

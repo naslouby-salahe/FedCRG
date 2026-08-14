@@ -673,7 +673,7 @@ class ExperimentConfig(BaseModel):
             mode="json",
             exclude={"calibration_seeds", "primary_calibration_seed"},
         )
-        return _sha256_json(
+        return _sha256_json( #TODO: use pydantic's `model_dump_json` for a more direct approach
             {
                 "dataset": dataset_payload,
                 "attack_split_seed": self.randomness.attack_split_seed,
@@ -685,7 +685,7 @@ class ExperimentConfig(BaseModel):
         """Hash the exact detector-training specification, excluding policy/protocol axes."""
         if self.detector is None or self.training is None:
             return self.data_spec_hash
-        return _sha256_json(
+        return _sha256_json( #TODO: use pydantic's `model_dump_json` for a more direct approach
             {
                 "data_spec_hash": self.data_spec_hash,
                 "detector": self.detector.model_dump(mode="json"),

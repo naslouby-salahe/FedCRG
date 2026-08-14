@@ -78,7 +78,7 @@ from fedcrg.types import (
 )
 
 _LOGGER = get_logger(__name__)
-_ATTACK_GROUP_ADAPTER = TypeAdapter(AttackGroupId)
+_ATTACK_GROUP_ADAPTER = TypeAdapter(AttackGroupId) #TODO: This is deadcode
 
 _BASE_ROLES = (
     DataRole.TRAIN,
@@ -570,7 +570,7 @@ class PrepareData:
         feature_names: tuple[FeatureName, ...],
         assignments: tuple[CalibrationAssignmentReference, ...],
     ) -> None:
-        payload = {
+        payload = { #TODO: use pydantic model for this payload
             "dataset_id": config.dataset.id.value,
             "source_version": config.dataset.source_version,
             "parser_version": config.dataset.parser_version,

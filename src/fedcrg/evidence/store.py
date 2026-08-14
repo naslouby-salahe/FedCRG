@@ -40,7 +40,7 @@ from fedcrg.types import (
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
-def sha256_file(path: Path, chunk_size: ByteCount = 1024 * 1024) -> Sha256:
+def sha256_file(path: Path, chunk_size: ByteCount = 1024 * 1024) -> Sha256: #TODO: this seems to be duplicated all over the project. Fix that
     """SHA-256 of one file using an IO-sized read chunk."""
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -202,11 +202,11 @@ class RunLayout:
 
     @classmethod
     def for_run(cls, outputs_root: Path, run_id: RunId) -> RunLayout:
-        return cls(outputs_root / "runs" / str(run_id))
+        return cls(outputs_root / "runs" / str(run_id)) #TODO: use enum for these hardcoded strings. Use constants instead of str primitives
 
     @property
     def manifest(self) -> Path:
-        return self.root / "manifest.json"
+        return self.root / "manifest.json" #TODO: use enum for these hardcoded strings. Use constants instead of str primitives
 
     @property
     def run_config(self) -> Path:
@@ -337,12 +337,12 @@ class OutputsLayout:
     """Reserved outputs/ directory tree: runs, caches, campaigns, logs,
     monitoring, reports, environment and telemetry files."""
 
-    def __init__(self, outputs_root: Path = Path("outputs")) -> None:
+    def __init__(self, outputs_root: Path = Path("outputs")) -> None: #TODO: use enum for these hardcoded strings. Use constants instead of str primitives
         self.outputs_root = outputs_root
 
     @property
     def runs(self) -> Path:
-        return self.outputs_root / "runs"
+        return self.outputs_root / "runs" #TODO: use enum for these hardcoded strings. Use constants instead of str primitives
 
     @property
     def cache(self) -> Path:
@@ -500,7 +500,7 @@ class ResultsBundleLayout:
     @property
     def required_directories(self) -> tuple[Identifier, ...]:
         return (
-            "metrics",
+            "metrics", #TODO: use enum for these hardcoded strings. Use constants instead of str primitives
             "statistics",
             "tables",
             "figures",
@@ -635,7 +635,7 @@ class ArtifactVerifier:
     @staticmethod
     def _expected_hash(layout: RunLayout, relative: Identifier) -> Sha256 | None:
         reference_paths = {
-            "training/model_reference.json": layout.model_reference,
+            "training/model_reference.json": layout.model_reference, #TODO: use enum for these hardcoded strings. Use constants instead of str primitives
             "scores/cache_reference.json": layout.score_reference,
         }
         reference = reference_paths.get(relative)
@@ -681,7 +681,7 @@ def capture_environment(repository_root: Path) -> GitEnvironment:
     import torch
 
     pin_payload = {
-        "python": sys.version.split()[0],
+        "python": sys.version.split()[0], #TODO: use pydantic model for this payload
         "torch": torch.__version__,
         "platform": platform.platform(),
         "commit": commit,

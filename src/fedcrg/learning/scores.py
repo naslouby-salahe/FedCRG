@@ -80,7 +80,7 @@ _REQUIRED_BASE_ROLES = set(_BASE_SCORE_ROLES)
 _FORBIDDEN_DERIVED_ROLES = set(_CALIBRATION_ROLES)
 
 
-def sha256_file(path: Path) -> Sha256:
+def sha256_file(path: Path) -> Sha256: #TODO:  duplicated code in src/fedcrg/learning/scores.py. Move it to a common utility module and import it from there.
     """SHA-256 of one file using an IO-sized read chunk."""
     digest = hashlib.sha256()
     with path.open("rb") as handle:

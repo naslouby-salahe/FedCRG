@@ -40,7 +40,7 @@ Frozen = ConfigDict(frozen=True)
 
 _FLOAT32_BYTES = 4
 _FLOAT64_BYTES = 8
-_INT64_BYTES = 8
+_INT64_BYTES = 8 #TODO: dead code? Not used anywhere in this file. Remove it if not needed.
 
 
 class ModelCommunicationLedger(BaseModel):

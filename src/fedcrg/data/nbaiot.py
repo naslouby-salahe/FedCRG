@@ -24,7 +24,7 @@ from fedcrg.types import (
 )
 
 
-class NbaiotFeature(StrEnum):
+class NbaiotFeature(StrEnum): #TODO: move to config and make it a frozen dataclass so that it can be used in the config and in the adapter.
     """Locked 115-feature contract of the canonical UCI N-BaIoT schema."""
 
     MI_DIR_L5_WEIGHT = "mi_dir_l5_weight"
@@ -144,7 +144,7 @@ class NbaiotFeature(StrEnum):
     HPHP_L0_01_PCC = "hphp_l0_01_pcc"
 
 
-NBAIOT_FEATURE_HEADERS: dict[str, NbaiotFeature] = {
+NBAIOT_FEATURE_HEADERS: dict[str, NbaiotFeature] = { #TODO: move to config and make it a frozen dataclass so that it can be used in the config and in the adapter.
     "MI_dir_L5_weight": NbaiotFeature.MI_DIR_L5_WEIGHT,
     "MI_dir_L5_mean": NbaiotFeature.MI_DIR_L5_MEAN,
     "MI_dir_L5_variance": NbaiotFeature.MI_DIR_L5_VARIANCE,
@@ -262,9 +262,9 @@ NBAIOT_FEATURE_HEADERS: dict[str, NbaiotFeature] = {
     "HpHp_L0.01_pcc": NbaiotFeature.HPHP_L0_01_PCC,
 }
 
-NBAIOT_FEATURES = tuple(feature.value for feature in NbaiotFeature)
+NBAIOT_FEATURES = tuple(feature.value for feature in NbaiotFeature) #TODO: move to config and make it a frozen dataclass so that it can be used in the config and in the adapter.
 
-NBAIOT_DEVICES = {
+NBAIOT_DEVICES = { #TODO: move to config and make it a frozen dataclass so that it can be used in the config and in the adapter.
     "nb01": ("danmini", "doorbell"),
     "nb02": ("ennio", "doorbell"),
     "nb03": ("ecobee", "thermostat"),
@@ -277,7 +277,7 @@ NBAIOT_DEVICES = {
 }
 
 
-def _normalized_name(path: Path) -> str:
+def _normalized_name(path: Path) -> str: #TODO: don't use str primitive
     return re.sub(r"[^a-z0-9]", "", str(path).lower())
 
 
@@ -409,13 +409,13 @@ class NBaiotAdapter(DatasetAdapter):
     @staticmethod
     def _attack_group(path: Path) -> AttackGroupId:
         lowered = str(path).lower()
-        if "mirai" in lowered:
+        if "mirai" in lowered: #TODO: Don't use hardcoded strings. Use enum 
             family = "mirai"
         elif "gafgyt" in lowered or "bashlite" in lowered:
-            family = "gafgyt"
+            family = "gafgyt" #TODO: Don't use hardcoded strings. Use enum
         else:
             raise DataIntegrityError(
                 f"{FailureCode.DATASET_COUNT_MISMATCH.value}: cannot derive attack subtype from {path}"
             )
-        subtype = path.stem.lower().replace("benign", "").replace(family, "").strip("_")
+        subtype = path.stem.lower().replace("benign", "").replace(family, "").strip("_") #TODO: Don't use hardcoded strings. Use enum
         return f"{family}_{subtype}"

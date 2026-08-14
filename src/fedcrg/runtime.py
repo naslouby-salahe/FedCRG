@@ -247,8 +247,8 @@ def render_campaign_status(
     """Render campaign progress for the terminal."""
     console = Console()
     table = Table(title=f"campaign {campaign_id}")
-    table.add_column("status")
-    table.add_column("completed")
+    table.add_column("status") #TODO: use enum for column names
+    table.add_column("completed") #TODO: use enum for column names
     table.add_column("total")
     table.add_column("current")
     table.add_column("elapsed_s")
@@ -270,6 +270,6 @@ def render_cache_status(
 ) -> None:
     """Render cache reuse status for the terminal."""
     console = Console()
-    hit_text = "hit" if hit else "miss"
+    hit_text = "hit" if hit else "miss" #TODO: use enum for hit/miss instead of hardcoded strings
     suffix = f" ({detail})" if detail else ""
     console.print(f"[{hit_text}] {cache_kind} {target}{suffix}")

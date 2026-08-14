@@ -189,7 +189,7 @@ _DIAD_PRECEDENCE = (
     FailureCode.ATTACK_DEV_CAPACITY_LT_500,
 )
 
-_DIAD_FINITE_RATE_MINIMUM = 0.99
+_DIAD_FINITE_RATE_MINIMUM = 0.99 #TODO: this should be a config param.
 
 
 class ClientEligibilityEvaluator:

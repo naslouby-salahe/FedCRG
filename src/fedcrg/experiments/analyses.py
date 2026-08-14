@@ -492,7 +492,7 @@ class RunSyntheticExperiments:
             return self._run_s6(spec, config, output)
         raise ValueError(f"Unsupported synthetic experiment: {experiment_id.value}")
 
-    def _run_s1(self, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path:
+    def _run_s1(self, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path: #TODO: Don't use canonical names for these methods. Use the experiment id instead of a hardcoded name. Use a dict to map experiment ids to methods instead of a long if/else chain.
         repetitions = self._int_values(spec, ExperimentAxisId.REPETITIONS)[0]
         cells = tuple(
             iid_readiness_validation(
@@ -510,7 +510,7 @@ class RunSyntheticExperiments:
         )
         return self.write(output, spec, cells, len(cells) * repetitions)
 
-    def _run_s2(self, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path:
+    def _run_s2(self, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path: #TODO: Don't use canonical names for these methods. Use the experiment id instead of a hardcoded name. Use a dict to map experiment ids to methods instead of a long if/else chain.
         repetitions = self._int_values(spec, ExperimentAxisId.REPETITIONS)[0]
         rows: list[SyntheticCoverageResult] = []
         for cell in spec.coupled_cells:
@@ -1166,7 +1166,7 @@ class RunBenchmark:
 
         primitives = (
             (
-                "reference_construction",
+                "reference_construction", #TODO: Don't use hardcoded strings
                 lambda: build_reference_threshold(reference_scores, self.config.protocol.alpha),
             ),
             (

@@ -41,7 +41,7 @@ from fedcrg.types import (
 Frozen = ConfigDict(frozen=True)
 
 
-class DiadFeature(StrEnum):
+class DiadFeature(StrEnum): #TODO: move this to the config file and make it a frozen dataclass, so that it can be used in the config and in the adapter.
     """Frozen 86-feature DIAD training-schema contract."""
 
     INTER_ARRIVAL_TIME = "inter_arrival_time"
@@ -132,14 +132,14 @@ class DiadFeature(StrEnum):
     STREAM_JITTER_60_VAR = "stream_jitter_60_var"
 
 
-DIAD_FEATURES = tuple(feature.value for feature in list(DiadFeature))
-_CLIENT_ID_MAC_DIGEST_LENGTH = 12
+DIAD_FEATURES = tuple(feature.value for feature in list(DiadFeature)) #TODO: make this a frozen dataclass so that it can be used in the config and in the adapter.
+_CLIENT_ID_MAC_DIGEST_LENGTH = 12 #TODO: make this a config param, and make it a frozen dataclass so that it can be used in the config and in the adapter.
 
 
 class DiadAdapter(DatasetAdapter):
     """Load the CIC IoT-DIAD 2024 packet-based release into per-device clients."""
 
-    _MODEL_COLUMNS = (*DIAD_FEATURES, "device_mac")
+    _MODEL_COLUMNS = (*DIAD_FEATURES, "device_mac") #TODO: should be a dataclass so that it can be used in the config and in the adapter.
 
     def __init__(self, root: Path, expected_feature_count: FeatureCount) -> None:
         super().__init__(root)
@@ -210,7 +210,7 @@ class DiadAdapter(DatasetAdapter):
                     f"{path.relative_to(self.root)}"
                 ) from exc
             frame.columns = [str(column).strip() for column in frame.columns]
-            normalized = frame["device_mac"].astype(str).str.strip().str.lower()
+            normalized = frame["device_mac"].astype(str).str.strip().str.lower() #TODO: use enum not hardcoded string
             selected = frame.loc[normalized.isin(macs)].copy()
             if selected.empty:
                 continue
@@ -224,7 +224,7 @@ class DiadAdapter(DatasetAdapter):
                 ],
                 dtype=object,
             )
-            if category.lower() == "benigntraffic":
+            if category.lower() == "benigntraffic": #TODO: Don't use hardcoded strings. Use enum or config param
                 benign_frames.append(numeric)
             else:
                 numeric[PreparedColumn.ATTACK_GROUP.value] = category.lower()
@@ -267,7 +267,7 @@ class DiadAdapter(DatasetAdapter):
         )
 
 
-_EXCLUDED_EXACT = {
+_EXCLUDED_EXACT = { #TODO: should be in the config file and be a frozen dataclass, so that it can be used in the config and in the adapter.
     "stream",
     "device_mac",
     "src_ip",
@@ -282,7 +282,7 @@ _EXCLUDED_EXACT = {
     "verified_chronology",
     *(column.value for column in PreparedColumn),
 }
-_EXCLUDED_NAME_MARKERS = (
+_EXCLUDED_NAME_MARKERS = ( #TODO: should be in the config file and be a frozen dataclass, so that it can be used in the config and in the adapter.
     "user_agent",
     "hostname",
     "domain_name",
@@ -291,10 +291,10 @@ _EXCLUDED_NAME_MARKERS = (
     "ip_address",
 )
 
-_ARCHITECTURE_INPUT_RATIO_LARGE = 0.75
-_ARCHITECTURE_INPUT_RATIO_MEDIUM = 0.50
-_ARCHITECTURE_INPUT_RATIO_SMALL = 1.0 / 3.0
-_ARCHITECTURE_INPUT_RATIO_BOTTLENECK = 0.25
+_ARCHITECTURE_INPUT_RATIO_LARGE = 0.75 #TODO: should be in config
+_ARCHITECTURE_INPUT_RATIO_MEDIUM = 0.50 #TODO: should be in config
+_ARCHITECTURE_INPUT_RATIO_SMALL = 1.0 / 3.0 #TODO: should be in config
+_ARCHITECTURE_INPUT_RATIO_BOTTLENECK = 0.25 #TODO: should be in config
 
 
 class ClientTrainingRowHash(BaseModel):
