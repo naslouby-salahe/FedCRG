@@ -20,7 +20,7 @@ import numpy
 import pandas
 import scipy
 import torch
-from pydantic import BaseModel, ConfigDict, TypeAdapter
+from pydantic import BaseModel, ConfigDict
 
 from fedcrg.config import Study, validate_experiment_config
 from fedcrg.data.preparation import PrepareData
@@ -68,14 +68,6 @@ from fedcrg.types import (
 )
 
 from fedcrg.evidence.store import RunLayout
-
-_STUDY_CONFIG = Path("config/study.yaml")
-_PREPROCESSED_ROOT = Path("data/preprocessed")
-_OUTPUTS_ROOT = Path("outputs")
-_RESULTS_ROOT = Path("results")
-_CAMPAIGN_ID_ADAPTER = TypeAdapter(CampaignId)
-_MODEL_SEED_ADAPTER = TypeAdapter(ModelSeed)
-_CALIBRATION_SEED_ADAPTER = TypeAdapter(CalibrationSeed)
 
 _SYNTHETIC_CATEGORIES = frozenset({ExperimentType.SYNTHETIC, ExperimentType.BENCHMARK})
 
@@ -221,10 +213,11 @@ class ResultsVerifyPayload(BaseModel):
     problems: tuple[Identifier, ...]
 
 
-def _study(config_path: Path | None) -> Study:
-    if config_path is None:
-        return Study.load()
-    return Study.load(study_path=config_path)
+def _study(ctx: click.Context) -> Study:
+    """Return the study configuration loaded by the group callback."""
+    study = ctx.obj
+    assert isinstance(study, Study)
+    return study
 
 
 def _print(payload: BaseModel) -> None:
@@ -257,9 +250,12 @@ def _purge_experiment_evidence(experiment_id: ExperimentId, outputs_root: Path) 
 
 @click.group()
 @click.version_option(package_name="fedcrg")
-def cli() -> None:
+@click.pass_context
+def cli(ctx: click.Context) -> None:
     """FedCRG reproducible research tooling."""
-    configure_logging(logs_root=OutputsLayout(_OUTPUTS_ROOT).logs)
+    study = Study.load()
+    ctx.obj = study
+    configure_logging(logs_root=OutputsLayout(study.paths.outputs_root).logs)
 
 
 @cli.command(name="doctor")
@@ -282,10 +278,10 @@ def doctor() -> None:
 
 @cli.command(name="validate")
 @click.argument("experiment_id", type=click.Choice([item.value for item in ExperimentId]))
-@click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), default=None)
-def validate(experiment_id: str, config_path: Path | None) -> None:
+@click.pass_context
+def validate(ctx: click.Context, experiment_id: str) -> None:
     """Validate one resolved experiment configuration."""
-    study = _study(config_path)
+    study = _study(ctx)
     experiment = ExperimentId(experiment_id)
     spec = study.spec(experiment)
     config = study.resolve(experiment)
@@ -305,10 +301,10 @@ def validate(experiment_id: str, config_path: Path | None) -> None:
 
 @cli.command(name="plan")
 @click.argument("experiment_id", type=click.Choice([item.value for item in ExperimentId]))
-@click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), default=None)
-def plan(experiment_id: str, config_path: Path | None) -> None:
+@click.pass_context
+def plan(ctx: click.Context, experiment_id: str) -> None:
     """Print the execution plan for one experiment."""
-    study = _study(config_path)
+    study = _study(ctx)
     experiment = ExperimentId(experiment_id)
     spec = study.spec(experiment)
     config = study.resolve(experiment)
@@ -326,57 +322,61 @@ def plan(experiment_id: str, config_path: Path | None) -> None:
 
 
 @cli.command(name="preprocess")
-@click.argument("dataset_id", type=click.Choice([item.value for item in DatasetId]))
-@click.option("--data-root", type=click.Path(path_type=Path, exists=True), required=True)
+@click.argument(
+    "dataset_id",
+    required=False,
+    type=click.Choice([item.value for item in DatasetId]),
+)
 @click.option("--overwrite", is_flag=True, help="Rebuild the prepared cache explicitly.")
-@click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), default=None)
-def preprocess(dataset_id: str, data_root: Path, overwrite: bool, config_path: Path | None) -> None:
-    """Preprocess one raw dataset into data/preprocessed/ (reuse-first)."""
-    dataset = DatasetId(dataset_id)
-    try:
-        experiment_id = _DATASET_EXPERIMENTS[dataset]
-    except KeyError as exc:
-        raise click.BadParameter(
-            f"Unknown raw dataset id {dataset_id!r}, expected one of "
-            + ", ".join(sorted(item.value for item in _DATASET_EXPERIMENTS))
-        ) from exc
-    study = _study(config_path)
-    config = study.resolve(experiment_id)
-    if overwrite:
-        dataset_root = config.preprocessed_root / dataset.value
-        if dataset_root.is_dir():
-            shutil.rmtree(dataset_root)
+@click.pass_context
+def preprocess(ctx: click.Context, dataset_id: str | None, overwrite: bool) -> None:
+    """Preprocess raw datasets into data/preprocessed/ (reuse-first).
+
+    Without a dataset argument every raw dataset with a preprocessing
+    pipeline is prepared.
+    """
+    study = _study(ctx)
+    if dataset_id is None:
+        datasets = tuple(_DATASET_EXPERIMENTS)
+    else:
+        dataset = DatasetId(dataset_id)
+        if dataset not in _DATASET_EXPERIMENTS:
+            raise click.BadParameter(
+                f"Raw dataset {dataset_id!r} has no preprocessing pipeline, "
+                "expected one of " + ", ".join(sorted(item.value for item in _DATASET_EXPERIMENTS))
+            )
+        datasets = (dataset,)
     preparer = PrepareData()
-    manifest = preparer.ensure_prepared(config, data_root)
-    cache_root = preparer.cache_root(config, manifest)
-    _print(
-        PreprocessPayload(
-            dataset=dataset,
-            cache_root=cache_root.as_posix(),
-            data_spec_hash=config.data_spec_hash,
-            manifest_sha256=sha256_file(cache_root / PreparedLayout.manifest_filename),
+    for dataset in datasets:
+        experiment_id = _DATASET_EXPERIMENTS[dataset]
+        config = study.resolve(experiment_id)
+        if overwrite:
+            dataset_root = config.preprocessed_root / dataset.value
+            if dataset_root.is_dir():
+                shutil.rmtree(dataset_root)
+        manifest = preparer.ensure_prepared(config, study.paths.data_root)
+        cache_root = preparer.cache_root(config, manifest)
+        _print(
+            PreprocessPayload(
+                dataset=dataset,
+                cache_root=cache_root.as_posix(),
+                data_spec_hash=config.data_spec_hash,
+                manifest_sha256=sha256_file(cache_root / PreparedLayout.manifest_filename),
+            )
         )
-    )
 
 
 @cli.command(name="run")
 @click.argument("experiment_id", type=click.Choice([item.value for item in ExperimentId]))
-@click.option("--prepared-root", type=click.Path(path_type=Path), default=str(_PREPROCESSED_ROOT))
-@click.option("--outputs", type=click.Path(path_type=Path), default=str(_OUTPUTS_ROOT))
 @click.option("--overwrite", is_flag=True, help="Re-run and replace regenerable evidence.")
-@click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), default=None)
-def run(
-    experiment_id: str,
-    prepared_root: Path,
-    outputs: Path,
-    overwrite: bool,
-    config_path: Path | None,
-) -> None:
+@click.pass_context
+def run(ctx: click.Context, experiment_id: str, overwrite: bool) -> None:
     """Execute one pre-registered experiment."""
-    study = _study(config_path)
+    study = _study(ctx)
     experiment = ExperimentId(experiment_id)
     spec = study.spec(experiment)
     config = study.resolve(experiment)
+    outputs = config.outputs_root
     if overwrite:
         _purge_experiment_evidence(experiment, outputs)
     layout = OutputsLayout(outputs)
@@ -399,7 +399,7 @@ def run(
         )
         return
     _precompute_protocol_tables(study, experiment)
-    workload = RunAllExperiments().execute(experiment, config, prepared_root)
+    workload = RunAllExperiments().execute(experiment, config, config.preprocessed_root)
     _print(
         RunPayload(
             experiment=experiment,
@@ -411,62 +411,35 @@ def run(
 
 
 @cli.command(name="campaign")
-@click.option("--campaign-id", default="default", show_default=True)
-@click.option(
-    "--experiment",
-    "experiments",
-    multiple=True,
-    type=click.Choice([item.value for item in ExperimentId]),
-)
-@click.option("--prepared-root", type=click.Path(path_type=Path), default=str(_PREPROCESSED_ROOT))
-@click.option("--outputs", type=click.Path(path_type=Path), default=str(_OUTPUTS_ROOT))
-@click.option(
-    "--results", "results_root", type=click.Path(path_type=Path), default=str(_RESULTS_ROOT)
-)
 @click.option("--overwrite", is_flag=True, help="Restart the campaign from scratch.")
-@click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), default=None)
-def campaign(
-    campaign_id: str,
-    experiments: tuple[str, ...],
-    prepared_root: Path,
-    outputs: Path,
-    results_root: Path,
-    overwrite: bool,
-    config_path: Path | None,
-) -> None:
-    """Execute a persistent campaign over the registered experiments."""
-    study = _study(config_path)
-    typed_campaign_id = _CAMPAIGN_ID_ADAPTER.validate_python(campaign_id)
+@click.pass_context
+def campaign(ctx: click.Context, overwrite: bool) -> None:
+    """Execute the full experiment campaign from prepared data."""
+    study = _study(ctx)
+    campaign_id = study.campaign_id
+    outputs = study.paths.outputs_root
     store = CampaignStatusStore(outputs_root=outputs)
     if overwrite:
-        status_path = store.path_for(typed_campaign_id)
+        status_path = store.path_for(campaign_id)
         if status_path.is_file():
             status_path.unlink()
-    if experiments:
-        selected = tuple(ExperimentId(item) for item in experiments)
-    else:
-        selected = tuple(
-            spec.id for spec in study.catalogue.all() if spec.category not in _SYNTHETIC_CATEGORIES
-        )
     work_items = tuple(
         CampaignWorkItem(
-            experiment_id=experiment_id,
-            config_path=_STUDY_CONFIG,
-            prepared_root=prepared_root,
+            experiment_id=spec.id,
+            config_path=Path("config/study.yaml"),
+            prepared_root=study.paths.preprocessed_root,
         )
-        for experiment_id in selected
+        for spec in study.catalogue.all()
     )
-    for item in work_items:
-        _precompute_protocol_tables(study, item.experiment_id)
     status = CampaignExecutor(study=study).run(
-        typed_campaign_id,
+        campaign_id,
         work_items,
         outputs_root=outputs,
-        results_root=results_root,
+        results_root=study.paths.results_root,
     )
     _print(
         CampaignPayload(
-            campaign_id=typed_campaign_id,
+            campaign_id=campaign_id,
             status=status.current_stage.value if status.current_stage else "pending",
             completed=len(status.completed_experiments),
             total=max(1, len(work_items)),
@@ -483,10 +456,11 @@ def campaign(
     required=False,
     type=click.Choice([item.value for item in ExperimentId]),
 )
-@click.option("--outputs", type=click.Path(path_type=Path), default=str(_OUTPUTS_ROOT))
-@click.option("--campaign-id", default="default", show_default=True)
-def status(experiment_id: str | None, outputs: Path, campaign_id: str) -> None:
+@click.pass_context
+def status(ctx: click.Context, experiment_id: str | None) -> None:
     """Show run status for one experiment (or all experiments)."""
+    study = _study(ctx)
+    outputs = study.paths.outputs_root
     layout = OutputsLayout(outputs)
     counts: dict[ExperimentId, RunStatusCounts] = {}
     runs_root = layout.runs
@@ -525,9 +499,7 @@ def status(experiment_id: str | None, outputs: Path, campaign_id: str) -> None:
     campaign_stage: Identifier | None = None
     campaign_record: CampaignId | None = None
     try:
-        campaign_status = CampaignStatusStore(outputs_root=outputs).load(
-            _CAMPAIGN_ID_ADAPTER.validate_python(campaign_id)
-        )
+        campaign_status = CampaignStatusStore(outputs_root=outputs).load(study.campaign_id)
         campaign_record = campaign_status.campaign_id
         campaign_stage = (
             campaign_status.current_stage.value if campaign_status.current_stage else None
@@ -544,7 +516,6 @@ def status(experiment_id: str | None, outputs: Path, campaign_id: str) -> None:
 
 
 @cli.command(name="monitor")
-@click.option("--outputs", type=click.Path(path_type=Path), default=str(_OUTPUTS_ROOT))
 @click.option("--interval", type=float, default=1.0, show_default=True)
 @click.option(
     "--samples",
@@ -552,9 +523,11 @@ def status(experiment_id: str | None, outputs: Path, campaign_id: str) -> None:
     default=None,
     help="Stop after this many samples (default: stream until interrupted).",
 )
-def monitor(outputs: Path, interval: float, samples: int | None) -> None:
+@click.pass_context
+def monitor(ctx: click.Context, interval: float, samples: int | None) -> None:
     """Stream CPU/RAM/GPU telemetry and persist it under outputs/monitoring/."""
-    telemetry_path = OutputsLayout(outputs).telemetry_file
+    study = _study(ctx)
+    telemetry_path = OutputsLayout(study.paths.outputs_root).telemetry_file
     monitor = ResourceMonitor()
     if interval <= 0:
         raise click.BadParameter("--interval must be positive")
@@ -569,18 +542,17 @@ def monitor(outputs: Path, interval: float, samples: int | None) -> None:
 
 
 @cli.command(name="report")
-@click.argument("campaign_id")
-@click.option("--outputs", type=click.Path(path_type=Path), default=str(_OUTPUTS_ROOT))
-@click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), default=None)
-def report(campaign_id: str, outputs: Path, config_path: Path | None) -> None:
+@click.pass_context
+def report(ctx: click.Context) -> None:
     """Build the repository report and publication package from frozen evidence."""
-    study = _study(config_path)
+    study = _study(ctx)
     config = study.resolve(ExperimentId.PRIMARY_NBAIOT)
+    outputs = study.paths.outputs_root
     repository_report = build_repository_report(outputs, config)
     publication_manifest = build_publication(config, outputs)
     _print(
         ReportPayload(
-            campaign_id=_CAMPAIGN_ID_ADAPTER.validate_python(campaign_id),
+            campaign_id=study.campaign_id,
             repository_report=repository_report.as_posix(),
             publication_manifest=publication_manifest.as_posix(),
         )
@@ -593,33 +565,27 @@ def results_group() -> None:
 
 
 @results_group.command(name="build")
-@click.argument("campaign_id")
-@click.option("--outputs", type=click.Path(path_type=Path), default=str(_OUTPUTS_ROOT))
-@click.option(
-    "--results", "results_root", type=click.Path(path_type=Path), default=str(_RESULTS_ROOT)
-)
-def results_build(campaign_id: str, outputs: Path, results_root: Path) -> None:
-    """Build the publication bundle for one campaign from immutable evidence."""
+@click.pass_context
+def results_build(ctx: click.Context) -> None:
+    """Build the publication bundle from immutable evidence."""
+    study = _study(ctx)
     path = build_results_bundle(
-        _CAMPAIGN_ID_ADAPTER.validate_python(campaign_id),
-        outputs_root=outputs,
-        results_root=results_root,
+        study.campaign_id,
+        outputs_root=study.paths.outputs_root,
+        results_root=study.paths.results_root,
     )
     _print(ResultsBuildPayload(results_path=path.as_posix()))
 
 
 @results_group.command(name="verify")
-@click.argument("campaign_id")
-@click.option("--outputs", type=click.Path(path_type=Path), default=str(_OUTPUTS_ROOT))
-@click.option(
-    "--results", "results_root", type=click.Path(path_type=Path), default=str(_RESULTS_ROOT)
-)
-def results_verify(campaign_id: str, outputs: Path, results_root: Path) -> None:
+@click.pass_context
+def results_verify(ctx: click.Context) -> None:
     """Verify that a publication bundle is complete, consistent, and hash-valid."""
+    study = _study(ctx)
     verification = verify_results_bundle(
-        _CAMPAIGN_ID_ADAPTER.validate_python(campaign_id),
-        results_root=results_root,
-        outputs_root=outputs,
+        study.campaign_id,
+        results_root=study.paths.results_root,
+        outputs_root=study.paths.outputs_root,
     )
     _print(ResultsVerifyPayload(valid=verification.valid, problems=tuple(verification.problems)))
     if not verification.valid:

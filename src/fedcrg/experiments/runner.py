@@ -92,6 +92,7 @@ from fedcrg.types import (
     DataRole,
     ExperimentId,
     ExperimentStatus,
+    ExperimentType,
     FailureCode,
     FeatureName,
     Identifier,
@@ -107,9 +108,16 @@ from fedcrg.types import (
     Timestamp,
     Duration,
 )
+from fedcrg.experiments.analyses import (
+    ProtocolTablePrecomputer,
+    RunBenchmark,
+    RunSyntheticExperiments,
+)
 
 Frozen = ConfigDict(frozen=True)
 _LOGGER = get_logger(__name__)
+
+_ANALYSIS_CATEGORIES = frozenset({ExperimentType.SYNTHETIC, ExperimentType.BENCHMARK})
 
 
 class PreflightReport(BaseModel):
@@ -1591,6 +1599,7 @@ class CampaignExecutor:
         for item in work_items:
             if item.experiment_id in completed:
                 continue
+            spec = self.study.spec(item.experiment_id)
             config = self.study.resolve(item.experiment_id)
             prepared_root = item.prepared_root
             status = CampaignStatus(
@@ -1604,11 +1613,22 @@ class CampaignExecutor:
             )
             self.status_store.save(status)
             try:
-                self.runner.execute(
-                    item.experiment_id,
-                    config,
-                    prepared_root,
-                )
+                ProtocolTablePrecomputer().precompute(config, spec)
+                if spec.category in _ANALYSIS_CATEGORIES:
+                    output = (
+                        OutputsLayout(outputs_root).cache_analysis
+                        / f"{item.experiment_id.value}.json"
+                    )
+                    if item.experiment_id is ExperimentId.COMPUTATIONAL_BENCHMARK:
+                        RunBenchmark(spec, config).run(output)
+                    else:
+                        RunSyntheticExperiments().run(item.experiment_id, spec, config, output)
+                else:
+                    self.runner.execute(
+                        item.experiment_id,
+                        config,
+                        prepared_root,
+                    )
                 rows.append(_completed_row(item.experiment_id, now))
             except Exception as exc:
                 rows.append(_failed_row(item.experiment_id, str(exc), now))

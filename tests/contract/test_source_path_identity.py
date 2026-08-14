@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from fedcrg.data.nbaiot import NBaiotAdapter
+from fedcrg.data.nbaiot import NBAIOT_FEATURE_HEADERS, NBaiotAdapter
 from fedcrg.types import ClientId
 from pydantic import TypeAdapter
 
@@ -35,7 +35,7 @@ def _write_device(root: Path, name: str) -> None:
     device = root / name
     (device / "gafgyt_attacks").mkdir(parents=True)
     (device / "mirai_attacks").mkdir(parents=True)
-    columns = [f"f{i}" for i in range(115)]
+    columns = list(NBAIOT_FEATURE_HEADERS)
     benign = pd.DataFrame(np.zeros((4, 115), dtype=np.float64), columns=columns)
     benign.to_csv(device / "benign_traffic.csv", index=False)
     for subtype in ("combo", "junk", "scan", "tcp", "udp"):

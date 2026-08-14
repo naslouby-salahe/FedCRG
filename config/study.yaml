@@ -1,7 +1,15 @@
 # FedCRG study-level scientific configuration.
 # Owns every study-wide locked value: protocol, statistics, randomness,
-# detector/training profiles, and the policy registry.
+# detector/training profiles, the policy registry, and the repository layout.
 # Dataset contracts and the experiment catalogue live in the sibling files.
+
+paths:
+  data_root: data/raw
+  preprocessed_root: data/preprocessed
+  outputs_root: outputs
+  results_root: results
+
+campaign_id: default
 
 protocol:
   id: fedcrg

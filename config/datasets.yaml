@@ -5,6 +5,7 @@
 datasets:
   nbaiot:
     id: nbaiot
+    source_directory: N-BaIoT
     feature_contract: nbaiot_locked_115
     source_version: "UCI-442"
     parser_version: "1"
@@ -39,6 +40,7 @@ datasets:
 
   diad:
     id: diad
+    source_directory: CIC_IoT_DIAD_2024/Device Identification_Anomaly Detection - Packet Based Features
     feature_contract: diad_locked_86
     source_version: "CIC-IoT-DIAD-2024"
     parser_version: "1"
@@ -64,6 +66,7 @@ datasets:
 
   synthetic:
     id: synthetic
+    source_directory: .
     feature_contract: synthetic
     source_version: "generated-v2"
     parser_version: "1"

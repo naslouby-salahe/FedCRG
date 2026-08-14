@@ -154,7 +154,9 @@ class PrepareData:
         matches but whose artifacts fail validation is rebuilt.
         """
         adapter = adapter_override or self.adapter(
-            config.dataset.id, data_root, config.dataset.feature_count
+            config.dataset.id,
+            data_root / config.dataset.source_directory,
+            config.dataset.feature_count,
         )
         if adapter.dataset_id is not config.dataset.id:
             raise ValueError("Adapter dataset identity does not match experiment config")
@@ -165,7 +167,9 @@ class PrepareData:
         final_root = self.prepared_root(config, source_identity_hash)
         if final_root.exists():
             try:
-                return self._reuse_existing(final_root, config, sources, data_root)
+                return self._reuse_existing(
+                    final_root, config, sources, data_root / config.dataset.source_directory
+                )
             except DataIntegrityError as exc:
                 _LOGGER.warning("prepared cache invalid (%s); rebuilding %s", exc, final_root)
                 shutil.rmtree(final_root, ignore_errors=True)
@@ -182,7 +186,7 @@ class PrepareData:
         final_root: Path,
         config: ExperimentConfig,
         sources: tuple[SourceFileManifest, ...],
-        data_root: Path,
+        source_root: Path,
     ) -> PreparedDatasetManifest:
         manifest_path = final_root / PreparedLayout.manifest_filename
         preprocessing_path = final_root / PreparedLayout.preprocessing_filename
@@ -196,7 +200,7 @@ class PrepareData:
         if manifest.source_files != sources:
             raise DataIntegrityError("Prepared cache source identity differs from the raw data")
         for item in sources:
-            source_path = data_root / item.relative_path
+            source_path = source_root / item.relative_path
             if not source_path.is_file():
                 raise DataIntegrityError(
                     f"Raw source file is missing for the prepared cache: {item.relative_path}"

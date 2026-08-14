@@ -74,16 +74,18 @@ Representative commands:
 ```bash
 fedcrg doctor
 fedcrg validate primary_nbaiot
-fedcrg preprocess nbaiot --data-root /path/to/nbaiot
+fedcrg preprocess nbaiot
 fedcrg plan primary_nbaiot
-fedcrg run primary_nbaiot --prepared-root <preprocessed-root>
-fedcrg campaign --campaign-id default --prepared-root <preprocessed-root>
+fedcrg run primary_nbaiot
+fedcrg campaign
 fedcrg status
 fedcrg monitor
-fedcrg report default
-fedcrg results build default
-fedcrg results verify default
+fedcrg report
+fedcrg results build
+fedcrg results verify
 ```
+
+`fedcrg preprocess` without a dataset argument prepares every raw dataset. The CLI takes no path or configuration options: repository layout and the campaign identity are owned by `config/study.yaml`. `fedcrg campaign` executes every registered experiment under the configured campaign identity; pass `--overwrite` to restart it from scratch.
 
 The high-level research application path performs a prepared-data audit and freezes statistical lookup tables before model training. Lower-level services remain available for reproducible component work, but confirmatory execution should use the audited path.
 
@@ -102,7 +104,7 @@ The high-level research application path performs a prepared-data audit and free
 
 The codebase implements the registered S1-S6 / R1-R14 paths and evidence contracts. That does **not** mean the locked experiments have already been executed. Dataset acquisition/source hashes, five-seed federated training, the 970,000 S1-S5 Monte-Carlo trials, S6 exact power cells, DIAD eligibility/results, Deep-SVDD runs, R13 machine-specific benchmarking, and final manuscript artifacts must be generated in the intended environment.
 
-`fedcrg results verify <campaign-id>` is expected to remain incomplete until those evidence ledgers reconcile. It must never infer or fabricate missing experiment results.
+`fedcrg results verify` is expected to remain incomplete until those evidence ledgers reconcile. It must never infer or fabricate missing experiment results.
 
 ## Development rules
 

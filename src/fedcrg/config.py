@@ -46,6 +46,7 @@ from fedcrg.types import (
     BootstrapSeed,
     CalibrationAssignmentMode,
     CalibrationSeed,
+    CampaignId,
     CandidateCount,
     ClientFraction,
     ClientId,
@@ -223,6 +224,17 @@ class DeepSvddConfig(BaseModel):
 DetectorConfig = Annotated[AutoencoderConfig | DeepSvddConfig, Field(discriminator="id")]
 
 
+class StudyPaths(BaseModel):
+    """Repository layout roots; the CLI accepts no path options."""
+
+    model_config = FrozenModel
+
+    data_root: Path
+    preprocessed_root: Path
+    outputs_root: Path
+    results_root: Path
+
+
 class StudyConfig(BaseModel):
     """Everything study-wide: protocol, statistics, randomness, profiles, policies."""
 
@@ -234,6 +246,8 @@ class StudyConfig(BaseModel):
     detector_profiles: dict[ProfileId, DetectorConfig]
     training_profiles: dict[ProfileId, TrainingConfig]
     policies: tuple[PolicyId, ...]
+    paths: StudyPaths
+    campaign_id: CampaignId
 
     @model_validator(mode="after")
     def _validate(self) -> Self:
@@ -302,6 +316,7 @@ class DatasetConfig(BaseModel):
     model_config = FrozenModel
 
     id: DatasetId
+    source_directory: Path = Path(".")
     feature_contract: DatasetFeatureContractId
     source_version: Version
     parser_version: Version
@@ -747,6 +762,8 @@ def resolve_experiment_config(
         randomness=randomness,
         statistics=study.statistics,
         policies=spec.policies,
+        outputs_root=study.paths.outputs_root,
+        preprocessed_root=study.paths.preprocessed_root,
     )
 
 
@@ -778,6 +795,14 @@ class Study:
 
     def spec(self, experiment_id: ExperimentId) -> ExperimentSpec:
         return self.catalogue.spec(experiment_id)
+
+    @property
+    def paths(self) -> StudyPaths:
+        return self.study_config.paths
+
+    @property
+    def campaign_id(self) -> CampaignId:
+        return self.study_config.campaign_id
 
     def resolve(
         self,

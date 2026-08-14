@@ -1,5 +1,6 @@
 # FedCRG developer interface. The Makefile only forwards to real commands;
-# it never carries scientific configuration values.
+# it never carries scientific configuration values. Paths live in
+# config/study.yaml, so no target accepts path variables.
 
 PYTHON ?= python3
 PIP ?= pip
@@ -8,11 +9,8 @@ PYRIGHT ?= pyright
 PYTEST ?= pytest
 NOX ?= nox
 
-CONFIG ?= config/study.yaml
-DATASET ?= nbaiot
-CAMPAIGN ?= default
-DATA_ROOT ?= data/raw
-PREPARED_ROOT ?= data/preprocessed
+DATASET ?=
+EXPERIMENT ?= primary_nbaiot
 
 .PHONY: help install format lint typecheck test test-unit test-integration \
 	test-contract test-regression audit validate preprocess plan run campaign \
@@ -54,31 +52,31 @@ audit: ## Re-audit the repository against the goal matrix
 	$(PYTHON) tools/audit_repository.py
 
 validate: ## Validate one resolved experiment configuration
-	$(PYTHON) -m fedcrg.cli validate primary_nbaiot --config $(CONFIG)
+	$(PYTHON) -m fedcrg.cli validate $(EXPERIMENT)
 
-preprocess: ## Preprocess DATASET into data/preprocessed/
-	$(PYTHON) -m fedcrg.cli preprocess $(DATASET) --data-root $(DATA_ROOT) --config $(CONFIG)
+preprocess: ## Preprocess DATASET (default: every raw dataset) into data/preprocessed/
+	$(PYTHON) -m fedcrg.cli preprocess $(DATASET)
 
 plan: ## Plan the primary experiment
-	$(PYTHON) -m fedcrg.cli plan primary_nbaiot --config $(CONFIG)
+	$(PYTHON) -m fedcrg.cli plan $(EXPERIMENT)
 
-run: ## Execute the CONFIG experiment grid from prepared data
-	$(PYTHON) -m fedcrg.cli run primary_nbaiot --prepared-root $(PREPARED_ROOT) --config $(CONFIG)
+run: ## Execute one experiment from prepared data
+	$(PYTHON) -m fedcrg.cli run $(EXPERIMENT)
 
-campaign: ## Run campaign CAMPAIGN over the configured experiments
-	$(PYTHON) -m fedcrg.cli campaign --campaign-id $(CAMPAIGN) --prepared-root $(PREPARED_ROOT) --config $(CONFIG)
+campaign: ## Execute the full experiment campaign from prepared data
+	$(PYTHON) -m fedcrg.cli campaign
 
-status: ## Show persistent status of campaign CAMPAIGN
-	$(PYTHON) -m fedcrg.cli status --campaign-id $(CAMPAIGN)
+status: ## Show persistent status of the campaign
+	$(PYTHON) -m fedcrg.cli status
 
 monitor: ## Stream resource telemetry (CPU/RAM/GPU)
 	$(PYTHON) -m fedcrg.cli monitor
 
-results: ## Build the publication bundle for campaign CAMPAIGN
-	$(PYTHON) -m fedcrg.cli results build $(CAMPAIGN)
+results: ## Build the publication bundle
+	$(PYTHON) -m fedcrg.cli results build
 
-verify-results: ## Verify the publication bundle for campaign CAMPAIGN
-	$(PYTHON) -m fedcrg.cli results verify $(CAMPAIGN)
+verify-results: ## Verify the publication bundle
+	$(PYTHON) -m fedcrg.cli results verify
 
 quality: ## Complete quality gate (format, lint, typecheck, full tests)
 	$(RUFF) format --check src tests
