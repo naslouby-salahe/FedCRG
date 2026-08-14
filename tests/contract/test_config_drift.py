@@ -124,13 +124,15 @@ def _source_literals() -> dict[tuple[str, object], list[int]]:
             parent = _parent_of(tree, node)
             if _is_structural_context(parent, node):
                 continue
+            if _is_presentation_context(tree, node):
+                continue
             value = float(node.value)
             key = (relative, value)
             occurrences.setdefault(key, []).append(getattr(node, "lineno", 0))
     return occurrences
 
 
-def _parent_of(tree: ast.AST, node: ast.Constant) -> ast.AST | None:
+def _parent_of(tree: ast.AST, node: ast.AST) -> ast.AST | None:
     for parent in ast.walk(tree):
         for child in ast.iter_child_nodes(parent):
             if child is node:
@@ -170,6 +172,43 @@ def _is_structural_context(parent: ast.AST | None, node: ast.Constant) -> bool:
         return True
     if isinstance(parent, ast.UnaryOp):
         return True
+    return False
+
+
+# Presentation-only matplotlib calls: their arguments (figure dimensions,
+# legend columns, label rotation) are presentation parameters, never
+# scientific configuration. Data-carrying calls (plot, scatter, bar, axhline,
+# axvline, imshow, annotate) are deliberately NOT exempt so band lines and
+# data coordinates remain drift-checked.
+_PRESENTATION_CALLS = {
+    "figsize",
+    "legend",
+    "tick_params",
+    "set_title",
+    "set_xlabel",
+    "set_ylabel",
+    "set_xlim",
+    "set_ylim",
+    "savefig",
+    "tight_layout",
+    "colorbar",
+    "axis",
+    "text",
+    "subplots",
+}
+
+
+def _is_presentation_context(tree: ast.AST, node: ast.Constant) -> bool:
+    """True when a literal belongs to a pure-presentation matplotlib call."""
+    parent = _parent_of(tree, node)
+    while parent is not None:
+        if isinstance(parent, ast.Call):
+            name = getattr(parent.func, "id", "") or getattr(parent.func, "attr", "")
+            return name in _PRESENTATION_CALLS
+        if isinstance(parent, (ast.keyword, ast.Tuple, ast.List, ast.Set)):
+            parent = _parent_of(tree, parent)
+            continue
+        return False
     return False
 
 
@@ -227,6 +266,34 @@ def test_experiment_axes_not_duplicated_in_python() -> None:
                 )
 
 
+def _is_seed_position(parent: ast.AST | None, node: ast.Constant) -> bool:
+    """True when a literal is used AS a seed, not merely equal to a seed value.
+
+    Catches the real drift patterns: seed-named keyword arguments, positional
+    arguments to seed-named calls, and all-integer collections (the seed-list
+    pattern). Non-seed uses such as figure dimensions (figsize=(11, 4.2)) are
+    exempt because the float element makes the collection non-seed-like.
+    """
+    if parent is None:
+        return False
+    if isinstance(parent, ast.keyword) and parent.arg is not None and "seed" in parent.arg:
+        return True
+    if isinstance(parent, ast.Call):
+        name = getattr(parent.func, "id", "") or getattr(parent.func, "attr", "")
+        if "seed" in name:
+            return True
+    if isinstance(parent, (ast.Tuple, ast.List, ast.Set)):
+        elements = parent.elts
+        if elements and all(
+            isinstance(item, ast.Constant)
+            and isinstance(item.value, int)
+            and not isinstance(item.value, bool)
+            for item in elements
+        ):
+            return True
+    return False
+
+
 def test_configured_seed_lists_not_duplicated_in_python() -> None:
     raw = yaml.safe_load((ROOT / "config" / "datasets.yaml").read_text(encoding="utf-8"))
     seeds: set[int] = set()
@@ -248,6 +315,8 @@ def test_configured_seed_lists_not_duplicated_in_python() -> None:
                 if node.value in seeds:
                     parent = _parent_of(tree, node)
                     if _is_structural_context(parent, node):
+                        continue
+                    if not _is_seed_position(parent, node):
                         continue
                     raise AssertionError(
                         f"{relative}:{getattr(node, 'lineno', 0)} duplicates configured "

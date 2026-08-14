@@ -16,8 +16,9 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from pydantic import TypeAdapter
 
-from fedcrg.config import ExperimentConfig, Study
+from fedcrg.config import AxisValue, ExperimentConfig, Study
 from fedcrg.evidence.models import (
     ChecksumRecord,
     GitEnvironment,
@@ -79,6 +80,8 @@ from fedcrg.types import (
 from pydantic import BaseModel, ConfigDict
 
 Frozen = ConfigDict(frozen=True)
+
+_FPR_ADAPTER = TypeAdapter(Fpr)
 
 _LOGGER = get_logger(__name__)
 
@@ -782,6 +785,7 @@ def build_phase_transition_figure(
     gate_counts: tuple[SampleCount, ...],
     band: OperatingBand,
     assurance: Assurance,
+    confidence: ConfidenceLevel,
 ) -> Path:
     """Render the calibration-size phase transition (readiness and mismatch evidence)."""
     from fedcrg.thresholding.readiness import (
@@ -799,7 +803,7 @@ def build_phase_transition_figure(
     axes[0].set_xlabel("n_C")
     axes[0].set_ylabel("in-band probability")
     axes[0].set_title("Local readiness evidence")
-    minimum = minimum_bidirectional_sample_count(band.lower, confidence=0.95)
+    minimum = minimum_bidirectional_sample_count(band.lower, confidence)
     axes[1].axvline(minimum, color="crimson", linestyle="--", linewidth=1.0)
     axes[1].set_xlabel("n_G")
     axes[1].set_ylabel("bidirectional minimum")
@@ -821,6 +825,12 @@ def _require_bundle_table(results_root: Path, filename: Identifier) -> pd.DataFr
     return pd.read_csv(path)
 
 
+def _band_guide_lines() -> tuple[Fpr, Fpr, Fpr]:
+    """The locked operating band guide lines from the study protocol."""
+    protocol = Study.load().study_config.protocol
+    return protocol.band.lower, protocol.alpha, protocol.band.upper
+
+
 def build_per_client_operating_points_figure(output: Path, results_root: Path) -> Path:
     """Render per-client FPR operating points against the locked band lines."""
     frame = _require_bundle_table(results_root, "table_3_primary_policy_results.csv")
@@ -829,7 +839,7 @@ def build_per_client_operating_points_figure(output: Path, results_root: Path) -
     figure, axis = plt.subplots(figsize=(9, 5))
     for policy, group in frame.groupby("policy_id", sort=True):
         axis.scatter(group["client_id"], group["fpr"], label=policy, s=18)
-    for level in (0.005, 0.01, 0.015):
+    for level in _band_guide_lines():
         axis.axhline(level, color="gray", linestyle=":", linewidth=0.8)
     axis.set_xlabel("client id")
     axis.set_ylabel("final-test FPR")
@@ -848,15 +858,13 @@ def build_reliability_utility_frontier_figure(output: Path, results_root: Path) 
     required = {"policy_id", "mebe", "attack_balanced_macro_tpr"}
     if not required.issubset(frame.columns):
         raise ValueError("primary policy results table lacks MEBE/ABMacroTPR columns")
-    summary = (
-        frame.groupby("policy_id", sort=True)[["mebe", "attack_balanced_macro_tpr"]]
-        .mean()
-        .reset_index()
-    )
+    summary = frame.groupby("policy_id", sort=True)[["mebe", "attack_balanced_macro_tpr"]].mean()
+    summary = pd.DataFrame(summary).reset_index()
     figure, axis = plt.subplots(figsize=(8, 5))
     axis.scatter(summary["mebe"], summary["attack_balanced_macro_tpr"], s=42)
     for _, row in summary.iterrows():
-        axis.annotate(row["policy_id"], (row["mebe"], row["attack_balanced_macro_tpr"]), fontsize=8)
+        policy_label = str(row["policy_id"])
+        axis.annotate(policy_label, (row["mebe"], row["attack_balanced_macro_tpr"]), fontsize=8)
     axis.set_xlabel("mean excess band error (MEBE)")
     axis.set_ylabel("attack-balanced macro TPR")
     axis.set_title("Reliability-utility frontier")
@@ -904,7 +912,7 @@ def build_external_replication_figure(output: Path, results_root: Path) -> Path:
         raise ValueError("external replication table lacks client_id/fpr columns")
     figure, axis = plt.subplots(figsize=(9, 5))
     axis.scatter(range(len(frame)), frame["fpr"], s=18)
-    for level in (0.005, 0.01, 0.015):
+    for level in _band_guide_lines():
         axis.axhline(level, color="gray", linestyle=":", linewidth=0.8)
     axis.set_xlabel("eligible DIAD client")
     axis.set_ylabel("final-test FPR")
@@ -916,11 +924,11 @@ def build_external_replication_figure(output: Path, results_root: Path) -> Path:
     return output
 
 
-def _catalogue_axis_values(spec_id: ExperimentId, axis_id: ExperimentAxisId) -> tuple[float, ...]:
+def _catalogue_axis_values(
+    spec_id: ExperimentId, axis_id: ExperimentAxisId
+) -> tuple[AxisValue, ...]:
     """Resolve one locked experiment-grid axis from the catalogue."""
-    study = Study.load()
-    values = study.catalogue.spec(spec_id).axis(axis_id).values
-    return tuple(float(value) for value in values)
+    return tuple(Study.load().catalogue.spec(spec_id).axis(axis_id).values)
 
 
 def build_readiness_frontier_from_catalogue(output: Path) -> Path:
@@ -946,7 +954,7 @@ def build_mismatch_power_map_from_catalogue(output: Path) -> Path:
         )
     )
     true_fprs = tuple(
-        value
+        _FPR_ADAPTER.validate_python(value)
         for value in _catalogue_axis_values(ExperimentId.MISMATCH_POWER, ExperimentAxisId.TRUE_FPR)
     )
     protocol = Study.load().study_config.protocol
@@ -971,7 +979,12 @@ def build_phase_transition_from_catalogue(output: Path) -> Path:
     )
     protocol = Study.load().study_config.protocol
     return build_phase_transition_figure(
-        output, calibration_counts, gate_counts, protocol.band, protocol.readiness_assurance
+        output,
+        calibration_counts,
+        gate_counts,
+        protocol.band,
+        protocol.readiness_assurance,
+        protocol.mismatch_confidence,
     )
 
 

@@ -35,6 +35,7 @@ from fedcrg.types import (
     FailureCode,
     FeatureCount,
     FeatureName,
+    MacAddress,
     ModelSeed,
     NonNegativeCount,
     PositiveCount,
@@ -596,19 +597,19 @@ class DiadAdapter(DatasetAdapter):
         return DatasetId.DIAD
 
     @staticmethod
-    def _normalized_mac(value: str) -> str:
+    def _normalized_mac(value: str) -> MacAddress:
         return value.strip().lower()
 
     @classmethod
-    def _client_id(cls, normalized_mac: str) -> ClientId:
+    def _client_id(cls, normalized_mac: MacAddress) -> ClientId:
         digest = hashlib.sha256(normalized_mac.encode("ascii")).hexdigest()[:12]
         return f"diad_{digest}"
 
-    def _map_devices(self) -> dict[ClientId, tuple[str, ...]]:
+    def _map_devices(self) -> dict[ClientId, tuple[MacAddress, ...]]:
         """Scan every source CSV for distinct normalized device MACs."""
         if self._devices is not None:
             return self._devices
-        macs: dict[ClientId, set[str]] = {}
+        macs: dict[ClientId, set[MacAddress]] = {}
         for path in DatasetDiscovery.csv_files(self.root, recursive=True):
             try:
                 column = pd.read_csv(str(path), usecols=["device_mac"])

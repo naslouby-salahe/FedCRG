@@ -150,6 +150,14 @@ DeviceName = Annotated[
         strip_whitespace=True,
     ),
 ]
+MacAddress = Annotated[
+    str,
+    StringConstraints(
+        min_length=1,
+        max_length=64,
+        strip_whitespace=True,
+    ),
+]
 ClientId = Identifier
 AttackGroupId = Identifier
 ProfileId = Identifier

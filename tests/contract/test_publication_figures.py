@@ -47,6 +47,7 @@ def test_formula_figures_are_deterministic(tmp_path: Path) -> None:
             gate_counts=gate_counts,
             band=band,
             assurance=0.95,
+            confidence=0.95,
         ),
     )
     for index, builder in enumerate(builders):

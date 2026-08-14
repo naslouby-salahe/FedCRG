@@ -107,6 +107,9 @@ _ALLOWED_ANNOTATIONS[("data/datasets.py", "_ensure_row_ids", "source")] = (
 _ALLOWED_ANNOTATIONS[("data/datasets.py", "_normalized_name", "return")] = (
     "string normalization helper output"
 )
+_ALLOWED_ANNOTATIONS[("data/datasets.py", "_normalized_mac", "value")] = (
+    "raw dataset text boundary before MAC normalization"
+)
 
 # No free-text exception: every model field must carry a meaningful constrained
 # type (Version, Description, Identifier, Sha256, ...) rather than a bare str.
