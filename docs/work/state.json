@@ -1,22 +1,24 @@
 {
   "goal": "FedCRG architecture simplification and full implementation (prompt.md)",
-  "cycle": 2,
-  "updated_at": "2026-08-14T12:00:00Z",
+  "cycle": 3,
+  "updated_at": "2026-08-14T18:30:00Z",
   "baseline": {
-    "pytest": "contract 84 passed; integration/unit/regression 38 collection errors (stale imports)",
-    "ruff_check": "50 errors (F401/F841/F811/B007/B023)",
-    "ruff_format": "22 files need formatting",
-    "pyright": "0 errors on src/fedcrg",
-    "entry_point": "fedcrg.cli.app:cli is broken (cli.py is a module)"
+    "pytest": "227 passed (contract 26 files, unit 27 files, integration 7 files, regression 4 files)",
+    "ruff_check": "0 errors",
+    "ruff_format": "0 files need formatting",
+    "pyright": "strict mode, 0 errors (documented boundary posture: Unknown* family and torch-stub comparisons at warning)",
+    "entry_point": "fedcrg.cli:cli works; full CLI surface smoke-tested",
+    "audit_tool": "tools/audit_repository.py clean (No actionable findings)",
+    "nox": "quality session green (ruff format, ruff check, pyright, full pytest)"
   },
   "milestones": {
-    "m0_tracking": {"status": "completed", "note": "Fresh matrix + JSON state rebuilt from current tree on 2026-08-14; stale markdown status removed"},
-    "m1_source_fixes": {"status": "in_progress", "note": "runner.py graphlib topo sort, oracle-test gap, run_id; reporting.py signature; store.py immutability; preprocessing reuse validation + locked attack-dev allocation; federated communication ledgers"},
-    "m2_cli": {"status": "pending", "note": "cli.py rewritten to target surface wired to real modules; pyproject entry point fixed"},
-    "m3_tests": {"status": "pending", "note": "tests/_fixtures.py + all integration/unit/regression tests migrated to target module layout"},
-    "m4_new_tests": {"status": "pending", "note": "preprocessing reuse (10 scenarios), cache reuse, results bundle, runtime console contract tests"},
-    "m5_tooling": {"status": "pending", "note": "Makefile, noxfile, tools/audit_repository.py, README, CI aligned to target architecture"},
-    "m6_quality": {"status": "pending", "note": "ruff format+check, pyright strict, full pytest, nox quality, CLI smoke, hostile audit loop"}
+    "m0_tracking": {"status": "completed", "note": "Cycle-2 matrix and JSON state rebuilt; cycle-3 refresh applied 2026-08-14"},
+    "m1_source_fixes": {"status": "completed", "note": "graphlib dependency ordering, oracle-test materialization, locked attack-dev allocation, source-aware cache identity, communication ledgers, run immutability, RoundIndex type, calibration-assignment relative paths, score row-id chaining, readiness-plan table consumption, supervised-evidence gating"},
+    "m2_cli": {"status": "completed", "note": "cli.py target surface (doctor, validate, preprocess, plan, run, campaign, status, monitor, report, results); frozen pydantic payloads; campaign auto-builds results bundle"},
+    "m3_tests": {"status": "completed", "note": "tests/_fixtures.py + all integration/unit/regression files migrated; migrated tests surfaced and fixed real source bugs"},
+    "m4_new_tests": {"status": "completed", "note": "preprocessing reuse 10-scenario matrix, results-bundle integrity, policy-registry contract, manuscript-shorthand hygiene, strengthened primitive-leak scan (kwonly + locals)"},
+    "m5_tooling": {"status": "completed", "note": "audit tool targets current architecture; Makefile/README/noxfile/CI aligned; freeze_environment.py repaired; score-cache parquet columns owned by enum"},
+    "m6_quality": {"status": "completed", "note": "ruff clean, pyright strict 0 errors, 227 tests, nox quality green, CLI smoke of every command, hostile audit loop clean"}
   },
-  "current_focus": "m1_source_fixes"
+  "current_focus": "hostile re-audit loop complete for cycle 3; next cycle re-runs the audit from a clean checkout"
 }

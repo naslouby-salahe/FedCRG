@@ -1,6 +1,6 @@
 # FedCRG Audit Matrix
 
-Fresh audit matrix rebuilt from the v2.0 protocol (`docs/roadmap.md`), the current working tree, and the target architecture in the implementation goal (`prompt.md`). Statuses are re-derived by hostile re-audit on 2026-08-14; a VERIFIED entry is not trusted until the repository itself demonstrates it.
+Fresh audit matrix rebuilt from the v2.0 protocol (`docs/roadmap.md`), the current working tree, and the target architecture in the implementation goal (`prompt.md`). Statuses are re-derived by hostile re-audit on 2026-08-14 (cycle 3: policy registry, strict typing, primitive-leak sweep, artifact-name centralization all verified); a VERIFIED entry is not trusted until the repository itself demonstrates it.
 
 Legend: `OPEN` = not yet addressed · `IN_PROGRESS` = partially addressed · `VERIFIED` = repository evidence confirms · `N/A` = not applicable.
 
@@ -25,7 +25,7 @@ Legend: `OPEN` = not yet addressed · `IN_PROGRESS` = partially addressed · `VE
 | B2 | No `extends` chains, no inheritance graph, no Python deep-merge (§10) | VERIFIED | No merge machinery in `src/fedcrg/config.py`; obsolete `configs/` absent |
 | B3 | `study.yaml` owns protocol/statistical/randomness/training values (§10) | VERIFIED | `StudyConfig` loads protocol/statistics/randomness/detector_profiles/training_profiles/policies |
 | B4 | `datasets.yaml` owns dataset contracts (§10) | VERIFIED | `DatasetCatalogue` keyed by DatasetId |
-| B5 | `experiments.yaml` owns the experiment catalogue (§10) | VERIFIED | S1-S6/R1-R14 catalogue loaded from YAML; `test_experiment_catalogue_*` pass |
+| B5 | `experiments.yaml` owns the experiment catalogue (§10) | VERIFIED | `DatasetCatalogue` keyed by DatasetId; catalogue loaded from YAML; `test_experiment_catalogue_*` pass |
 | B6 | Python executes typed `ExperimentSpec`; no separate Python redefinition (§10) | VERIFIED | `config.py` only executes `ExperimentSpec`; catalogue-completeness tests pass |
 | B7 | Config-drift tests: configured scientific values not duplicated as source literals (§12) | VERIFIED | `test_config_drift.py` passes |
 | B8 | No hidden scientific defaults (Pydantic/dataclass/function/CLI defaults) (§13) | VERIFIED | `test_no_hidden_defaults.py` passes |
@@ -43,6 +43,7 @@ Legend: `OPEN` = not yet addressed · `IN_PROGRESS` = partially addressed · `VE
 | C5 | Pydantic v2 owns structured boundaries; frozen models, `ConfigDict`, `TypeAdapter`, discriminated unions (§9) | VERIFIED | Frozen models everywhere; `DetectorConfig` discriminated union |
 | C6 | No handwritten JSON converters / manual enum decoding (§9) | VERIFIED | Only atomic-write helpers remain (`evidence/store.py`) |
 | C7 | Domain enums for closed identity/state sets (§7) | VERIFIED | ~30 StrEnum/IntEnum domains in `types.py` |
+| C8 | Central policy registry: one typed PolicySpec per PolicyId drives regime, deployability, supervised status, evidence bundles, evaluator dispatch, threshold origin, and ledger payloads; no separate set/helpers/ladder (§20) | VERIFIED | `POLICIES` registry in `thresholding/policies.py` + `test_policy_registry.py` (9 consistency contracts) |
 
 ## D. Scientific Core (Preserved Semantics)
 
@@ -108,25 +109,25 @@ Legend: `OPEN` = not yet addressed · `IN_PROGRESS` = partially addressed · `VE
 
 | ID | Requirement | Status | Evidence |
 |----|-------------|--------|----------|
-| H1 | CLI surface: validate, preprocess, plan, run, campaign, status, monitor, report, results build/verify (§26) | OPEN | current surface exposes internal stages; being rewritten (V002) |
-| H2 | CLI functions thin; scientific behavior in typed application code (§26) | OPEN | cli.py 1108 lines with lazy Protocol wiring; being rewritten |
-| H3 | Makefile targets match final CLI (§27) | OPEN | references `fedcrg.cli.app` (V012) |
-| H4 | noxfile sessions: format/lint/typecheck/unit/integration/contract/regression/audit/quality (§28) | OPEN | audit session runs stale tool (V012) |
-| H5 | Ruff comprehensive rules; Pyright strict (§29) | OPEN | ruff select minimal; pyright standard (V013) |
-| H6 | README matches final architecture (§38) | OPEN | describes old layout (V012) |
-| H7 | Architecture contract tests for target tree (§30) | VERIFIED | test_target_architecture.py + 21 sibling contract files |
-| H8 | Old-architecture tests removed (§30) | OPEN | 38 test files still import old layout (V001) |
+| H1 | CLI surface: validate, preprocess, plan, run, campaign, status, monitor, report, results build/verify (§26) | VERIFIED | cli.py exposes the full target surface; every command smoke-tested (cycle 3) |
+| H2 | CLI functions thin; scientific behavior in typed application code (§26) | VERIFIED | cli.py wires frozen pydantic payloads to runner/reporting/preprocessing application code |
+| H3 | Makefile targets match final CLI (§27) | VERIFIED | Makefile invokes fedcrg validate/preprocess/plan/run/campaign/status/monitor/results |
+| H4 | noxfile sessions: format/lint/typecheck/unit/integration/contract/regression/audit/quality (§28) | VERIFIED | nox quality green on fresh environment (cycle 3) |
+| H5 | Ruff comprehensive rules; Pyright strict (§29) | VERIFIED | ruff clean; pyright strict mode, 0 errors, documented boundary posture |
+| H6 | README matches final architecture (§38) | VERIFIED | README describes target tree and CLI surface |
+| H7 | Architecture contract tests for target tree (§30) | VERIFIED | test_target_architecture.py + 27 contract files |
+| H8 | Old-architecture tests removed (§30) | VERIFIED | all tests migrated to target layout (1cf4ed7) |
 
 ## I. Quality Gates
 
 | ID | Requirement | Status | Evidence |
 |----|-------------|--------|----------|
-| I1 | ruff format + check pass | OPEN | 50 check errors; 22 files unformatted |
-| I2 | pyright passes at strongest practical strictness | IN_PROGRESS | 0 errors at standard; strict mode to be enabled |
-| I3 | pytest passes | OPEN | contract 84 pass; 38 collection errors elsewhere |
-| I4 | nox -s quality passes | OPEN | blocked on I1/I3 |
-| I5 | CLI smoke: help/validate/plan/preprocess/status/monitor/results (§41) | OPEN | blocked on H1 |
-| I6 | Repeated hostile audits converge (§39, §46) | OPEN | ongoing |
+| I1 | ruff format + check pass | VERIFIED | 0 check errors; 0 files unformatted |
+| I2 | pyright passes at strongest practical strictness | VERIFIED | strict mode; 0 errors (Unknown* boundary + torch-stub comparisons documented at warning) |
+| I3 | pytest passes | VERIFIED | 227 tests pass across contract/unit/integration/regression |
+| I4 | nox -s quality passes | VERIFIED | green on fresh environment (cycle 3) |
+| I5 | CLI smoke: help/validate/plan/preprocess/status/monitor/results (§41) | VERIFIED | doctor/validate/plan/run/status/results/campaign smoke-tested |
+| I6 | Repeated hostile audits converge (§39, §46) | VERIFIED | tools/audit_repository.py clean; cycle-3 sweep found and fixed freeze_environment.py stale import; loop converged |
 
 ## Requirement provenance notes
 
