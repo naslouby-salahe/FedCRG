@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import cast
 
 import torch
+import torch.nn.functional as F
 
 from fedcrg.config import ActivationId, AutoencoderConfig, DeepSvddConfig, DetectorConfig
 from fedcrg.types import ByteCount, Dimension, ParameterCount, PositiveCount, Sha256
@@ -26,20 +27,44 @@ class DetectorModel(torch.nn.Module, ABC):
         return digest.hexdigest()
 
     def trainable_parameter_count(self) -> PositiveCount:
-        return sum(parameter.numel() for parameter in self.parameters() if parameter.requires_grad)
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
     def trainable_tensor_bytes(self) -> ByteCount:
-        return sum(
-            parameter.numel() * parameter.element_size()
-            for parameter in self.parameters()
-            if parameter.requires_grad
-        )
+        return sum(p.numel() * p.element_size() for p in self.parameters() if p.requires_grad)
 
 
 def activation_module(activation: ActivationId) -> type[torch.nn.Module]:
     if activation is ActivationId.TANH:
         return torch.nn.Tanh
     raise ValueError(f"Unsupported activation: {activation.value}")
+
+
+def build_mlp(
+    dims: tuple[Dimension, ...],
+    activation: type[torch.nn.Module],
+    bias: bool = True,
+    output_activation: bool = False
+) -> torch.nn.Sequential:
+    layers: list[torch.nn.Module] = []
+    for i, (left, right) in enumerate(zip(dims[:-1], dims[1:], strict=True)):
+        layers.append(torch.nn.Linear(left, right, bias=bias))
+        if output_activation or i < len(dims) - 2:
+            layers.append(activation())
+    return torch.nn.Sequential(*layers)
+
+
+def initialize_weights(
+    module: torch.nn.Module,
+    gain: float,
+    forbid_bias: bool = False
+) -> None:
+    for m in module.modules():
+        if isinstance(m, torch.nn.Linear):
+            torch.nn.init.xavier_uniform_(m.weight, gain=gain)
+            if m.bias is not None:
+                if forbid_bias:
+                    raise ValueError("The frozen autoencoder contract requires zero biases")
+                torch.nn.init.zeros_(m.bias)
 
 
 def autoencoder_parameter_count(
@@ -59,38 +84,21 @@ class Autoencoder(DetectorModel):
         super().__init__()
         dims = (input_dim, *config.hidden_dims)
         activation = activation_module(config.activation)
-        encoder_layers: list[torch.nn.Module] = []
-        for left, right in zip(dims[:-1], dims[1:], strict=True):
-            encoder_layers.extend((torch.nn.Linear(left, right), activation()))
 
-        decoder_dims = tuple(reversed(dims))
-        decoder_layers: list[torch.nn.Module] = []
-        for index, (left, right) in enumerate(
-            zip(decoder_dims[:-1], decoder_dims[1:], strict=True)
-        ):
-            decoder_layers.append(torch.nn.Linear(left, right))
-            if index < len(decoder_dims) - 2:
-                decoder_layers.append(activation())
+        encoder = build_mlp(dims, activation, output_activation=True)
+        decoder = build_mlp(tuple(reversed(dims)), activation, output_activation=False)
 
-        self.network = torch.nn.Sequential(*encoder_layers, *decoder_layers)
-        self._initialize_parameters(config)
+        self.network = torch.nn.Sequential(*encoder, *decoder)
 
-    def _initialize_parameters(self, config: AutoencoderConfig) -> None:
-        for module in self.modules():
-            if not isinstance(module, torch.nn.Linear):
-                continue
-            torch.nn.init.xavier_uniform_(module.weight, gain=config.xavier_tanh_gain)
-            if module.bias is not None:
-                if not config.zero_bias:
-                    raise ValueError("The frozen autoencoder contract requires zero biases")
-                torch.nn.init.zeros_(module.bias)
+        initialize_weights(
+            self.network, gain=config.xavier_tanh_gain, forbid_bias=not config.zero_bias
+        )
 
     def forward(self, batch: torch.Tensor) -> torch.Tensor:
         return cast(torch.Tensor, self.network(batch))
 
     def anomaly_score(self, batch: torch.Tensor) -> torch.Tensor:
-        reconstruction = self.forward(batch)
-        return torch.mean((batch - reconstruction) ** 2, dim=1)
+        return F.mse_loss(self.forward(batch), batch, reduction="none").mean(dim=1)
 
 
 class DeepSvdd(DetectorModel):
@@ -98,21 +106,14 @@ class DeepSvdd(DetectorModel):
 
     def __init__(self, input_dim: Dimension, config: DeepSvddConfig) -> None:
         super().__init__()
-        activation = torch.nn.Tanh if config.activation is ActivationId.TANH else torch.nn.ReLU
+        activation = activation_module(config.activation)
         dims = (input_dim, *config.hidden_dims, config.embedding_dim)
-        layers: list[torch.nn.Module] = []
-        for index, (left, right) in enumerate(zip(dims[:-1], dims[1:], strict=True)):
-            layers.append(torch.nn.Linear(left, right, bias=config.bias))
-            if index < len(dims) - 2:
-                layers.append(activation())
-        self.encoder = torch.nn.Sequential(*layers)
+
+        self.encoder = build_mlp(dims, activation, bias=config.bias, output_activation=False)
         self.register_buffer("center", torch.zeros(config.embedding_dim))
+
         gain = torch.nn.init.calculate_gain("tanh")
-        for module in self.modules():
-            if isinstance(module, torch.nn.Linear):
-                torch.nn.init.xavier_uniform_(module.weight, gain=gain)
-                if module.bias is not None:
-                    torch.nn.init.zeros_(module.bias)
+        initialize_weights(self.encoder, gain=gain)
 
     def forward(self, batch: torch.Tensor) -> torch.Tensor:
         return cast(torch.Tensor, self.encoder(batch))
@@ -120,6 +121,7 @@ class DeepSvdd(DetectorModel):
     def initialize_center(self, batches: list[torch.Tensor]) -> None:
         if not batches:
             raise ValueError("At least one batch is required to initialize the center")
+
         with torch.no_grad():
             client_means = torch.stack(
                 [self.forward(batch).mean(dim=0) for batch in batches], dim=0
@@ -127,8 +129,7 @@ class DeepSvdd(DetectorModel):
             self.center.copy_(client_means.mean(dim=0))
 
     def anomaly_score(self, batch: torch.Tensor) -> torch.Tensor:
-        embedding = self.forward(batch)
-        return torch.sum((embedding - self.center) ** 2, dim=1)
+        return torch.sum((self.forward(batch) - self.center) ** 2, dim=1)
 
 
 def create_detector(input_dim: Dimension, config: DetectorConfig) -> DetectorModel:

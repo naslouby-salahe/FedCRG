@@ -53,23 +53,23 @@ class ScoreCacheColumn(StrEnum):
     ATTACK_FAMILY_TEST_ONLY = "attack_family_test_only"
 
 
-_CALIBRATION_ROLES = (
+_CALIBRATION_ROLES = frozenset((
     DataRole.REFERENCE,
     DataRole.MISMATCH,
     DataRole.CALIBRATION,
     DataRole.BENIGN_GUARD,
-)
+))
 
-_BASE_SCORE_ROLES = (
+_BASE_SCORE_ROLES = frozenset((
     DataRole.TRAIN,
     DataRole.RESERVOIR,
     DataRole.BENIGN_TEST,
     DataRole.ATTACK_DEV,
     DataRole.ATTACK_TEST,
-)
+))
 
-_REQUIRED_BASE_ROLES = set(_BASE_SCORE_ROLES)
-_FORBIDDEN_DERIVED_ROLES = set(_CALIBRATION_ROLES)
+_REQUIRED_BASE_ROLES = _BASE_SCORE_ROLES
+_FORBIDDEN_DERIVED_ROLES = _CALIBRATION_ROLES
 
 
 class RoleScoreInput(BaseModel):
@@ -260,33 +260,29 @@ class CalibrationAssignment:
         reservoir_row_ids: tuple[RowId, ...],
     ) -> None:
         split = dataset.split
-        positions = tuple(
-            range(
-                split.reference_benign
-                + split.mismatch_benign
-                + split.calibration_benign
-                + split.benign_guard
-            )
-        )
+        total_len = split.reference_benign + split.mismatch_benign + split.calibration_benign + split.benign_guard
+        positions = np.arange(total_len)
+        
         if mode is CalibrationAssignmentMode.SEEDED_PERMUTATION:
             rng = np.random.Generator(
                 np.random.PCG64(_assignment_seed(dataset.id, calibration_seed, client_id))
             )
-            order = rng.permutation(len(positions))
-            positions = tuple(positions[index] for index in order)
+            positions = rng.permutation(positions)
+            
         self._positions: dict[DataRole, tuple[int, ...]] = {
-            DataRole.REFERENCE: positions[: split.reference_benign],
-            DataRole.MISMATCH: positions[
-                split.reference_benign : split.reference_benign + split.mismatch_benign
-            ],
-            DataRole.CALIBRATION: positions[
-                split.reference_benign + split.mismatch_benign : split.reference_benign
-                + split.mismatch_benign
-                + split.calibration_benign
-            ],
-            DataRole.BENIGN_GUARD: positions[
-                split.reference_benign + split.mismatch_benign + split.calibration_benign :
-            ],
+            DataRole.REFERENCE: tuple(positions[: split.reference_benign].tolist()),
+            DataRole.MISMATCH: tuple(
+                positions[split.reference_benign : split.reference_benign + split.mismatch_benign].tolist()
+            ),
+            DataRole.CALIBRATION: tuple(
+                positions[
+                    split.reference_benign + split.mismatch_benign : 
+                    split.reference_benign + split.mismatch_benign + split.calibration_benign
+                ].tolist()
+            ),
+            DataRole.BENIGN_GUARD: tuple(
+                positions[split.reference_benign + split.mismatch_benign + split.calibration_benign :].tolist()
+            ),
         }
         self._row_ids = reservoir_row_ids
 
@@ -508,29 +504,32 @@ class ScoreCache:
 
     @staticmethod
     def _role_frame(identity: ScoreCacheIdentity, scores: RoleScores) -> pd.DataFrame:
-        groups = scores.attack_groups or (None,) * len(scores.values)
+        groups = scores.attack_groups
+        n_samples = len(scores.values)
+        
         if scores.role is DataRole.BENIGN_TEST:
             label: int | None = 0
         elif scores.role is DataRole.ATTACK_TEST:
             label = 1
         else:
             label = None
+            
         return pd.DataFrame(
             {
                 ScoreCacheColumn.DATASET_ID.value: identity.dataset.value,
                 ScoreCacheColumn.CLIENT_ID.value: scores.client_id,
-                PreparedColumn.ROW_ID.value: [row_id for row_id in scores.row_ids],
+                PreparedColumn.ROW_ID.value: list(scores.row_ids),
                 ScoreCacheColumn.PHASE.value: scores.role.value,
                 ScoreCacheColumn.MODEL_SEED.value: int(identity.model_seed),
                 ScoreCacheColumn.SCORE_FLOAT64.value: np.asarray(scores.values, dtype=np.float64),
                 ScoreCacheColumn.LABEL_TEST_ONLY.value: pd.array(
-                    [label] * len(scores.values), dtype="Int64"
+                    [label] * n_samples, dtype="Int64"
                 ),
                 ScoreCacheColumn.ATTACK_FAMILY_TEST_ONLY.value: pd.array(
                     (
-                        [None if group is None else group for group in groups]
-                        if scores.role is DataRole.ATTACK_TEST
-                        else [None] * len(scores.values)
+                        list(groups)
+                        if scores.role is DataRole.ATTACK_TEST and groups is not None
+                        else [None] * n_samples
                     ),
                     dtype="string",
                 ),
@@ -623,10 +622,10 @@ class ScoreCache:
         parquet_path = root / metadata.score_cache_file
         frame = pd.read_parquet(parquet_path)
         clients: list[ClientScoreSet] = []
-        for client_id, client_frame in frame.groupby("client_id", sort=True):
+        for client_id, client_frame in frame.groupby(ScoreCacheColumn.CLIENT_ID.value, sort=True):
             score_list: list[RoleScores] = []
             typed_client_id = str(client_id)
-            for role_value, role_frame in client_frame.groupby("phase", sort=True):
+            for role_value, role_frame in client_frame.groupby(ScoreCacheColumn.PHASE.value, sort=True):
                 role = DataRole(str(role_value))
                 role_scores = self._role_scores_from_frame(typed_client_id, role, role_frame)
                 expected = self._record_lookup(records, typed_client_id, role).score_array_sha256
@@ -654,7 +653,10 @@ class ScoreCache:
         parquet_path = root / metadata.score_cache_file
         frame = pd.read_parquet(
             parquet_path,
-            filters=[("client_id", "==", client_id), ("phase", "==", role.value)],
+            filters=[
+                (ScoreCacheColumn.CLIENT_ID.value, "==", client_id),
+                (ScoreCacheColumn.PHASE.value, "==", role.value),
+            ],
         )
         if frame.empty:
             raise KeyError(f"Score cache has no {client_id}/{role.value} partition")
@@ -755,17 +757,21 @@ class ScoreComputer:
             raise ValueError("Scoring batch_size must be positive")
         torch_device = resolve_compute_device(device)
         model = model.to(torch_device).eval()
-        result: list[np.ndarray] = []
+        n_samples = len(values)
+        if n_samples == 0:
+            return np.empty(0, dtype=np.float64)
+
+        out = np.empty(n_samples, dtype=np.float64)
         with torch.inference_mode():
-            for start in range(0, len(values), batch_size):
+            for start in range(0, n_samples, batch_size):
+                end = start + batch_size
                 batch = torch.as_tensor(
-                    values[start : start + batch_size],
+                    values[start:end],
                     dtype=torch.float32,
                     device=torch_device,
                 )
-                scores = model.anomaly_score(batch).detach().cpu().numpy()
-                result.append(scores.astype(np.float64, copy=False))
-        return np.concatenate(result) if result else np.empty(0, dtype=np.float64)
+                out[start:end] = model.anomaly_score(batch).detach().cpu().numpy().astype(np.float64, copy=False)
+        return out
 
     def compute_manifest(
         self,
