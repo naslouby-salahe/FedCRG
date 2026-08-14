@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fedcrg.reporting.results import ResultsBuilder, ResultsVerifier
+from fedcrg.reporting import ResultsBuilder, ResultsVerifier
 
 
 def _write_fake_evidence(outputs_root: Path) -> None:
@@ -24,7 +24,9 @@ def _write_fake_evidence(outputs_root: Path) -> None:
     (publication / "figures" / "figure_1.png").write_bytes(b"png")
 
 
-def test_results_builder_creates_complete_bundle(tmp_path: Path) -> None:
+def test_results_builder_creates_bundle_and_marks_partial_evidence_incomplete(
+    tmp_path: Path,
+) -> None:
     outputs_root = tmp_path / "outputs"
     _write_fake_evidence(outputs_root)
     destination = ResultsBuilder().build(
@@ -43,7 +45,9 @@ def test_results_builder_creates_complete_bundle(tmp_path: Path) -> None:
 
     manifest = json.loads((destination / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["campaign_id"] == "c1"
-    assert manifest["complete"] is True
+    # The fake evidence has no completed run cells, so the bundle must honestly
+    # report itself as incomplete rather than claiming completeness.
+    assert manifest["complete"] is False
     checksums = json.loads((destination / "checksums.json").read_text(encoding="utf-8"))
     assert manifest["file_count"] == len(checksums)
 
@@ -62,6 +66,10 @@ def test_results_builder_refuses_to_overwrite(tmp_path: Path) -> None:
 
 
 def test_results_verifier_detects_missing_bundle(tmp_path: Path) -> None:
-    result = ResultsVerifier().verify("missing", results_root=tmp_path / "results")
+    result = ResultsVerifier().verify(
+        "missing",
+        results_root=tmp_path / "results",
+        outputs_root=tmp_path / "outputs",
+    )
     assert not result.valid
     assert any("does not exist" in problem for problem in result.problems)

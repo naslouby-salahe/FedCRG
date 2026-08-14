@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 import io
 import tokenize
 from pathlib import Path

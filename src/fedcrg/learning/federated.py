@@ -32,6 +32,7 @@ from fedcrg.types import (
     PositiveCount,
     RngSeed,
     RoundCount,
+    RoundIndex,
     Sha256,
 )
 
@@ -106,7 +107,7 @@ def preprocessing_communication(
 
 
 def cosine_learning_rate(
-    round_index: RoundCount,
+    round_index: RoundIndex,
     rounds: RoundCount,
     initial: LearningRate,
     final: LearningRate,
@@ -124,7 +125,7 @@ def cosine_learning_rate(
 def epoch_seed(
     model_seed: ModelSeed,
     client_id: ClientId,
-    round_index: RoundCount,
+    round_index: RoundIndex,
     epoch: EpochCount,
 ) -> RngSeed:
     """Deterministic per-epoch RNG seed."""
@@ -166,6 +167,7 @@ def equal_client_mean(models: Sequence[DetectorModel]) -> StateDict:
 
 class ClientRoundResult(BaseModel):
     """One client's local-round training outcome."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -177,9 +179,10 @@ class ClientRoundResult(BaseModel):
 
 class RoundResult(BaseModel):
     """One federated round's aggregate outcome."""
+
     model_config = Frozen
 
-    round_index: RoundCount
+    round_index: RoundIndex
     learning_rate: LearningRate
     selected_clients: tuple[ClientId, ...]
     client_results: tuple[ClientRoundResult, ...]
@@ -194,6 +197,7 @@ class RoundResult(BaseModel):
 
 class TrainingResult(BaseModel):
     """Frozen federated-training evidence for one model seed."""
+
     model_config = Frozen
 
     model_seed: ModelSeed
@@ -219,7 +223,7 @@ class FederatedClient:
         config: TrainingConfig,
         learning_rate: LearningRate,
         model_seed: ModelSeed,
-        round_index: RoundCount,
+        round_index: RoundIndex,
     ) -> tuple[DetectorModel, ClientRoundResult]:
         model = global_model.clone().to(self.device)
         optimizer = torch.optim.Adam(
@@ -313,6 +317,7 @@ class ClientSampler:
 
 class FederatedServer:
     """Deterministic federated training orchestration."""
+
     def __init__(self, initial_model: DetectorModel) -> None:
         self.model = initial_model.clone()
 
@@ -395,7 +400,7 @@ class FederatedTrainer:
         sampler: ClientSampler,
         config: TrainingConfig,
         model_seed: ModelSeed,
-        round_index: RoundCount,
+        round_index: RoundIndex,
         model_payload_bytes: ByteCount,
     ) -> RoundResult:
         learning_rate = cosine_learning_rate(

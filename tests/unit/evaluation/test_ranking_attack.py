@@ -1,7 +1,10 @@
+"""Unit tests for ranking and attack-balanced metrics."""
+
+from __future__ import annotations
+
 import numpy as np
 
-from fedcrg.evaluation.attack_balanced_metrics import attack_balanced_tpr
-from fedcrg.evaluation.ranking_metrics import auprc, auroc
+from fedcrg.thresholding.metrics import attack_balanced_tpr, auprc, auroc
 
 
 def test_ranking_metrics_are_perfect_for_separable_scores() -> None:

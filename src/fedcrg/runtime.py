@@ -81,6 +81,7 @@ def log_stage(logger: logging.Logger, message: Identifier, **fields: object) -> 
 @dataclass(frozen=True, slots=True)
 class CudaDeviceInfo:
     """CUDA device identity and capacity pin."""
+
     available: bool
     device_name: Identifier | None = None
     vram_capacity_bytes: ByteCount | None = None
@@ -136,6 +137,7 @@ def log_peak_vram(logger: logging.Logger) -> None:
 @dataclass(frozen=True, slots=True)
 class CudaTelemetry:
     """Frozen CUDA resource telemetry sample."""
+
     available: bool
     device_count: NonNegativeCount = 0
     device_name: Identifier | None = None
@@ -148,6 +150,7 @@ class CudaTelemetry:
 @dataclass(frozen=True, slots=True)
 class ResourceSample:
     """Frozen resource telemetry sample."""
+
     timestamp: Timestamp
     process_ram_bytes: ByteCount
     available_system_ram_bytes: ByteCount

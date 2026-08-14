@@ -1,26 +1,53 @@
+"""Regression tests for the R14 stream-feature derivation contract."""
+
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
+import pytest
+from pydantic import TypeAdapter
 
-from fedcrg.domain.identifiers import ClientId
-from fedcrg.datasets.feature_sensitivity import derive_numeric_safe_features
+from fedcrg.data.datasets import derive_numeric_safe_features
+from fedcrg.types import ClientId
+
+_CLIENT_ID_ADAPTER = TypeAdapter(ClientId)
 
 
-def test_r14_keeps_stream_behavior_features_but_excludes_direct_stream_identifier() -> None:
-    frame = pd.DataFrame(
+def _stream_frame(rows: int = 200) -> pd.DataFrame:
+    return pd.DataFrame(
         {
-            "row_id": [f"{index:064x}" for index in range(100)],
-            "stream": np.arange(100),
-            "stream_1_count": np.arange(100, dtype=float),
-            "stream_1_mean": np.linspace(0.0, 1.0, 100),
-            "device_mac": np.arange(100),
-            "src_port": np.arange(100),
-            "numeric_behavior": np.linspace(1.0, 2.0, 100),
+            "row_id": [f"{i:064x}" for i in range(rows)],
+            "stream": np.zeros(rows),
+            "stream_1_count": np.arange(rows) % 7,
+            "stream_1_mean": np.linspace(0.0, 1.0, rows),
+            "device_mac": "aa:bb:cc:dd:ee:ff",
+            "src_port": 443,
+            "numeric_behavior": np.linspace(0.5, 2.5, rows),
         }
     )
-    result = derive_numeric_safe_features({ClientId("diad_example0001"): frame})
-    assert "stream" not in result.features
-    assert "device_mac" not in result.features
-    assert "src_port" not in result.features
-    assert "stream_1_count" in result.features
-    assert "stream_1_mean" in result.features
-    assert "numeric_behavior" in result.features
+
+
+def _training_frames() -> dict[ClientId, pd.DataFrame]:
+    client = _CLIENT_ID_ADAPTER.validate_python("client-a")
+    return {client: _stream_frame()}
+
+
+def test_derive_numeric_safe_features_keeps_only_numeric_stream_features() -> None:
+    result = derive_numeric_safe_features(_training_frames())
+    assert result.features == ("numeric_behavior", "stream_1_count", "stream_1_mean")
+    assert result.dimension == 3
+    assert result.encoder_hidden_dims == (2, 1, 1, 1)
+    assert len(result.training_row_hashes) == 1
+
+
+def test_derive_numeric_safe_features_is_deterministic() -> None:
+    first = derive_numeric_safe_features(_training_frames())
+    second = derive_numeric_safe_features(_training_frames())
+    assert first.features == second.features
+    assert first.architecture == second.architecture
+    assert first.training_row_hashes == second.training_row_hashes
+
+
+def test_derive_numeric_safe_features_rejects_empty_input() -> None:
+    with pytest.raises(ValueError):
+        derive_numeric_safe_features({})

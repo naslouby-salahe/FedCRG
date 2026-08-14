@@ -53,6 +53,4 @@ def test_top_level_outputs_are_reserved_by_responsibility(tmp_path: Path) -> Non
 def test_preprocessed_root_is_repository_owned(tmp_path: Path) -> None:
     from fedcrg.config import ExperimentConfig
 
-    assert ExperimentConfig.model_fields["preprocessed_root"].default == Path(
-        "data/preprocessed"
-    )
+    assert ExperimentConfig.model_fields["preprocessed_root"].default == Path("data/preprocessed")

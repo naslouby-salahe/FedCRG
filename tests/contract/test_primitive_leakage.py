@@ -42,7 +42,11 @@ _ALLOWED_ANNOTATIONS: dict[tuple[str, str, str], str] = {
     ("evidence/store.py", "_jsonable", "value"): "JSON serialization boundary",
     ("evidence/store.py", "load_yaml_mapping", "return"): "YAML parse boundary before validation",
     ("experiments/analyses.py", "", "parameters"): "run-config parameters parsed before validation",
-    ("experiments/analyses.py", "RunConfigPayload", "parameters"): "run-config parameters parsed before validation",
+    (
+        "experiments/analyses.py",
+        "RunConfigPayload",
+        "parameters",
+    ): "run-config parameters parsed before validation",
 }
 
 # Pydantic before-validators receive and return unvalidated YAML/JSON input.
@@ -62,14 +66,28 @@ for _name in _COERCE_VALIDATORS:
     _ALLOWED_ANNOTATIONS[("config.py", _name, "value")] = "YAML/JSON input before validation"
 
 _ALLOWED_ANNOTATIONS[("config.py", "serialized_payload", "return")] = "JSON serialization output"
-_ALLOWED_ANNOTATIONS[("data/datasets.py", "hash_file", "chunk_size")] = "filesystem read chunk boundary"
-_ALLOWED_ANNOTATIONS[("data/datasets.py", "hash_row_ids", "values")] = "row-id collection boundary (RowId | str)"
-_ALLOWED_ANNOTATIONS[("data/datasets.py", "hash_seed", "text")] = "hash input string (crypto boundary)"
-_ALLOWED_ANNOTATIONS[("data/datasets.py", "stable_row_id", "source")] = "source-file path string (filesystem boundary)"
-_ALLOWED_ANNOTATIONS[("data/datasets.py", "validate_split_disjointness", "row_id_column")] = "pandas column-name boundary"
-_ALLOWED_ANNOTATIONS[("data/datasets.py", "_ensure_row_ids", "source")] = "source-file path string (filesystem boundary)"
-_ALLOWED_ANNOTATIONS[("data/datasets.py", "_normalized_name", "return")] = "string normalization helper output"
-_ALLOWED_ANNOTATIONS[("data/datasets.py", "_normalized_name", "path")] = "filesystem path boundary" 
+_ALLOWED_ANNOTATIONS[("data/datasets.py", "hash_file", "chunk_size")] = (
+    "filesystem read chunk boundary"
+)
+_ALLOWED_ANNOTATIONS[("data/datasets.py", "hash_row_ids", "values")] = (
+    "row-id collection boundary (RowId | str)"
+)
+_ALLOWED_ANNOTATIONS[("data/datasets.py", "hash_seed", "text")] = (
+    "hash input string (crypto boundary)"
+)
+_ALLOWED_ANNOTATIONS[("data/datasets.py", "stable_row_id", "source")] = (
+    "source-file path string (filesystem boundary)"
+)
+_ALLOWED_ANNOTATIONS[("data/datasets.py", "validate_split_disjointness", "row_id_column")] = (
+    "pandas column-name boundary"
+)
+_ALLOWED_ANNOTATIONS[("data/datasets.py", "_ensure_row_ids", "source")] = (
+    "source-file path string (filesystem boundary)"
+)
+_ALLOWED_ANNOTATIONS[("data/datasets.py", "_normalized_name", "return")] = (
+    "string normalization helper output"
+)
+_ALLOWED_ANNOTATIONS[("data/datasets.py", "_normalized_name", "path")] = "filesystem path boundary"
 
 # No free-text exception: every model field must carry a meaningful constrained
 # type (Version, Description, Identifier, Sha256, ...) rather than a bare str.
@@ -133,7 +151,9 @@ def test_no_weak_generic_mappings() -> None:
             if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
                 # Function-local annotations (e.g. `raw: object = json.loads(...)`)
                 # are the JSON boundary; only module/class-level fields are flagged.
-                if isinstance(_enclosing_scope(tree, node), (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if isinstance(
+                    _enclosing_scope(tree, node), (ast.FunctionDef, ast.AsyncFunctionDef)
+                ):
                     continue
                 if node.annotation is not None and _annotation_is_weak(node.annotation):
                     key = (relative, "", node.target.id)
@@ -196,7 +216,12 @@ def _collect_annotation_violations() -> list[str]:
         relative = path.relative_to(SRC).as_posix()
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
-        def visit(node: ast.AST, owner: str, in_function: bool = False) -> None:
+        def visit(
+            node: ast.AST,
+            owner: str,
+            in_function: bool = False,
+            relative: str = relative,
+        ) -> None:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 scope = node.name
                 if node.returns is not None:
@@ -205,9 +230,7 @@ def _collect_annotation_violations() -> list[str]:
                         if key not in _ALLOWED_ANNOTATIONS and not (
                             leaf == "int" and _is_dunder_len(node)
                         ):
-                            violations.append(
-                                f"{relative}:{node.lineno} {scope} returns {leaf}"
-                            )
+                            violations.append(f"{relative}:{node.lineno} {scope} returns {leaf}")
                 cli_input = _is_click_handler(node)
                 for arg in node.args.args:
                     if arg.annotation is None:
@@ -242,9 +265,7 @@ def _collect_annotation_violations() -> list[str]:
 
 def test_no_primitive_leaks_outside_approved_boundaries() -> None:
     violations = _collect_annotation_violations()
-    assert not violations, "Primitive leaks outside approved boundaries:\n" + "\n".join(
-        violations
-    )
+    assert not violations, "Primitive leaks outside approved boundaries:\n" + "\n".join(violations)
 
 
 def test_no_bare_dict_or_list_annotations() -> None:

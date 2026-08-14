@@ -37,10 +37,16 @@ _ALLOWED_SOURCE_LITERALS: dict[tuple[str, object], str] = {
     ("evidence/store.py", 1_000_000): "run-id alpha encoding in parts per million",
     ("evidence/store.py", 10_000): "run-id rho/assurance/confidence encoding in basis points",
     ("experiments/analyses.py", 0.005): "Monte-Carlo acceptance floor for coverage validation",
-    ("experiments/analyses.py", 0.1): "normal-mixture synthetic distribution: 10% contaminated component",
+    (
+        "experiments/analyses.py",
+        0.1,
+    ): "normal-mixture synthetic distribution: 10% contaminated component",
     ("experiments/analyses.py", 0.9): "normal-mixture synthetic distribution: 90% clean component",
     ("experiments/analyses.py", 1000): "seed offset scale converting float axis values to integers",
-    ("experiments/analyses.py", 3.0): "normal-mixture and contamination shift location in standard deviations",
+    (
+        "experiments/analyses.py",
+        3.0,
+    ): "normal-mixture and contamination shift location in standard deviations",
     ("experiments/analyses.py", 5): "source-order analysis block count and 5th-percentile quantile",
     ("experiments/analyses.py", 25): "IQR lower quantile (25th percentile)",
     ("experiments/analyses.py", 75): "IQR upper quantile (75th percentile)",
@@ -70,8 +76,15 @@ def _configured_values() -> set[object]:
         def walk(node: object) -> None:
             if isinstance(node, dict):
                 for key, item in node.items():
-                    if key in {"id", "name", "description", "version", "source_version",
-                               "parser_version", "feature_contract"}:
+                    if key in {
+                        "id",
+                        "name",
+                        "description",
+                        "version",
+                        "source_version",
+                        "parser_version",
+                        "feature_contract",
+                    }:
                         continue
                     walk(item)
             elif isinstance(node, list):
@@ -145,7 +158,10 @@ def _is_structural_context(parent: ast.AST | None, node: ast.Constant) -> bool:
         if parent.func.attr.endswith("get_device_name") or parent.func.attr == "set_device":
             return True
     if isinstance(parent, ast.keyword) and parent.arg in {
-        "timeout", "workers", "chunk_size", "default",
+        "timeout",
+        "workers",
+        "chunk_size",
+        "default",
     }:
         return True
     if isinstance(parent, ast.BinOp):
@@ -169,8 +185,7 @@ def test_configured_values_not_duplicated_in_source() -> None:
         for line in lines[:3]:
             violations.append(f"{relative}:{line} repeats configured value {value!r}")
     assert not violations, (
-        "Configured scientific values duplicated in production source:\n"
-        + "\n".join(violations)
+        "Configured scientific values duplicated in production source:\n" + "\n".join(violations)
     )
 
 
@@ -178,7 +193,7 @@ def test_experiment_axes_not_duplicated_in_python() -> None:
     raw = yaml.safe_load((ROOT / "config" / "experiments.yaml").read_text(encoding="utf-8"))
     axis_values: set[object] = set()
     for experiment in raw["experiments"]:
-        for axis, values in (experiment.get("axes") or {}).items():
+        for _axis, values in (experiment.get("axes") or {}).items():
             if isinstance(values, list):
                 axis_values.update(values)
         for cell in experiment.get("coupled_cells") or []:
@@ -197,7 +212,9 @@ def test_experiment_axes_not_duplicated_in_python() -> None:
             if not isinstance(node.value, (int, float)) or isinstance(node.value, bool):
                 continue
             if float(node.value) in {
-                float(item) for item in axis_values if isinstance(item, (int, float)) and not isinstance(item, bool)
+                float(item)
+                for item in axis_values
+                if isinstance(item, (int, float)) and not isinstance(item, bool)
             }:
                 parent = _parent_of(tree, node)
                 if _is_structural_context(parent, node):
@@ -223,7 +240,11 @@ def test_configured_seed_lists_not_duplicated_in_python() -> None:
         relative = path.relative_to(SRC).as_posix()
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
-            if isinstance(node, ast.Constant) and isinstance(node.value, int) and not isinstance(node.value, bool):
+            if (
+                isinstance(node, ast.Constant)
+                and isinstance(node.value, int)
+                and not isinstance(node.value, bool)
+            ):
                 if node.value in seeds:
                     parent = _parent_of(tree, node)
                     if _is_structural_context(parent, node):

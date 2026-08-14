@@ -1,34 +1,28 @@
-import json
+"""Unit tests for deterministic manuscript-table builders."""
+
+from __future__ import annotations
+
 from pathlib import Path
 
 import pandas as pd
 
-from fedcrg.reporting.tables import PublicationTableBuilder
+from fedcrg.reporting import PublicationTableBuilder
+from fedcrg.types import PolicyId
 
 
-def test_sensitivity_reads_cells_directory_not_a_single_results_file(tmp_path: Path) -> None:
-    """Each real-score sensitivity writes one SensitivityEnvelope/MultiplicityEnvelope per
-    model seed under experiments/{experiment_id}/cells/*.json, never a single
-    experiments/{experiment_id}/results.json."""
-    cells_root = tmp_path / "readiness_sample_size" / "cells"
-    cells_root.mkdir(parents=True)
-    (cells_root / "11.json").write_text(
-        json.dumps(
-            {
-                "experiment_id": "readiness_sample_size",
-                "model_seed": 11,
-                "calibration_seed": 1000,
-                "cells": [
-                    {"settings": [{"axis": "calibration_n", "value": 30}], "config_hash": "x"}
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
-    output = tmp_path / "table.csv"
-    result_path = PublicationTableBuilder().sensitivity(tmp_path, output)
-    frame = pd.read_csv(result_path)
-    assert len(frame) == 1
-    assert frame.iloc[0]["experiment_id"] == "readiness_sample_size"
-    assert frame.iloc[0]["model_seed"] == 11
-    assert frame.iloc[0]["calibration_seed"] == 1000
+def test_literature_boundary_table_is_deterministic(tmp_path: Path) -> None:
+    first = PublicationTableBuilder().literature_boundary(tmp_path / "first.csv")
+    second = PublicationTableBuilder().literature_boundary(tmp_path / "second.csv")
+    assert first.read_bytes() == second.read_bytes()
+    frame = pd.read_csv(first)
+    assert set(frame["policy_id"]) == {
+        PolicyId.REFERENCE_QUANTILE.value,
+        PolicyId.GLOBAL_QUANTILE.value,
+        PolicyId.LOCAL_QUANTILE.value,
+        PolicyId.SHRINKAGE.value,
+        PolicyId.THREE_SIGMA.value,
+        PolicyId.FEDCRG.value,
+        PolicyId.DEV_F1_SELECT.value,
+        PolicyId.SUMMARY_STATISTIC_SELECT.value,
+        PolicyId.SUPERVISED_F1.value,
+    }

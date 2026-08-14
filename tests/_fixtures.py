@@ -1,24 +1,41 @@
 """Shared explicit test fixtures for the frozen primary scientific configuration.
 
-These values mirror the frozen primary YAML profiles so unit tests never depend on
-runtime resolution while also never declaring scientific defaults in production code.
-They are regression fixtures for the locked primary contract.
+These values mirror the frozen primary YAML profiles so unit tests never depend
+on runtime resolution while also never declaring scientific defaults in
+production code. They are regression fixtures for the locked primary contract.
 """
 
 from __future__ import annotations
 
-from fedcrg.configuration.detector_config import AutoencoderConfig
-from fedcrg.configuration.method_config import ProtocolConfig
-from fedcrg.configuration.statistics_config import StatisticsConfig
-from fedcrg.configuration.training_config import RandomnessConfig, TrainingConfig
-from fedcrg.domain.enums import (
+from pathlib import Path
+
+from fedcrg.config import (
+    AutoencoderConfig,
+    DatasetConfig,
+    ExpectedBenignCounts,
+    ExperimentConfig,
+    ProtocolConfig,
+    RandomnessConfig,
+    SplitConfig,
+    StatisticsConfig,
+    TrainingConfig,
+)
+from fedcrg.types import (
     ActivationId,
     AggregationId,
+    ClientId,
     ComputeDeviceId,
+    DatasetFeatureContractId,
+    DatasetId,
     DetectorId,
+    ExperimentId,
     OptimizerId,
+    PolicyId,
     ProtocolId,
 )
+from pydantic import TypeAdapter
+
+_CLIENT_ID_ADAPTER = TypeAdapter(ClientId)
 
 
 def primary_protocol() -> ProtocolConfig:
@@ -82,4 +99,68 @@ def primary_autoencoder(hidden_dims: tuple[int, ...] = (86, 57, 38, 29)) -> Auto
         activation=ActivationId.TANH,
         xavier_tanh_gain=5.0 / 3.0,
         zero_bias=True,
+    )
+
+
+NBAIOT_CLIENT_IDS = tuple(_CLIENT_ID_ADAPTER.validate_python(f"nb{i:02d}") for i in range(1, 10))
+
+
+def nbaiot_dataset_config(
+    *,
+    train_benign: int = 10,
+    reference_benign: int = 5,
+    mismatch_benign: int = 8,
+    calibration_benign: int = 7,
+    benign_guard: int = 2,
+    min_benign_test: int = 5,
+    attack_dev: int = 6,
+    min_attack_test: int = 6,
+    min_attack_test_per_group: int = 2,
+    expected_benign: int = 40,
+) -> DatasetConfig:
+    """Small N-BaIoT contract with configurable split sizing for unit tests."""
+    return DatasetConfig(
+        id=DatasetId.NBAIOT,
+        feature_contract=DatasetFeatureContractId.NBAIOT_LOCKED_115,
+        source_version="1",
+        feature_count=115,
+        expected_clients=9,
+        minimum_clients=1,
+        parser_version="1",
+        expected_benign_counts=ExpectedBenignCounts(
+            {client: expected_benign for client in NBAIOT_CLIENT_IDS}
+        ),
+        split=SplitConfig(
+            train_benign=train_benign,
+            reference_benign=reference_benign,
+            mismatch_benign=mismatch_benign,
+            calibration_benign=calibration_benign,
+            benign_guard=benign_guard,
+            min_benign_test=min_benign_test,
+            attack_dev=attack_dev,
+            min_attack_test=min_attack_test,
+            min_attack_test_per_group=min_attack_test_per_group,
+        ),
+        calibration_seeds=(1000,),
+        primary_calibration_seed=1000,
+    )
+
+
+def primary_experiment_config(
+    root: Path, experiment_id: ExperimentId = ExperimentId.PRIMARY_NBAIOT
+) -> ExperimentConfig:
+    """Resolved primary-shaped experiment configuration rooted at ``root``."""
+    return ExperimentConfig(
+        id=experiment_id,
+        protocol=primary_protocol(),
+        dataset=nbaiot_dataset_config(),
+        detector=primary_autoencoder(),
+        training=primary_training().model_copy(
+            update={"rounds": 1, "local_epochs": 1, "batch_size": 2, "device": ComputeDeviceId.CPU}
+        ),
+        randomness=primary_randomness(),
+        statistics=primary_statistics(),
+        policies=(PolicyId.FEDCRG,),
+        outputs_root=root,
+        preprocessed_root=root / "preprocessed",
     )

@@ -1,22 +1,36 @@
 """Smoke-test the real train -> score -> evaluate cache pipeline end-to-end."""
 
+from __future__ import annotations
+
 import hashlib
-from pathlib import Path
-from pathlib import PurePosixPath
+from datetime import UTC, datetime
+from pathlib import Path, PurePosixPath
 
 import numpy as np
 import pandas as pd
 
-from fedcrg.experiments.policy_evaluation import EvaluatePolicies
-from fedcrg.scoring.compute_scores import ComputeScores
-from fedcrg.experiments.model_training import TrainDetector
-from fedcrg.artifacts.manifests import PreparedDatasetManifestStore
-from fedcrg.artifacts.integrity import sha256_file
-from fedcrg.artifacts.json_io import atomic_write_json
-from fedcrg.configuration.dataset_config import DatasetConfig, SplitConfig
-from fedcrg.configuration.detector_config import AutoencoderConfig
-from fedcrg.configuration.experiment_config import ExperimentConfig
-from fedcrg.domain.enums import (
+from fedcrg.config import (
+    AutoencoderConfig,
+    DatasetConfig,
+    ExpectedBenignCounts,
+    ExperimentConfig,
+    SplitConfig,
+)
+from fedcrg.data.datasets import hash_row_ids
+from fedcrg.evidence.models import (
+    ClientDatasetManifest,
+    PreparedDatasetManifest,
+    RoleArtifactManifest,
+)
+from fedcrg.evidence.store import (
+    PreparedDatasetManifestStore,
+    atomic_write_json,
+    sha256_file,
+)
+from fedcrg.experiments.runner import ComputeScores, EvaluatePolicies, TrainDetector
+from fedcrg.thresholding.readiness import ReadinessPlanCache
+from fedcrg.types import (
+    CalibrationAssignmentMode,
     ComputeDeviceId,
     DataRole,
     DatasetFeatureContractId,
@@ -24,9 +38,6 @@ from fedcrg.domain.enums import (
     ExperimentId,
     PolicyId,
 )
-from fedcrg.domain.identifiers import ClientId, RowId, Sha256
-from fedcrg.datasets.prepare import ClientDatasetManifest, RoleArtifactManifest, hash_row_ids
-from fedcrg.decision.calibration_readiness import ReadinessPlanCache
 from tests._fixtures import (
     primary_protocol,
     primary_randomness,
@@ -59,7 +70,7 @@ def _config(root: Path) -> ExperimentConfig:
             minimum_clients=10,
             minimum_benign_rows=7800,
             minimum_malicious_rows=1000,
-            expected_benign_counts={},
+            expected_benign_counts=ExpectedBenignCounts({}),
             split=SplitConfig(
                 train_benign=4,
                 reference_benign=10,
@@ -89,11 +100,12 @@ def _config(root: Path) -> ExperimentConfig:
         statistics=primary_statistics(),
         policies=(PolicyId.REFERENCE_QUANTILE, PolicyId.LOCAL_QUANTILE, PolicyId.FEDCRG),
         outputs_root=root,
+        preprocessed_root=root / "preprocessed",
     )
 
 
-def _row_id(client: str, role: DataRole, index: int) -> RowId:
-    return RowId(hashlib.sha256(f"{client}-{role.value}-{index}".encode()).hexdigest())
+def _row_id(client: str, role: DataRole, index: int) -> str:
+    return hashlib.sha256(f"{client}-{role.value}-{index}".encode()).hexdigest()
 
 
 def _role_frame(client: str, role: DataRole, rows: int, offset: float) -> pd.DataFrame:
@@ -109,7 +121,6 @@ def _write_prepared(root: Path, config: ExperimentConfig) -> Path:
     root.mkdir(parents=True)
     client_manifests: list[ClientDatasetManifest] = []
     for client_index, client_name in enumerate(("diad_test0001", "diad_test0002")):
-        client_id = ClientId(client_name)
         client_root = root / "clients" / client_name
         client_root.mkdir(parents=True)
         role_manifests: list[RoleArtifactManifest] = []
@@ -123,22 +134,26 @@ def _write_prepared(root: Path, config: ExperimentConfig) -> Path:
                     rows=rows,
                     row_id_sha256=hash_row_ids(frame["row_id"].tolist()),
                     relative_path=PurePosixPath(path.relative_to(root).as_posix()),
-                    file_sha256=Sha256(sha256_file(path)),
+                    file_sha256=sha256_file(path),
                 )
             )
-        client_manifests.append(ClientDatasetManifest(client_id, tuple(role_manifests)))
+        client_manifests.append(
+            ClientDatasetManifest(client_id=client_name, roles=tuple(role_manifests))
+        )
 
-    manifest = PreparedDatasetManifestStore().build(
+    manifest = PreparedDatasetManifest(
         dataset_id=config.dataset.id,
         source_version=config.dataset.source_version,
         parser_version=config.dataset.parser_version,
-        data_spec_hash=Sha256(config.data_spec_hash),
+        data_spec_hash=config.data_spec_hash,
         feature_names=_FEATURES,
         clients=tuple(client_manifests),
         source_files=(),
         calibration_assignments=(),
         external_replication_supported=True,
         dataset_level_code=None,
+        created_at=datetime.now(UTC),
+        deterministic_payload_sha256="b" * 64,
     )
     PreparedDatasetManifestStore().save(root / "manifest.json", manifest)
     atomic_write_json(root / "preprocessing.json", {"note": "test fixture, values already scaled"})
@@ -158,13 +173,20 @@ def test_train_score_evaluate_cache_pipeline(tmp_path: Path) -> None:
     )
 
     readiness_cache_path = config.outputs_root / "cache" / "analysis" / "readiness_plans.json"
-    ReadinessPlanCache(readiness_cache_path).precompute(
+    readiness_cache = ReadinessPlanCache(readiness_cache_path)
+    readiness_cache.precompute(
         config.dataset.split.calibration_benign,
         config.protocol.band,
         config.protocol.readiness_assurance,
     )
+    readiness_cache.save()
 
-    bundle = EvaluatePolicies().evaluate_from_cache(config, score_root, calibration_seed=1000)
+    bundle = EvaluatePolicies().evaluate_from_cache(
+        config,
+        score_root,
+        calibration_seed=1000,
+        mode=CalibrationAssignmentMode.SEEDED_PERMUTATION,
+    )
     assert len(bundle.clients) == 2 * len(config.policies)
     metrics = [item.metrics for item in bundle.clients if item.metrics is not None]
     assert metrics

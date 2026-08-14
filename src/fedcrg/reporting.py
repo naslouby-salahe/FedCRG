@@ -59,6 +59,7 @@ from fedcrg.types import (
     Metric,
     ModelSeed,
     NonNegativeCount,
+    PathString,
     PolicyId,
     PositiveCount,
     Probability,
@@ -167,6 +168,7 @@ def _definition_for(manifest: RunManifest):
 
 class LiteratureBoundaryRow(BaseModel):
     """One literature-boundary table row."""
+
     model_config = Frozen
 
     policy_id: PolicyId
@@ -175,6 +177,7 @@ class LiteratureBoundaryRow(BaseModel):
 
 class AdmissionStateRow(BaseModel):
     """One admission-state table row."""
+
     model_config = Frozen
 
     run_id: RunId
@@ -200,6 +203,7 @@ class AdmissionStateRow(BaseModel):
 
 class ContrastTableRow(BaseModel):
     """One contrast table row."""
+
     model_config = Frozen
 
     comparator: PolicyId
@@ -214,6 +218,7 @@ class ContrastTableRow(BaseModel):
 
 class ProtocolConstantRow(BaseModel):
     """One protocol-constant table row."""
+
     model_config = Frozen
 
     constant: Identifier
@@ -222,6 +227,7 @@ class ProtocolConstantRow(BaseModel):
 
 class DatasetInventoryRow(BaseModel):
     """One dataset-inventory table row."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -231,6 +237,7 @@ class DatasetInventoryRow(BaseModel):
 
 class RoleCountRow(BaseModel):
     """Role row-count and hash within a dataset row."""
+
     model_config = Frozen
 
     role: DataRole
@@ -240,6 +247,7 @@ class RoleCountRow(BaseModel):
 
 class FederationResultsRow(BaseModel):
     """One federation-results table row."""
+
     model_config = Frozen
 
     run_id: RunId
@@ -295,9 +303,7 @@ class PublicationTableBuilder:
                 continue
             for line in path.read_text(encoding="utf-8").splitlines():
                 if line:
-                    records.append(
-                        ThresholdRecord.model_validate_json(line)
-                    )
+                    records.append(ThresholdRecord.model_validate_json(line))
         return self._write(
             pd.DataFrame.from_records(record.model_dump(mode="json") for record in records),
             output,
@@ -339,24 +345,16 @@ class PublicationTableBuilder:
             ProtocolConstantRow(constant="rho", value=protocol.rho),
             ProtocolConstantRow(constant="band_lower", value=protocol.band.lower),
             ProtocolConstantRow(constant="band_upper", value=protocol.band.upper),
-            ProtocolConstantRow(
-                constant="readiness_assurance", value=protocol.readiness_assurance
-            ),
-            ProtocolConstantRow(
-                constant="mismatch_confidence", value=protocol.mismatch_confidence
-            ),
+            ProtocolConstantRow(constant="readiness_assurance", value=protocol.readiness_assurance),
+            ProtocolConstantRow(constant="mismatch_confidence", value=protocol.mismatch_confidence),
         ]
         training = config.training
         if training is not None:
             rows.extend(
                 [
                     ProtocolConstantRow(constant="rounds", value=training.rounds),
-                    ProtocolConstantRow(
-                        constant="local_epochs", value=training.local_epochs
-                    ),
-                    ProtocolConstantRow(
-                        constant="batch_size", value=training.batch_size
-                    ),
+                    ProtocolConstantRow(constant="local_epochs", value=training.local_epochs),
+                    ProtocolConstantRow(constant="batch_size", value=training.batch_size),
                     ProtocolConstantRow(
                         constant="learning_rate_initial",
                         value=training.learning_rate_initial,
@@ -365,9 +363,7 @@ class PublicationTableBuilder:
                         constant="learning_rate_final",
                         value=training.learning_rate_final,
                     ),
-                    ProtocolConstantRow(
-                        constant="client_fraction", value=training.client_fraction
-                    ),
+                    ProtocolConstantRow(constant="client_fraction", value=training.client_fraction),
                 ]
             )
         return self._write(
@@ -431,6 +427,7 @@ class PublicationTableBuilder:
 
 class PublicationPackage:
     """Tables, figures, and manifest of one publication."""
+
     def __init__(
         self,
         tables: tuple[PublicationArtifact, ...],
@@ -448,6 +445,7 @@ class PublicationPackage:
 
 class PublicationArtifact:
     """One generated table or figure with availability."""
+
     def __init__(
         self,
         name: Description,
@@ -641,7 +639,9 @@ def build_decision_architecture_figure(output: Path) -> Path:
         axis.add_patch(patch)
         axis.text(x + width / 2, y + height / 2, label, ha="center", va="center", fontsize=9)
 
-    def arrow(start: tuple[float, float], end: tuple[float, float], label: str | None = None) -> None:
+    def arrow(
+        start: tuple[float, float], end: tuple[float, float], label: str | None = None
+    ) -> None:
         from matplotlib.patches import FancyArrowPatch
 
         axis.add_patch(
@@ -704,7 +704,10 @@ def build_repository_report(outputs: Path, config: ExperimentConfig) -> Path:
             bootstrap_replicates=config.statistics.bootstrap_replicates,
         )
         contrasts_payload: object = [
-            {"comparator": item.comparator.value, "metrics": [metric.model_dump(mode="json") for metric in item.metrics]}
+            {
+                "comparator": item.comparator.value,
+                "metrics": [metric.model_dump(mode="json") for metric in item.metrics],
+            }
             for item in contrasts
         ]
     else:
@@ -764,6 +767,7 @@ _REQUIRED_BUNDLE_DIRECTORIES = (
 
 class ResultsManifest(BaseModel):
     """Frozen results-bundle manifest."""
+
     model_config = Frozen
 
     campaign_id: CampaignId
@@ -773,13 +777,14 @@ class ResultsManifest(BaseModel):
     detector_id: DetectorId | None
     model_seeds: tuple[ModelSeed, ...]
     calibration_seeds: tuple[CalibrationSeed, ...]
-    outputs_root: Identifier
+    outputs_root: PathString
     file_count: PositiveCount
     source_policy: Description
 
 
 class ResultsVerification:
     """Validity and problems of one bundle verification."""
+
     def __init__(self, valid: bool, problems: tuple[Identifier, ...]) -> None:
         self.valid = valid
         self.problems = problems
@@ -997,9 +1002,7 @@ class ResultsVerifier:
         destination = results_root / str(campaign_id)
         problems: list[Identifier] = []
         if not destination.exists():
-            return ResultsVerification(
-                False, (f"results bundle does not exist: {destination}",)
-            )
+            return ResultsVerification(False, (f"results bundle does not exist: {destination}",))
         for directory in _REQUIRED_BUNDLE_DIRECTORIES:
             if not (destination / directory).is_dir():
                 problems.append(f"missing required bundle directory: {directory}")

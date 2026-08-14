@@ -70,10 +70,12 @@ from fedcrg.thresholding.metrics import (
 from fedcrg.thresholding.readiness import (
     BinomialCounts,
     ClientEvaluationResult,
+    ReadinessPlanCache,
     clopper_pearson_interval,
 )
 from fedcrg.types import PolicyEvaluationStatus
 from fedcrg.thresholding.policies import (
+    SUPERVISED_POLICIES,
     BenignPolicyEvidence,
     FinalTestEvidence,
     PolicyThresholdSelector,
@@ -93,6 +95,7 @@ from fedcrg.types import (
     FeatureName,
     Identifier,
     ModelSeed,
+    PathString,
     PolicyId,
     PositiveCount,
     PreparedColumn,
@@ -109,6 +112,7 @@ _LOGGER = get_logger(__name__)
 
 class PreflightReport(BaseModel):
     """Outcome of the research preflight audit."""
+
     model_config = Frozen
 
     valid: bool
@@ -125,6 +129,7 @@ def _tensor_sha256(tensor: torch.Tensor) -> Sha256:
 
 class ExperimentPlan(BaseModel):
     """One validated execution plan for a policy cell."""
+
     model_config = Frozen
 
     definition: ExperimentSpec
@@ -358,9 +363,7 @@ def _oracle_candidate_missing(client_id: ClientId) -> Threshold:
     raise RuntimeError(f"Oracle candidate threshold is unavailable for {client_id}")
 
 
-def feature_columns(
-    frame: pd.DataFrame, expected_count: PositiveCount
-) -> tuple[FeatureName, ...]:
+def feature_columns(frame: pd.DataFrame, expected_count: PositiveCount) -> tuple[FeatureName, ...]:
     """Resolve model-feature columns of a prepared frame."""
     metadata = {column.value for column in PreparedColumn}
     columns = tuple(
@@ -490,7 +493,10 @@ class TrainDetector:
             raise ValueError("Training requires a training profile")
         final_model, result = self.trainer.train(
             model,
-            {client_id: torch.utils.data.TensorDataset(tensor) for client_id, tensor in datasets.items()},
+            {
+                client_id: torch.utils.data.TensorDataset(tensor)
+                for client_id, tensor in datasets.items()
+            },
             training,
             model_seed,
         )
@@ -538,7 +544,9 @@ class TrainDetector:
         if manifest.dataset_manifest_sha256 != prepared_manifest_hash:
             raise ValueError("Existing model cache was trained from a different prepared manifest")
         if manifest.preprocessing_sha256 != preprocessing_hash:
-            raise ValueError("Existing model cache was trained with different preprocessing evidence")
+            raise ValueError(
+                "Existing model cache was trained with different preprocessing evidence"
+            )
         if manifest.model_file_sha256 != sha256_file(model_path):
             raise ValueError("Existing frozen-model hash does not match its manifest")
 
@@ -622,10 +630,12 @@ class ComputeScores:
             _LOGGER.info("score cache reused %s", score_root)
             return score_root
 
-        clients: list[tuple[ClientId, list[tuple[DataRole, np.ndarray, tuple[str, ...]]]]] = []
+        clients: list[
+            tuple[ClientId, list[tuple[DataRole, np.ndarray, tuple[str, ...], tuple[str, ...]]]]
+        ] = []
         for client_manifest in prepared_manifest.clients:
             client_id = client_manifest.client_id
-            role_inputs: list[tuple[DataRole, np.ndarray, tuple[str, ...]]] = []
+            role_inputs: list[tuple[DataRole, np.ndarray, tuple[str, ...], tuple[str, ...]]] = []
             for role in _BASE_SCORE_ROLES:
                 role_manifest = client_manifest.role(role)
                 path = prepared_root / role_manifest.relative_path
@@ -635,14 +645,23 @@ class ComputeScores:
                 values = frame[
                     [column for column in frame.columns if column not in _METADATA_COLUMNS]
                 ].to_numpy(dtype=np.float64)
-                if role is DataRole.ATTACK_TEST and PreparedColumn.ATTACK_GROUP.value in frame.columns:
+                row_ids = tuple(
+                    str(value) for value in frame[PreparedColumn.ROW_ID.value].astype(str)
+                )
+                if len(row_ids) != len(values):
+                    raise ValueError(
+                        f"Prepared role row ids do not align for {client_id}/{role.value}"
+                    )
+                if (
+                    role is DataRole.ATTACK_TEST
+                    and PreparedColumn.ATTACK_GROUP.value in frame.columns
+                ):
                     groups = tuple(
-                        str(value)
-                        for value in frame[PreparedColumn.ATTACK_GROUP.value].astype(str)
+                        str(value) for value in frame[PreparedColumn.ATTACK_GROUP.value].astype(str)
                     )
                 else:
                     groups = ()
-                role_inputs.append((role, values, groups))
+                role_inputs.append((role, values, groups, row_ids))
             clients.append((client_id, role_inputs))
 
         role_scores = []
@@ -653,16 +672,16 @@ class ComputeScores:
             if training is None:
                 raise ValueError("Scoring requires a training profile")
             scored = tuple(
-            RoleScores(
-                role=role,
-                values=self.computer.compute(
-                    model, values, training.device, training.batch_size
-                ),
+                RoleScores(
+                    role=role,
+                    values=self.computer.compute(
+                        model, values, training.device, training.batch_size
+                    ),
                     client_id=client_id,
-                    row_ids=tuple(f"{client_id}:{role.value}:{i}" for i in range(len(values))),
+                    row_ids=row_ids,
                     attack_groups=groups if groups else None,
                 )
-                for role, values, groups in inputs
+                for role, values, groups, row_ids in inputs
             )
             role_scores.append(ClientScoreSet(client_id=client_id, scores=scored))
         manifest = ScoreManifest(
@@ -729,6 +748,10 @@ class EvaluatePolicies:
     ) -> EvaluationBundle:
         descriptor = self.score_cache.load_descriptor(score_root)
         self._validate_score_identity(config, descriptor)
+        # Real-data evaluation consumes the frozen pre-data readiness-plan table;
+        # a missing table is a missing precomputation step, not an on-the-fly gap.
+        plans_path = OutputsLayout(config.outputs_root).readiness_plans_file
+        self.protocol = ClientEvaluation(readiness_cache=ReadinessPlanCache(plans_path))
         manifest = self.score_cache.load(score_root)
         views = self.views.build(
             manifest,
@@ -738,7 +761,12 @@ class EvaluatePolicies:
         )
         protocol_results = self._protocol_results(config, views, score_root)
         benign_inputs = self._benign_inputs(views, protocol_results)
-        supervised_inputs = self._supervised_inputs(score_root, views, benign_inputs)
+        supervised_requested = any(policy in SUPERVISED_POLICIES for policy in config.policies)
+        supervised_inputs = (
+            self._supervised_inputs(score_root, views, benign_inputs)
+            if supervised_requested
+            else None
+        )
         thresholds = self.selector.select(
             benign_inputs,
             config.protocol,
@@ -802,8 +830,7 @@ class EvaluatePolicies:
                 )
             )
             test_groups = np.asarray(
-                ("__benign__",) * len(benign_test.values)
-                + tuple(group for group in attack_groups),
+                ("__benign__",) * len(benign_test.values) + tuple(group for group in attack_groups),
                 dtype=object,
             )
             ranking_auroc = auroc(test_scores, test_labels)
@@ -876,10 +903,7 @@ class EvaluatePolicies:
         assert_ranking_metric_invariance(
             client_rows, tolerance=config.statistics.ranking_invariance_tolerance
         )
-        federation_rows = tuple(
-            aggregate_policy(policy, client_rows)
-            for policy in config.policies
-        )
+        federation_rows = tuple(aggregate_policy(policy, client_rows) for policy in config.policies)
         return EvaluationBundle(
             clients=client_rows,
             federations=federation_rows,
@@ -899,8 +923,7 @@ class EvaluatePolicies:
         }
         reference = self.protocol.estimate_reference(reference_by_client, config.protocol)
         calibration_sizes = {
-            len(views.get(client_id, DataRole.CALIBRATION).values)
-            for client_id in views.client_ids
+            len(views.get(client_id, DataRole.CALIBRATION).values) for client_id in views.client_ids
         }
         if len(calibration_sizes) != 1:
             raise ValueError("Calibration evidence count must be identical across clients")
@@ -1036,6 +1059,7 @@ class EvaluatePolicies:
 
 class FrozenCacheInputs:
     """Frozen upstream cache paths for one model seed."""
+
     def __init__(
         self,
         prepared_root: Path,
@@ -1221,6 +1245,7 @@ class PolicyCellMaterializer:
 
 class PolicyRunDirectory:
     """One policy run directory within a federation cell."""
+
     def __init__(self, policy: PolicyId, path: Path) -> None:
         self.policy = policy
         self.path = path
@@ -1228,6 +1253,7 @@ class PolicyRunDirectory:
 
 class FederationCellResult(BaseModel):
     """Run directories produced for one federation cell."""
+
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     experiment_id: ExperimentId
@@ -1315,6 +1341,7 @@ class FederationCellMaterializer:
 
 class FrozenModelEvidence(BaseModel):
     """Frozen model and score cache evidence for one seed."""
+
     model_config = Frozen
 
     model_seed: ModelSeed
@@ -1325,6 +1352,7 @@ class FrozenModelEvidence(BaseModel):
 
 class WorkloadExecution(BaseModel):
     """Executed model evidence and run directories for one experiment."""
+
     model_config = Frozen
 
     experiment_id: ExperimentId
@@ -1334,6 +1362,7 @@ class WorkloadExecution(BaseModel):
 
 class ResearchExecution(BaseModel):
     """Preflight report and executed workload."""
+
     model_config = Frozen
 
     preflight: PreflightReport
@@ -1435,6 +1464,7 @@ class _CampaignOutcomeRow(BaseModel):
 
 class CampaignWorkItem(BaseModel):
     """One ordered campaign work item."""
+
     model_config = Frozen
 
     experiment_id: ExperimentId
@@ -1444,6 +1474,7 @@ class CampaignWorkItem(BaseModel):
 
 class CampaignStatus(BaseModel):
     """Persistent restart-safe campaign status snapshot."""
+
     model_config = ConfigDict(frozen=True)
 
     campaign_id: CampaignId
@@ -1452,7 +1483,7 @@ class CampaignStatus(BaseModel):
     current_experiment: ExperimentId | None = None
     current_stage: CampaignStage | None = None
     experiments: tuple[_CampaignOutcomeRow, ...] = ()
-    results_path: Identifier | None = None
+    results_path: PathString | None = None
     elapsed_seconds: Duration = 0.0
 
     @property
@@ -1597,9 +1628,7 @@ class CampaignExecutor:
         return build_results_bundle(campaign_id, outputs_root, results_root).as_posix()
 
 
-def _completed_row(
-    experiment_id: ExperimentId, finished_at: Timestamp
-) -> _CampaignOutcomeRow:
+def _completed_row(experiment_id: ExperimentId, finished_at: Timestamp) -> _CampaignOutcomeRow:
     return _CampaignOutcomeRow(
         experiment_id=experiment_id,
         status=ExperimentStatus.COMPLETE,

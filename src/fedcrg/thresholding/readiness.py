@@ -49,6 +49,7 @@ from fedcrg.types import (
 
 Frozen = ConfigDict(frozen=True)
 
+
 class ReferenceThreshold(BaseModel):
     """Federation-wide reference operating point from equal-count pooled R."""
 
@@ -59,6 +60,7 @@ class ReferenceThreshold(BaseModel):
     sample_count: PositiveCount
     client_count: PositiveCount
     samples_per_client: PositiveCount
+
 
 class ReadinessPlan(BaseModel):
     """Pre-data order-statistic plan for one ``(n, a, b, assurance)`` contract."""
@@ -72,6 +74,7 @@ class ReadinessPlan(BaseModel):
     band: OperatingBand
     assurance: Assurance
 
+
 class ContinuityDiagnostics(BaseModel):
     """Score-shape diagnostics at the selected local order statistic."""
 
@@ -81,6 +84,7 @@ class ContinuityDiagnostics(BaseModel):
     duplicate_count: ExceedanceCount
     selected_threshold_multiplicity: ExceedanceCount
     minimum_positive_spacing: Spacing | None = None
+
 
 class CalibrationReadiness(BaseModel):
     """Readiness outcome for one client: the realized local threshold and ties."""
@@ -94,6 +98,7 @@ class CalibrationReadiness(BaseModel):
     @property
     def tie_count(self) -> ExceedanceCount:
         return self.diagnostics.selected_threshold_multiplicity
+
 
 class MismatchEvidence(BaseModel):
     """Exact-binomial evidence that the reference threshold is materially wrong."""
@@ -110,6 +115,7 @@ class MismatchEvidence(BaseModel):
     p_high: PValue
     high_side_only: bool = False
 
+
 class ThresholdDecision(BaseModel):
     """Final deployment decision for one client."""
 
@@ -120,6 +126,7 @@ class ThresholdDecision(BaseModel):
     source: ThresholdSource
     reason: DecisionReason
     tie_count: ExceedanceCount
+
 
 class ClientEvaluationResult(BaseModel):
     """Complete per-client governance evidence bundle."""
@@ -132,11 +139,13 @@ class ClientEvaluationResult(BaseModel):
     mismatch: MismatchEvidence
     decision: ThresholdDecision
 
+
 def reference_rank(sample_count: SampleCount, alpha: Alpha) -> PositiveCount:
     """q_ref = min(N_R, ceil((N_R + 1)(1 - alpha)))."""
     if sample_count <= 0:
         raise ValueError("sample_count must be positive")
     return min(sample_count, math.ceil((sample_count + 1) * (1.0 - alpha)))
+
 
 def build_reference_threshold(
     scores_by_client: Mapping[ClientId, np.ndarray],
@@ -164,7 +173,10 @@ def build_reference_threshold(
         samples_per_client=samples_per_client,
     )
 
-def coverage_probability(rank: PositiveCount, sample_count: SampleCount, band: OperatingBand) -> CoverageProbability:
+
+def coverage_probability(
+    rank: PositiveCount, sample_count: SampleCount, band: OperatingBand
+) -> CoverageProbability:
     """P_r = I_b(n+1-r, r) - I_a(n+1-r, r) in float64."""
     if not 1 <= rank <= sample_count:
         raise ValueError("rank must be inside [1, sample_count]")
@@ -174,10 +186,13 @@ def coverage_probability(rank: PositiveCount, sample_count: SampleCount, band: O
     probability -= special.betainc(upper_shape, lower_shape, band.lower)
     return float(probability)
 
+
 class ReadinessPlanBuilder:
     """Choose the order-statistic rank using protocol constants only."""
 
-    def build(self, sample_count: SampleCount, band: OperatingBand, assurance: Assurance) -> ReadinessPlan:
+    def build(
+        self, sample_count: SampleCount, band: OperatingBand, assurance: Assurance
+    ) -> ReadinessPlan:
         if sample_count <= 0:
             raise ValueError("sample_count must be positive")
         if not 0.0 < assurance < 1.0:
@@ -206,6 +221,7 @@ class ReadinessPlanBuilder:
             assurance=assurance,
         )
 
+
 class ReadinessPlanCache:
     """Persistent pre-data plan table consumed by real-data policy evaluation."""
 
@@ -229,7 +245,9 @@ class ReadinessPlanCache:
             f"n={sample_count}|a={band.lower:.17g}|b={band.upper:.17g}|assurance={assurance:.17g}"
         )
 
-    def precompute(self, sample_count: SampleCount, band: OperatingBand, assurance: Assurance) -> ReadinessPlan:
+    def precompute(
+        self, sample_count: SampleCount, band: OperatingBand, assurance: Assurance
+    ) -> ReadinessPlan:
         key = self.key(sample_count, band, assurance)
         candidate = self.builder.build(sample_count, band, assurance)
         existing = self._plans.get(key)
@@ -238,7 +256,9 @@ class ReadinessPlanCache:
         self._plans[key] = candidate
         return candidate
 
-    def require(self, sample_count: SampleCount, band: OperatingBand, assurance: Assurance) -> ReadinessPlan:
+    def require(
+        self, sample_count: SampleCount, band: OperatingBand, assurance: Assurance
+    ) -> ReadinessPlan:
         key = self.key(sample_count, band, assurance)
         try:
             return self._plans[key]
@@ -282,6 +302,7 @@ class ReadinessPlanCache:
             raise ValueError("Readiness-plan table must be a JSON array")
         self.load_plans(tuple(ReadinessPlan.model_validate(entry) for entry in raw))
 
+
 class CalibrationReadinessEvaluator:
     """Select the precomputed order statistic and audit continuity at that point."""
 
@@ -298,7 +319,10 @@ class CalibrationReadinessEvaluator:
         threshold = float(ordered[plan.rank - 1])
         return CalibrationReadiness(plan=plan, threshold=threshold, diagnostics=diagnostics)
 
-def continuity_diagnostics(scores: np.ndarray, selected_rank: PositiveCount) -> ContinuityDiagnostics:
+
+def continuity_diagnostics(
+    scores: np.ndarray, selected_rank: PositiveCount
+) -> ContinuityDiagnostics:
     """Tie and continuity diagnostics at one rank."""
     values = np.asarray(scores, dtype=np.float64)
     if values.ndim != 1 or len(values) == 0:
@@ -318,7 +342,10 @@ def continuity_diagnostics(scores: np.ndarray, selected_rank: PositiveCount) -> 
         minimum_positive_spacing=minimum_spacing,
     )
 
-def familywise_readiness_assurance(client_count: PositiveCount, familywise_alpha: Probability) -> Assurance:
+
+def familywise_readiness_assurance(
+    client_count: PositiveCount, familywise_alpha: Probability
+) -> Assurance:
     """Bonferroni per-client assurance 1 - alpha/K for a familywise target."""
     if client_count <= 0:
         raise ValueError("client_count must be positive")
@@ -326,15 +353,16 @@ def familywise_readiness_assurance(client_count: PositiveCount, familywise_alpha
         raise ValueError("familywise_alpha must be in (0,1)")
     return 1.0 - familywise_alpha / client_count
 
-def clopper_pearson_interval(counts: BinomialCounts, confidence: ConfidenceLevel) -> ConfidenceInterval:
+
+def clopper_pearson_interval(
+    counts: BinomialCounts, confidence: ConfidenceLevel
+) -> ConfidenceInterval:
     """Exact two-sided Clopper-Pearson interval for the benign exceedance rate."""
     if not 0.0 < confidence < 1.0:
         raise ValueError("confidence must be in (0, 1)")
     tail = (1.0 - confidence) / 2.0
     lower = (
-        0.0
-        if counts.x == 0
-        else float(special.betaincinv(counts.x, counts.n - counts.x + 1, tail))
+        0.0 if counts.x == 0 else float(special.betaincinv(counts.x, counts.n - counts.x + 1, tail))
     )
     upper = (
         1.0
@@ -343,7 +371,10 @@ def clopper_pearson_interval(counts: BinomialCounts, confidence: ConfidenceLevel
     )
     return ConfidenceInterval(lower=lower, upper=upper)
 
-def minimum_bidirectional_sample_count(lower_band: Fpr, confidence: ConfidenceLevel) -> SampleCount | None:
+
+def minimum_bidirectional_sample_count(
+    lower_band: Fpr, confidence: ConfidenceLevel
+) -> SampleCount | None:
     """Smallest n with 1 - ((1-confidence)/2)^(1/n) < a; None when a == 0."""
     if not 0.0 <= lower_band < 1.0:
         raise ValueError("lower_band must be in [0, 1)")
@@ -359,8 +390,10 @@ def minimum_bidirectional_sample_count(lower_band: Fpr, confidence: ConfidenceLe
         estimate -= 1
     return estimate
 
+
 class ReferenceMismatchEvaluator:
     """Exact reference-mismatch evidence evaluator."""
+
     def evaluate(
         self,
         scores: np.ndarray,
@@ -402,14 +435,17 @@ class ReferenceMismatchEvaluator:
             high_side_only=high_side_only,
         )
 
+
 class FleetMismatchDecision(BaseModel):
     """Fleet-level mismatch decision for one client."""
+
     model_config = Frozen
 
     client_id: ClientId
     outcome: MismatchOutcome
     low_p_value: PValue | None = None
     high_p_value: PValue
+
 
 class DirectionalHypothesis(BaseModel):
     """One directional mismatch hypothesis: client + claimed direction."""
@@ -420,12 +456,14 @@ class DirectionalHypothesis(BaseModel):
     outcome: MismatchOutcome
     p_value: PValue
 
+
 def _directional_p_values(
     counts: BinomialCounts, band: OperatingBand
 ) -> tuple[PValue | None, PValue]:
     low = None if band.lower == 0.0 else float(binom.cdf(counts.x, counts.n, band.lower))
     high = float(binom.sf(counts.x - 1, counts.n, band.upper))
     return low, high
+
 
 def bonferroni_fleet_sensitivity(
     counts_by_client: Mapping[ClientId, BinomialCounts],
@@ -457,6 +495,7 @@ def bonferroni_fleet_sensitivity(
         )
     return tuple(decisions)
 
+
 def _holm_rejected(
     hypotheses: list[DirectionalHypothesis],
     alpha: Probability,
@@ -475,6 +514,7 @@ def _holm_rejected(
             break
     return rejected
 
+
 def holm_directional_fleet_sensitivity(
     counts_by_client: Mapping[ClientId, BinomialCounts],
     band: OperatingBand,
@@ -489,14 +529,10 @@ def holm_directional_fleet_sensitivity(
         diagnostics[client_id] = (low, high)
         if low is not None:
             hypotheses.append(
-                DirectionalHypothesis(
-                    client_id=client_id, outcome=MismatchOutcome.LOW, p_value=low
-                )
+                DirectionalHypothesis(client_id=client_id, outcome=MismatchOutcome.LOW, p_value=low)
             )
         hypotheses.append(
-            DirectionalHypothesis(
-                client_id=client_id, outcome=MismatchOutcome.HIGH, p_value=high
-            )
+            DirectionalHypothesis(client_id=client_id, outcome=MismatchOutcome.HIGH, p_value=high)
         )
 
     rejected = _holm_rejected(hypotheses, familywise_alpha)
@@ -523,6 +559,7 @@ def holm_directional_fleet_sensitivity(
             )
         )
     return tuple(decisions)
+
 
 class DeploymentDecision:
     """Combine independent evidence without reinterpreting inconclusive states."""
@@ -551,7 +588,10 @@ class DeploymentDecision:
                 reason=DecisionReason.NO_MATERIAL_DIFFERENCE,
                 tie_count=tie_count,
             )
-        if readiness.plan.state is CalibrationReadinessState.NOT_READY or readiness.threshold is None:
+        if (
+            readiness.plan.state is CalibrationReadinessState.NOT_READY
+            or readiness.threshold is None
+        ):
             return ThresholdDecision(
                 state=DecisionState.CALIBRATION_DEFICIT,
                 threshold=reference.value,

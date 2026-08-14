@@ -15,5 +15,8 @@ def test_locked_synthetic_workload_counts() -> None:
     assert catalogue.spec(ExperimentId.TARGET_FPR_SYNTHETIC).workload.monte_carlo_trials == 360_000
     assert catalogue.spec(ExperimentId.TEMPORAL_DEPENDENCE).workload.monte_carlo_trials == 120_000
     assert catalogue.spec(ExperimentId.CALIBRATION_SHIFT).workload.monte_carlo_trials == 50_000
-    assert catalogue.spec(ExperimentId.CALIBRATION_CONTAMINATION).workload.monte_carlo_trials == 120_000
+    assert (
+        catalogue.spec(ExperimentId.CALIBRATION_CONTAMINATION).workload.monte_carlo_trials
+        == 120_000
+    )
     assert catalogue.spec(ExperimentId.MISMATCH_POWER).workload.exact_cells == 45

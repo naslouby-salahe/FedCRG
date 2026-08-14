@@ -95,11 +95,13 @@ FrozenModel = ConfigDict(frozen=True, extra="forbid", use_enum_values=False)
 
 _CALIBRATION_SEED_ADAPTER = TypeAdapter(CalibrationSeed)
 
+
 def _sha256_json(payload: object) -> Sha256:
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode(
         "utf-8"
     )
     return hashlib.sha256(encoded).hexdigest()
+
 
 class ProtocolConfig(BaseModel):
     """Locked FedCRG decision-protocol parameters."""
@@ -122,6 +124,7 @@ class ProtocolConfig(BaseModel):
             upper=min(1.0, self.alpha * (1.0 + self.rho)),
         )
 
+
 class StatisticsConfig(BaseModel):
     """Locked confirmatory statistical-analysis choices."""
 
@@ -140,6 +143,7 @@ class StatisticsConfig(BaseModel):
         """Signed allowance used by the locked non-inferiority comparison."""
         return -self.utility_margin
 
+
 class RandomnessConfig(BaseModel):
     """Seed registry shared by real-data experiments."""
 
@@ -154,6 +158,7 @@ class RandomnessConfig(BaseModel):
         if len(set(self.model_seeds)) != len(self.model_seeds):
             raise ValueError("Model seeds must be unique")
         return self
+
 
 class TrainingConfig(BaseModel):
     """Frozen federated-training specification with no hidden scientific defaults."""
@@ -186,6 +191,7 @@ class TrainingConfig(BaseModel):
             raise ValueError("Adam betas must be in (0, 1)")
         return self
 
+
 class AutoencoderConfig(BaseModel):
     """Frozen autoencoder architecture and initialization contract."""
 
@@ -196,6 +202,7 @@ class AutoencoderConfig(BaseModel):
     activation: Literal[ActivationId.TANH] = ActivationId.TANH
     xavier_tanh_gain: XavierGain
     zero_bias: Literal[True] = True
+
 
 class DeepSvddConfig(BaseModel):
     """Frozen Deep-SVDD encoder and center-mode contract."""
@@ -211,7 +218,9 @@ class DeepSvddConfig(BaseModel):
         DeepSvddCenterMode.EQUAL_MEAN_OF_CLIENT_INITIAL_EMBEDDINGS
     )
 
+
 DetectorConfig = Annotated[AutoencoderConfig | DeepSvddConfig, Field(discriminator="id")]
+
 
 class StudyConfig(BaseModel):
     """Everything study-wide: protocol, statistics, randomness, profiles, policies."""
@@ -246,6 +255,7 @@ class StudyConfig(BaseModel):
         except KeyError as exc:
             raise ConfigurationError(f"Unknown training profile: {profile_id!r}") from exc
 
+
 class ExpectedBenignCounts(RootModel[dict[ClientId, PositiveCount]]):
     """Per-client expected benign row counts, keyed by the typed client id."""
 
@@ -261,6 +271,7 @@ class ExpectedBenignCounts(RootModel[dict[ClientId, PositiveCount]]):
 
     def __len__(self) -> int:
         return len(self.root)
+
 
 class SplitConfig(BaseModel):
     """Per-client benign/attack role sizing for one dataset contract."""
@@ -289,6 +300,7 @@ class SplitConfig(BaseModel):
     @property
     def minimum_benign_rows(self) -> SampleCount:
         return self.train_benign + self.reservoir_size + self.min_benign_test
+
 
 class DatasetConfig(BaseModel):
     """Identity, feature contract, eligibility rule, and role sizing of one dataset."""
@@ -354,8 +366,10 @@ class DatasetConfig(BaseModel):
                 raise ValueError("Synthetic experiments must use the synthetic feature contract")
         return self
 
+
 class DatasetCatalogue(RootModel[dict[DatasetId, DatasetConfig]]):
     """Frozen dataset-contract registry keyed by dataset identity."""
+
     """All dataset contracts, keyed by dataset id."""
 
     @field_validator("root", mode="before")
@@ -370,6 +384,7 @@ class DatasetCatalogue(RootModel[dict[DatasetId, DatasetConfig]]):
             return self.root[dataset_id]
         except KeyError as exc:
             raise ConfigurationError(f"Unknown dataset contract: {dataset_id.value}") from exc
+
 
 AxisValue: TypeAlias = (
     int
@@ -386,6 +401,7 @@ _AXIS_VALUE_TYPES: dict[ExperimentAxisId, type[AxisValue] | None] = {
     ExperimentAxisId.PROCEDURE: MultiplicityProcedure,
     ExperimentAxisId.ASSIGNMENT: CalibrationAssignmentMode,
 }
+
 
 class ParameterAxis(BaseModel):
     """An independent axis whose values may be crossed with other independent axes."""
@@ -411,12 +427,15 @@ class ParameterAxis(BaseModel):
             raise ValueError(f"Experiment axis {self.id.value} contains duplicate values")
         return self
 
+
 class ParameterSetting(BaseModel):
     """One locked axis value in an experiment cell."""
+
     model_config = ConfigDict(frozen=True)
 
     axis: ExperimentAxisId
     value: AxisValue
+
 
 class ParameterCell(BaseModel):
     """A coupled combination that must be evaluated together, not Cartesian-crossed."""
@@ -452,13 +471,16 @@ class ParameterCell(BaseModel):
                 return setting.value
         raise KeyError(axis.value)
 
+
 class WorkloadExpectation(BaseModel):
     """Locked workload ledger for one experiment."""
+
     model_config = ConfigDict(frozen=True)
 
     monte_carlo_trials: NonNegativeCount = 0
     exact_cells: NonNegativeCount = 0
     detector_trainings: NonNegativeCount = 0
+
 
 class ExperimentSpec(BaseModel):
     """One locked catalogue entry; the only description of what an experiment contains."""
@@ -547,6 +569,7 @@ class ExperimentSpec(BaseModel):
     def all_datasets(self) -> tuple[DatasetId, ...]:
         return self.datasets or ((self.dataset,) if self.dataset else ())
 
+
 class ExperimentCatalogue(RootModel[tuple[ExperimentSpec, ...]]):
     """The locked experiment registry; exactly one entry per ExperimentId."""
 
@@ -577,6 +600,7 @@ class ExperimentCatalogue(RootModel[tuple[ExperimentSpec, ...]]):
 
     def all(self) -> tuple[ExperimentSpec, ...]:
         return self.root
+
 
 class ExperimentConfig(BaseModel):
     """Fully resolved, validated execution configuration for one experiment cell."""
@@ -664,6 +688,7 @@ class ExperimentConfig(BaseModel):
             }
         )
 
+
 def load_yaml_mapping(path: Path) -> object:
     """Load one configuration document before validation."""
     try:
@@ -676,13 +701,13 @@ def load_yaml_mapping(path: Path) -> object:
         raise ConfigurationError(f"Configuration root must be a string-keyed mapping: {path}")
     return raw
 
+
 def load_study(path: Path = Path("config/study.yaml")) -> StudyConfig:
     """Load and validate the study configuration."""
     return StudyConfig.model_validate(load_yaml_mapping(path))
 
-def load_dataset_registry(
-    path: Path = Path("config/datasets.yaml")
-) -> DatasetCatalogue:
+
+def load_dataset_registry(path: Path = Path("config/datasets.yaml")) -> DatasetCatalogue:
     """Load and validate the dataset contract registry."""
     root = load_yaml_mapping(path)
     if not isinstance(root, dict):
@@ -692,9 +717,8 @@ def load_dataset_registry(
         raise ConfigurationError("datasets.yaml must contain a 'datasets' mapping")
     return DatasetCatalogue.model_validate(datasets)
 
-def load_experiment_catalogue(
-    path: Path = Path("config/experiments.yaml")
-) -> ExperimentCatalogue:
+
+def load_experiment_catalogue(path: Path = Path("config/experiments.yaml")) -> ExperimentCatalogue:
     """Load and validate the experiment catalogue."""
     root = load_yaml_mapping(path)
     if not isinstance(root, dict):
@@ -703,6 +727,7 @@ def load_experiment_catalogue(
     if not isinstance(experiments, list):
         raise ConfigurationError("experiments.yaml must contain an 'experiments' list")
     return ExperimentCatalogue.model_validate(experiments)
+
 
 def resolve_experiment_config(
     spec: ExperimentSpec,
@@ -737,6 +762,7 @@ def resolve_experiment_config(
         statistics=study.statistics,
         policies=spec.policies,
     )
+
 
 class Study:
     """One loaded configuration set with catalogue lookup and resolution."""
@@ -779,6 +805,7 @@ class Study:
             self.datasets,
             dataset_id=dataset_id,
         )
+
 
 def validate_experiment_config(config: ExperimentConfig) -> None:
     """Cross-component invariants that span resolved configuration."""

@@ -1,15 +1,18 @@
-from pathlib import Path
+"""Unit tests for communication ledgers and split-stability summaries."""
 
-from fedcrg.evaluation.communication_metrics import (
+from __future__ import annotations
+
+from fedcrg.config import Study
+from fedcrg.experiments.analyses import (
+    summarize_state_stability,
+    summarize_threshold_stability,
+)
+from fedcrg.learning.federated import (
     model_communication,
     preprocessing_communication,
-    threshold_policy_communication,
 )
-from fedcrg.analysis.split_stability import summarize_state_stability, summarize_threshold_stability
-from fedcrg.configuration.resolve import ExperimentConfigResolver
-from fedcrg.domain.enums import DecisionState, PolicyId
-
-ROOT = Path(__file__).resolve().parents[3]
+from fedcrg.thresholding.policies import threshold_policy_communication
+from fedcrg.types import DecisionState, ExperimentId, PolicyId
 
 
 def test_primary_model_communication_ledger() -> None:
@@ -25,7 +28,7 @@ def test_preprocessing_communication_ledger() -> None:
 
 
 def test_primary_policy_payload_ledger() -> None:
-    config = ExperimentConfigResolver().resolve(ROOT / "configs/experiments/primary/nbaiot.yaml")
+    config = Study.load().resolve(ExperimentId.PRIMARY_NBAIOT)
     rows = {item.policy: item for item in threshold_policy_communication(config, client_count=9)}
     assert rows[PolicyId.FEDCRG].upload_bytes_per_client == 4_000
     assert rows[PolicyId.GLOBAL_QUANTILE].upload_bytes_per_client == 44_000

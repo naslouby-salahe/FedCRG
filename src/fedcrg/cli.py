@@ -224,9 +224,7 @@ def _precompute_protocol_tables(study: Study, experiment_id: ExperimentId) -> No
     ProtocolTablePrecomputer().precompute(config, spec)
 
 
-def _purge_experiment_evidence(
-    experiment_id: ExperimentId, outputs_root: Path
-) -> None:
+def _purge_experiment_evidence(experiment_id: ExperimentId, outputs_root: Path) -> None:
     """Remove regenerable run evidence for one experiment (explicit overwrite)."""
     runs_root = OutputsLayout(outputs_root).runs
     if not runs_root.is_dir():
@@ -269,9 +267,7 @@ def doctor() -> None:
 
 
 @cli.command(name="validate")
-@click.argument(
-    "experiment_id", type=click.Choice([item.value for item in ExperimentId])
-)
+@click.argument("experiment_id", type=click.Choice([item.value for item in ExperimentId]))
 @click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), default=None)
 def validate(experiment_id: str, config_path: Path | None) -> None:
     """Validate one resolved experiment configuration."""
@@ -282,9 +278,7 @@ def validate(experiment_id: str, config_path: Path | None) -> None:
     try:
         validate_experiment_config(config)
     except Exception as exc:
-        raise click.ClickException(
-            f"Experiment {experiment.value} is invalid: {exc}"
-        ) from exc
+        raise click.ClickException(f"Experiment {experiment.value} is invalid: {exc}") from exc
     _print(
         ValidationPayload(
             valid=True,
@@ -296,9 +290,7 @@ def validate(experiment_id: str, config_path: Path | None) -> None:
 
 
 @cli.command(name="plan")
-@click.argument(
-    "experiment_id", type=click.Choice([item.value for item in ExperimentId])
-)
+@click.argument("experiment_id", type=click.Choice([item.value for item in ExperimentId]))
 @click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), default=None)
 def plan(experiment_id: str, config_path: Path | None) -> None:
     """Print the execution plan for one experiment."""
@@ -324,9 +316,7 @@ def plan(experiment_id: str, config_path: Path | None) -> None:
 @click.option("--data-root", type=click.Path(path_type=Path, exists=True), required=True)
 @click.option("--overwrite", is_flag=True, help="Rebuild the prepared cache explicitly.")
 @click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), default=None)
-def preprocess(
-    dataset_id: str, data_root: Path, overwrite: bool, config_path: Path | None
-) -> None:
+def preprocess(dataset_id: str, data_root: Path, overwrite: bool, config_path: Path | None) -> None:
     """Preprocess one raw dataset into data/preprocessed/ (reuse-first)."""
     dataset = DatasetId(dataset_id)
     try:
@@ -356,12 +346,8 @@ def preprocess(
 
 
 @cli.command(name="run")
-@click.argument(
-    "experiment_id", type=click.Choice([item.value for item in ExperimentId])
-)
-@click.option(
-    "--prepared-root", type=click.Path(path_type=Path), default=str(_PREPROCESSED_ROOT)
-)
+@click.argument("experiment_id", type=click.Choice([item.value for item in ExperimentId]))
+@click.option("--prepared-root", type=click.Path(path_type=Path), default=str(_PREPROCESSED_ROOT))
 @click.option("--outputs", type=click.Path(path_type=Path), default=str(_OUTPUTS_ROOT))
 @click.option("--overwrite", is_flag=True, help="Re-run and replace regenerable evidence.")
 @click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), default=None)
@@ -399,9 +385,7 @@ def run(
         )
         return
     _precompute_protocol_tables(study, experiment)
-    workload = RunAllExperiments().execute(
-        experiment, config, prepared_root
-    )
+    workload = RunAllExperiments().execute(experiment, config, prepared_root)
     _print(
         RunPayload(
             experiment=experiment,
@@ -420,11 +404,11 @@ def run(
     multiple=True,
     type=click.Choice([item.value for item in ExperimentId]),
 )
-@click.option(
-    "--prepared-root", type=click.Path(path_type=Path), default=str(_PREPROCESSED_ROOT)
-)
+@click.option("--prepared-root", type=click.Path(path_type=Path), default=str(_PREPROCESSED_ROOT))
 @click.option("--outputs", type=click.Path(path_type=Path), default=str(_OUTPUTS_ROOT))
-@click.option("--results", "results_root", type=click.Path(path_type=Path), default=str(_RESULTS_ROOT))
+@click.option(
+    "--results", "results_root", type=click.Path(path_type=Path), default=str(_RESULTS_ROOT)
+)
 @click.option("--overwrite", is_flag=True, help="Restart the campaign from scratch.")
 @click.option("--config", "config_path", type=click.Path(path_type=Path, exists=True), default=None)
 def campaign(
@@ -448,9 +432,7 @@ def campaign(
         selected = tuple(ExperimentId(item) for item in experiments)
     else:
         selected = tuple(
-            spec.id
-            for spec in study.catalogue.all()
-            if spec.category not in _SYNTHETIC_CATEGORIES
+            spec.id for spec in study.catalogue.all() if spec.category not in _SYNTHETIC_CATEGORIES
         )
     work_items = tuple(
         CampaignWorkItem(
@@ -536,7 +518,9 @@ def status(experiment_id: str | None, outputs: Path, campaign_id: str) -> None:
             _CAMPAIGN_ID_ADAPTER.validate_python(campaign_id)
         )
         campaign_record = campaign_status.campaign_id
-        campaign_stage = campaign_status.current_stage.value if campaign_status.current_stage else None
+        campaign_stage = (
+            campaign_status.current_stage.value if campaign_status.current_stage else None
+        )
     except FileNotFoundError:
         pass
     _print(
@@ -600,7 +584,9 @@ def results_group() -> None:
 @results_group.command(name="build")
 @click.argument("campaign_id")
 @click.option("--outputs", type=click.Path(path_type=Path), default=str(_OUTPUTS_ROOT))
-@click.option("--results", "results_root", type=click.Path(path_type=Path), default=str(_RESULTS_ROOT))
+@click.option(
+    "--results", "results_root", type=click.Path(path_type=Path), default=str(_RESULTS_ROOT)
+)
 def results_build(campaign_id: str, outputs: Path, results_root: Path) -> None:
     """Build the publication bundle for one campaign from immutable evidence."""
     path = build_results_bundle(
@@ -614,7 +600,9 @@ def results_build(campaign_id: str, outputs: Path, results_root: Path) -> None:
 @results_group.command(name="verify")
 @click.argument("campaign_id")
 @click.option("--outputs", type=click.Path(path_type=Path), default=str(_OUTPUTS_ROOT))
-@click.option("--results", "results_root", type=click.Path(path_type=Path), default=str(_RESULTS_ROOT))
+@click.option(
+    "--results", "results_root", type=click.Path(path_type=Path), default=str(_RESULTS_ROOT)
+)
 def results_verify(campaign_id: str, outputs: Path, results_root: Path) -> None:
     """Verify that a publication bundle is complete, consistent, and hash-valid."""
     verification = verify_results_bundle(
@@ -622,11 +610,7 @@ def results_verify(campaign_id: str, outputs: Path, results_root: Path) -> None:
         results_root=results_root,
         outputs_root=outputs,
     )
-    _print(
-        ResultsVerifyPayload(
-            valid=verification.valid, problems=tuple(verification.problems)
-        )
-    )
+    _print(ResultsVerifyPayload(valid=verification.valid, problems=tuple(verification.problems)))
     if not verification.valid:
         raise click.ClickException("Results verification failed")
 

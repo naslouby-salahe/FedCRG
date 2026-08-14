@@ -117,9 +117,7 @@ def test_no_implementation_history_in_comments() -> None:
             for term in history_terms:
                 if term in lowered:
                     violations.append(f"{relative}:{node.lineno} {node.name}: {term!r}")
-    assert not violations, "Implementation-history commentary remains:\n" + "\n".join(
-        violations
-    )
+    assert not violations, "Implementation-history commentary remains:\n" + "\n".join(violations)
 
 
 def test_public_docstrings_describe_contracts() -> None:

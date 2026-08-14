@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import torch
 
-from fedcrg.domain.enums import ComputeDeviceId
-from fedcrg.runtime.gpu import cuda_device_info, resolve_compute_device
+from fedcrg.runtime import cuda_device_info, resolve_compute_device
+from fedcrg.types import ComputeDeviceId
 
 
 def test_cpu_device_resolves_without_cuda() -> None:
@@ -14,9 +14,6 @@ def test_cpu_device_resolves_without_cuda() -> None:
 
 
 def test_cuda_required_without_cuda_device_raises() -> None:
-    # The guard must refuse silent CPU fallback. When CUDA is genuinely absent this
-    # raises; when CUDA is present the resolution succeeds and the test still passes
-    # because the returned device is a CUDA device.
     device = resolve_compute_device(ComputeDeviceId.CUDA)
     assert device.type == "cuda"
 

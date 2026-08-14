@@ -1,28 +1,38 @@
+"""Unit tests for train-only preprocessing statistics and transform."""
+
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 import pytest
+from pydantic import TypeAdapter
 
-from fedcrg.domain.enums import DataRole, DatasetId
-from fedcrg.domain.errors import DataIntegrityError
-from fedcrg.domain.identifiers import ClientId
-from fedcrg.datasets.splits import ClientSplits, RoleFrame
-from fedcrg.datasets.preprocessing import FederatedPreprocessor
+from fedcrg.data.datasets import DataIntegrityError
+from fedcrg.data.preprocessing import ClientSplits, RoleFrame, TrainOnlyPreprocessing
+from fedcrg.types import ClientId, DataRole, DatasetId
 
-C1 = ClientId("c1")
-C2 = ClientId("c2")
+_CLIENT_ID_ADAPTER = TypeAdapter(ClientId)
+C1 = _CLIENT_ID_ADAPTER.validate_python("c1")
+C2 = _CLIENT_ID_ADAPTER.validate_python("c2")
 
 
 def _splits(values: np.ndarray) -> ClientSplits:
     frame = pd.DataFrame(values, columns=["f1", "f2"])
     frame["row_id"] = [f"r{i}" for i in range(len(frame))]
-    return ClientSplits(C1, (RoleFrame(DataRole.TRAIN, frame),))
+    return ClientSplits(
+        client_id=C1, roles=(RoleFrame(role=DataRole.TRAIN, frame=frame),)
+    )
 
 
 def test_nbaiot_preprocessing_uses_global_train_extrema_without_clipping() -> None:
     first = _splits(np.array([[0.0, 5.0], [1.0, 5.0]]))
-    second_frame = pd.DataFrame({"f1": [2.0, 3.0], "f2": [5.0, 5.0], "row_id": ["x", "y"]})
-    second = ClientSplits(C2, (RoleFrame(DataRole.TRAIN, second_frame),))
-    preprocessor = FederatedPreprocessor()
+    second_frame = pd.DataFrame(
+        {"f1": [2.0, 3.0], "f2": [5.0, 5.0], "row_id": ["x", "y"]}
+    )
+    second = ClientSplits(
+        client_id=C2, roles=(RoleFrame(role=DataRole.TRAIN, frame=second_frame),)
+    )
+    preprocessor = TrainOnlyPreprocessing()
     statistics = (
         preprocessor.client_statistics(first, DatasetId.NBAIOT, expected_features=2),
         preprocessor.client_statistics(second, DatasetId.NBAIOT, expected_features=2),
@@ -36,11 +46,21 @@ def test_nbaiot_preprocessing_uses_global_train_extrema_without_clipping() -> No
 
 
 def test_diad_preprocessing_imputes_from_client_train_median() -> None:
-    frame = pd.DataFrame({"f1": np.arange(100, dtype=float), "f2": np.arange(100, dtype=float) * 2.0, "row_id": [f"r{i}" for i in range(100)]})
+    frame = pd.DataFrame(
+        {
+            "f1": np.arange(100, dtype=float),
+            "f2": np.arange(100, dtype=float) * 2.0,
+            "row_id": [f"r{i}" for i in range(100)],
+        }
+    )
     frame.loc[0, "f1"] = np.nan
-    splits = ClientSplits(C1, (RoleFrame(DataRole.TRAIN, frame),))
-    preprocessor = FederatedPreprocessor()
-    statistics = (preprocessor.client_statistics(splits, DatasetId.DIAD, expected_features=2),)
+    splits = ClientSplits(
+        client_id=C1, roles=(RoleFrame(role=DataRole.TRAIN, frame=frame),)
+    )
+    preprocessor = TrainOnlyPreprocessing()
+    statistics = (
+        preprocessor.client_statistics(splits, DatasetId.DIAD, expected_features=2),
+    )
     model = preprocessor.aggregate(statistics, DatasetId.DIAD)
     assert model.parameters_for(C1).medians == (50.0, 99.0)
     transformed = model.transform(frame, C1)
@@ -51,4 +71,23 @@ def test_diad_training_finite_rate_is_enforced() -> None:
     values = np.ones((100, 2))
     values[:2, 0] = np.nan
     with pytest.raises(DataIntegrityError, match="DIAD_FEATURE_FINITE_RATE_FAIL"):
-        FederatedPreprocessor().validate_training_rows(_splits(values), DatasetId.DIAD, expected_features=2)
+        TrainOnlyPreprocessing().validate_training_rows(
+            _splits(values), DatasetId.DIAD, expected_features=2
+        )
+
+
+def test_aggregate_rejects_feature_order_drift() -> None:
+    preprocessor = TrainOnlyPreprocessing()
+    first = _splits(np.array([[0.0, 5.0], [1.0, 5.0]]))
+    second_frame = pd.DataFrame(
+        {"f2": [5.0, 5.0], "f1": [2.0, 3.0], "row_id": ["x", "y"]}
+    )
+    second = ClientSplits(
+        client_id=C2, roles=(RoleFrame(role=DataRole.TRAIN, frame=second_frame),)
+    )
+    statistics = (
+        preprocessor.client_statistics(first, DatasetId.NBAIOT, expected_features=2),
+        preprocessor.client_statistics(second, DatasetId.NBAIOT, expected_features=2),
+    )
+    with pytest.raises(DataIntegrityError):
+        preprocessor.aggregate(statistics, DatasetId.NBAIOT)

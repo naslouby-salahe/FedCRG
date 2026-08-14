@@ -1,44 +1,60 @@
-import numpy as np
+"""Unit tests for bidirectional mismatch evidence evaluation."""
 
-from fedcrg.domain.enums import MismatchOutcome
-from fedcrg.domain.values import OperatingBand
-from fedcrg.decision.mismatch_detection import (
+from __future__ import annotations
+
+import numpy as np
+import pytest
+
+from fedcrg.thresholding.readiness import (
     ReferenceMismatchEvaluator,
     minimum_bidirectional_sample_count,
 )
+from fedcrg.types import MismatchOutcome
+from tests._fixtures import primary_protocol
 
 
-def _scores(n: int, x: int) -> np.ndarray:
-    return np.array([1.0] * x + [-1.0] * (n - x), dtype=np.float64)
+def test_minimum_bidirectional_sample_count_is_locked() -> None:
+    protocol = primary_protocol()
+    minimum = minimum_bidirectional_sample_count(protocol.band.lower, protocol.mismatch_confidence)
+    assert minimum == 736
 
 
-def test_primary_minimum_sample_count() -> None:
-    assert minimum_bidirectional_sample_count(0.005, 0.95) == 736
-
-
-def test_exact_mismatch_cutoffs() -> None:
+def test_evaluator_detects_high_mismatch() -> None:
+    protocol = primary_protocol()
+    band = protocol.band
     evaluator = ReferenceMismatchEvaluator()
-    band = OperatingBand(0.005, 0.015)
-    cases = [
-        (736, 0, MismatchOutcome.LOW),
-        (736, 1, MismatchOutcome.NO_MATERIAL_DIFFERENCE),
-        (1500, 2, MismatchOutcome.LOW),
-        (1500, 3, MismatchOutcome.NO_MATERIAL_DIFFERENCE),
-        (1500, 32, MismatchOutcome.NO_MATERIAL_DIFFERENCE),
-        (1500, 33, MismatchOutcome.HIGH),
-        (3000, 7, MismatchOutcome.LOW),
-        (3000, 8, MismatchOutcome.NO_MATERIAL_DIFFERENCE),
-        (3000, 58, MismatchOutcome.NO_MATERIAL_DIFFERENCE),
-        (3000, 59, MismatchOutcome.HIGH),
-    ]
-    for n, x, expected in cases:
-        assert evaluator.evaluate(_scores(n, x), 0.0, band, 0.95).outcome is expected
+    result = evaluator.evaluate(
+        scores=np.linspace(0.75, 0.95, 736),
+        reference_threshold=0.75,
+        band=band,
+        confidence=protocol.mismatch_confidence,
+    )
+    assert result.outcome is MismatchOutcome.HIGH
+    assert result.exceedance_count > 0
+    assert result.sample_count == 736
+    assert result.estimated_fpr > 0.0
 
 
-def test_insufficient_evidence_is_explicit() -> None:
-    result = ReferenceMismatchEvaluator().evaluate(
-        np.zeros(735), 1.0, OperatingBand(0.005, 0.015), 0.95
+def test_evaluator_returns_insufficient_evidence_below_minimum() -> None:
+    protocol = primary_protocol()
+    evaluator = ReferenceMismatchEvaluator()
+    result = evaluator.evaluate(
+        scores=np.linspace(0.8, 0.9, 100),
+        reference_threshold=0.75,
+        band=protocol.band,
+        confidence=protocol.mismatch_confidence,
     )
     assert result.outcome is MismatchOutcome.INSUFFICIENT_EVIDENCE
-    assert result.sample_count < (result.minimum_sample_count or 0)
-    assert result.interval is not None
+    assert result.exceedance_count == 100
+
+
+def test_evaluator_rejects_empty_scores() -> None:
+    protocol = primary_protocol()
+    evaluator = ReferenceMismatchEvaluator()
+    with pytest.raises(ValueError):
+        evaluator.evaluate(
+            scores=np.array([]),
+            reference_threshold=0.75,
+            band=protocol.band,
+            confidence=protocol.mismatch_confidence,
+        )

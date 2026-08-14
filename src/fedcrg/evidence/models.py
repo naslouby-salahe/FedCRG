@@ -28,9 +28,10 @@ from fedcrg.types import (
     Fraction,
     Identifier,
     ModelSeed,
-    PValue,
+    PathString,
     PolicyId,
     PositiveCount,
+    PValue,
     RunId,
     SampleCount,
     Sha256,
@@ -45,6 +46,7 @@ Frozen = ConfigDict(frozen=True)
 
 class SourceFileManifest(BaseModel):
     """One source file's identity and integrity pin."""
+
     model_config = Frozen
 
     relative_path: PurePosixPath
@@ -54,15 +56,18 @@ class SourceFileManifest(BaseModel):
 
 class CalibrationAssignmentReference(BaseModel):
     """Reference to a calibration-assignment artifact."""
+
     model_config = Frozen
 
     calibration_seed: CalibrationSeed
     mode: CalibrationAssignmentMode
+    relative_path: PurePosixPath
     sha256: Sha256
 
 
 class RoleArtifactManifest(BaseModel):
     """One role partition artifact's identity and hash."""
+
     model_config = Frozen
 
     role: DataRole
@@ -74,6 +79,7 @@ class RoleArtifactManifest(BaseModel):
 
 class ClientDatasetManifest(BaseModel):
     """One client's prepared role partitions."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -88,6 +94,7 @@ class ClientDatasetManifest(BaseModel):
 
 class PreparedDatasetManifest(BaseModel):
     """Frozen prepared-dataset contract across all clients."""
+
     model_config = Frozen
 
     dataset_id: DatasetId
@@ -116,6 +123,7 @@ class PreparedDatasetManifest(BaseModel):
 
 class ClientTrainingCount(BaseModel):
     """Training-row ledger entry for one client."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -124,6 +132,7 @@ class ClientTrainingCount(BaseModel):
 
 class TrainingManifest(BaseModel):
     """Frozen training evidence for one model seed."""
+
     model_config = Frozen
 
     dataset_id: DatasetId
@@ -141,6 +150,7 @@ class TrainingManifest(BaseModel):
 
 class CalibrationRoleManifest(BaseModel):
     """One client's seeded calibration role assignment."""
+
     model_config = Frozen
 
     role: DataRole
@@ -150,6 +160,7 @@ class CalibrationRoleManifest(BaseModel):
 
 class ClientCalibrationManifest(BaseModel):
     """Per-client calibration-role assignment evidence."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -164,6 +175,7 @@ class ClientCalibrationManifest(BaseModel):
 
 class CalibrationAssignmentManifest(BaseModel):
     """Frozen calibration assignments across clients."""
+
     model_config = Frozen
 
     calibration_seed: CalibrationSeed
@@ -179,6 +191,7 @@ class CalibrationAssignmentManifest(BaseModel):
 
 class EligibilityManifest(BaseModel):
     """Frozen eligibility audit across discovered clients."""
+
     model_config = Frozen
 
     dataset_id: DatasetId
@@ -187,6 +200,7 @@ class EligibilityManifest(BaseModel):
 
 class RunManifest(BaseModel):
     """Frozen evidence manifest for one policy run."""
+
     model_config = Frozen
 
     run_id: RunId
@@ -200,6 +214,7 @@ class RunManifest(BaseModel):
 
 class ThresholdRecord(BaseModel):
     """Serialized threshold decision evidence for one client."""
+
     model_config = Frozen
 
     run_id: RunId
@@ -225,6 +240,7 @@ class ThresholdRecord(BaseModel):
 
 class MetricRecord(BaseModel):
     """Serialized evaluation metrics for one client."""
+
     model_config = Frozen
 
     run_id: RunId
@@ -249,14 +265,16 @@ class MetricRecord(BaseModel):
 
 class ChecksumRecord(BaseModel):
     """One file's relative bundle path and SHA-256."""
+
     model_config = Frozen
 
-    relative_path: Identifier
+    relative_path: PathString
     sha256: Sha256
 
 
 class CacheReference(BaseModel):
     """Pointer to an immutable cache artifact."""
+
     model_config = Frozen
 
     relative_path: Identifier
@@ -266,6 +284,7 @@ class CacheReference(BaseModel):
 
 class GitEnvironment(BaseModel):
     """Repository and Python environment pin."""
+
     model_config = Frozen
 
     git_commit: Identifier

@@ -1,7 +1,11 @@
+"""Unit tests for locked detector architecture contracts."""
+
+from __future__ import annotations
+
 import torch
 
-from fedcrg.configuration.detector_config import AutoencoderConfig
-from fedcrg.detectors.autoencoder import Autoencoder
+from fedcrg.config import AutoencoderConfig
+from fedcrg.learning.detectors import Autoencoder
 
 
 def test_locked_autoencoder_parameter_counts_and_zero_biases() -> None:
@@ -17,3 +21,9 @@ def test_locked_autoencoder_parameter_counts_and_zero_biases() -> None:
         for module in model.modules():
             if isinstance(module, torch.nn.Linear):
                 assert torch.count_nonzero(module.bias).item() == 0
+
+
+def test_autoencoder_anomaly_scores_have_reconstruction_shape() -> None:
+    model = Autoencoder(4, AutoencoderConfig(hidden_dims=(2, 1), xavier_tanh_gain=5.0 / 3.0))
+    scores = model.anomaly_score(torch.randn(6, 4))
+    assert scores.shape == (6,)

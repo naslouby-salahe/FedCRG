@@ -1,14 +1,51 @@
+"""Unit tests for federated training protocol contracts."""
+
+from __future__ import annotations
+
 import pytest
 import torch
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 from torch.utils.data import TensorDataset
-from fedcrg.configuration.detector_config import AutoencoderConfig
-from fedcrg.configuration.training_config import TrainingConfig
-from fedcrg.domain.enums import ComputeDeviceId
-from fedcrg.domain.identifiers import ClientId
-from fedcrg.detectors.autoencoder import Autoencoder
-from fedcrg.federation.learning_rate import cosine_learning_rate
-from fedcrg.federation.training import FederatedTrainer
+
+from fedcrg.config import AutoencoderConfig, TrainingConfig
+from fedcrg.learning.detectors import Autoencoder
+from fedcrg.learning.federated import FederatedTrainer, cosine_learning_rate
+from fedcrg.types import (
+    AggregationId,
+    ClientId,
+    ComputeDeviceId,
+    OptimizerId,
+)
+
+_CLIENT_ID_ADAPTER = TypeAdapter(ClientId)
+
+
+def _clients(count: int) -> dict[ClientId, TensorDataset]:
+    return {
+        _CLIENT_ID_ADAPTER.validate_python(f"c{i}"): TensorDataset(torch.randn(4, 2))
+        for i in range(count)
+    }
+
+
+def _config(fraction: float = 1.0) -> TrainingConfig:
+    return TrainingConfig(
+        rounds=1,
+        local_epochs=1,
+        batch_size=2,
+        optimizer=OptimizerId.ADAM,
+        learning_rate_initial=1e-3,
+        learning_rate_final=1e-3,
+        adam_betas=(0.9, 0.999),
+        adam_epsilon=1e-8,
+        weight_decay=0.0,
+        client_fraction=fraction,
+        aggregation=AggregationId.EQUAL_CLIENT_MEAN,
+        early_stopping=False,
+        mixed_precision=False,
+        deterministic_algorithms=True,
+        record_round20_score_correlation=False,
+        device=ComputeDeviceId.CPU,
+    )
 
 
 def test_learning_rate_uses_configured_endpoints() -> None:
@@ -18,36 +55,16 @@ def test_learning_rate_uses_configured_endpoints() -> None:
 
 def test_client_fraction_is_locked_to_full_participation() -> None:
     model = Autoencoder(2, AutoencoderConfig(hidden_dims=(1,), xavier_tanh_gain=5.0 / 3.0))
-    datasets = {ClientId(f"c{i}"): TensorDataset(torch.randn(4, 2)) for i in range(4)}
-    config = TrainingConfig(
-        rounds=1,
-        local_epochs=1,
-        batch_size=2,
-        learning_rate_initial=1e-3,
-        learning_rate_final=1e-3,
-        adam_betas=(0.9, 0.999),
-        adam_epsilon=1e-8,
-        weight_decay=0.0,
-        client_fraction=1.0,
-        record_round20_score_correlation=False,
-        device=ComputeDeviceId.CPU,
-    )
-    _, result = FederatedTrainer().train(model, datasets, config, model_seed=11)
+    _, result = FederatedTrainer().train(model, _clients(4), _config(), model_seed=11)
     assert len(result.rounds[0].selected_clients) == 4
+    assert result.rounds[0].round_communication_bytes > 0
 
 
 def test_client_fraction_below_one_is_rejected() -> None:
     with pytest.raises(ValidationError):
-        TrainingConfig(
-            rounds=1,
-            local_epochs=1,
-            batch_size=2,
-            client_fraction=0.5,
-            learning_rate_initial=1e-3,
-            learning_rate_final=1e-3,
-            adam_betas=(0.9, 0.999),
-            adam_epsilon=1e-8,
-            weight_decay=0.0,
-            record_round20_score_correlation=False,
-            device=ComputeDeviceId.CPU,
-        )
+        _config(fraction=0.5)
+
+
+def test_training_records_numerical_contamination() -> None:
+    with pytest.raises((ValueError, FloatingPointError)):
+        cosine_learning_rate(3, 3, 0.2, 0.01)

@@ -120,11 +120,13 @@ class ModelStore(Generic[ModelT]):
 
 class PreparedDatasetManifestStore(ModelStore):
     """Atomic store for prepared-dataset manifests."""
+
     model = PreparedDatasetManifest
 
 
 class TrainingManifestStore(ModelStore):
     """Atomic store for training manifests."""
+
     model = TrainingManifest
 
 
@@ -162,16 +164,19 @@ class RunManifestStore(ModelStore):
 
 class EligibilityManifestStore(ModelStore):
     """Atomic store for eligibility manifests."""
+
     model = EligibilityManifest
 
 
 class CalibrationAssignmentManifestStore(ModelStore):
     """Atomic store for calibration-assignment manifests."""
+
     model = CalibrationAssignmentManifest
 
 
 class CacheReferenceStore(ModelStore):
     """Atomic store for cache references."""
+
     model = CacheReference
 
     @staticmethod
@@ -427,6 +432,7 @@ def build_run_id(
 
 class FileHashRecord:
     """One file's relative path and SHA-256."""
+
     def __init__(self, relative_path: Identifier, sha256: Sha256) -> None:
         self.relative_path = relative_path
         self.sha256 = sha256
@@ -434,6 +440,7 @@ class FileHashRecord:
 
 class VerificationResult:
     """Outcome of an artifact verification audit."""
+
     def __init__(
         self,
         valid: bool,
@@ -576,9 +583,7 @@ def capture_environment(repository_root: Path) -> GitEnvironment:
         "commit": commit,
         "patch_sha256": patch_hash,
     }
-    pin_sha = hashlib.sha256(
-        json.dumps(pin_payload, sort_keys=True).encode("utf-8")
-    ).hexdigest()
+    pin_sha = hashlib.sha256(json.dumps(pin_payload, sort_keys=True).encode("utf-8")).hexdigest()
     return GitEnvironment(
         git_commit=commit,
         git_clean=clean,

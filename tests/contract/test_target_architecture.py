@@ -32,8 +32,15 @@ def test_only_intended_production_packages_exist() -> None:
 
 
 def test_expected_top_level_modules_exist() -> None:
-    for name in ("__init__.py", "__main__.py", "cli.py", "types.py", "config.py",
-                 "reporting.py", "runtime.py"):
+    for name in (
+        "__init__.py",
+        "__main__.py",
+        "cli.py",
+        "types.py",
+        "config.py",
+        "reporting.py",
+        "runtime.py",
+    ):
         assert (SRC / name).is_file(), f"Missing top-level module {name}"
 
 
@@ -159,8 +166,17 @@ def test_no_vague_module_names() -> None:
     import ast
 
     vague = {
-        "utils", "helpers", "common", "manager", "handler", "processor",
-        "engine", "service", "base", "registry", "factory",
+        "utils",
+        "helpers",
+        "common",
+        "manager",
+        "handler",
+        "processor",
+        "engine",
+        "service",
+        "base",
+        "registry",
+        "factory",
     }
     for path in _python_files(SRC):
         if path.name in ("__init__.py", "__main__.py"):
@@ -173,8 +189,7 @@ def test_no_vague_module_names() -> None:
                 lowered = node.name.lower()
                 for token in vague:
                     assert not lowered.endswith(token), (
-                        f"{path.relative_to(ROOT)} defines {node.name}, "
-                        f"a vague {token} class name"
+                        f"{path.relative_to(ROOT)} defines {node.name}, a vague {token} class name"
                     )
 
 

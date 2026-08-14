@@ -81,9 +81,7 @@ def test_no_or_fallback_scientific_values() -> None:
             for value in node.values:
                 if isinstance(value, ast.Constant) and isinstance(value.value, (int, float)):
                     if value.value != 0:
-                        violations.append(
-                            f"{relative}:{node.lineno} or-fallback {value.value!r}"
-                        )
+                        violations.append(f"{relative}:{node.lineno} or-fallback {value.value!r}")
     assert not violations, "or-fallback scientific values remain:\n" + "\n".join(violations)
 
 
@@ -128,7 +126,5 @@ def test_no_scientific_pydantic_defaults_outside_config_owner() -> None:
                     if statement.value.value != 0:
                         target = statement.target
                         name = target.id if isinstance(target, ast.Name) else "?"
-                        violations.append(
-                            f"{relative}:{statement.lineno} {node.name}.{name}"
-                        )
+                        violations.append(f"{relative}:{statement.lineno} {node.name}.{name}")
     assert not violations, "Scientific Pydantic defaults remain:\n" + "\n".join(violations)

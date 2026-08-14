@@ -73,9 +73,7 @@ def threshold_policy_communication(
     if client_count <= 0:
         raise ValueError("Policy traffic accounting requires a positive client count")
     split = config.dataset.split
-    full_policy_budget = (
-        split.reference_benign + split.mismatch_benign + split.calibration_benign
-    )
+    full_policy_budget = split.reference_benign + split.mismatch_benign + split.calibration_benign
     reference_payload = split.reference_benign * _FLOAT64_BYTES
     full_budget_payload = full_policy_budget * _FLOAT64_BYTES
     candidates = config.statistics.supervised_threshold_candidates
@@ -83,19 +81,27 @@ def threshold_policy_communication(
     candidate_payload = candidates * _FLOAT64_BYTES
 
     rows = (
-        PolicyTrafficLedgerRow(policy=PolicyId.REFERENCE_QUANTILE, upload_bytes_per_client=reference_payload),
-        PolicyTrafficLedgerRow(policy=PolicyId.GLOBAL_QUANTILE, upload_bytes_per_client=full_budget_payload),
+        PolicyTrafficLedgerRow(
+            policy=PolicyId.REFERENCE_QUANTILE, upload_bytes_per_client=reference_payload
+        ),
+        PolicyTrafficLedgerRow(
+            policy=PolicyId.GLOBAL_QUANTILE, upload_bytes_per_client=full_budget_payload
+        ),
         PolicyTrafficLedgerRow(policy=PolicyId.LOCAL_QUANTILE, upload_bytes_per_client=0),
         PolicyTrafficLedgerRow(policy=PolicyId.READINESS_ONLY, upload_bytes_per_client=0),
         PolicyTrafficLedgerRow(policy=PolicyId.MISMATCH_ONLY, upload_bytes_per_client=0),
         PolicyTrafficLedgerRow(policy=PolicyId.SHRINKAGE, upload_bytes_per_client=0),
-        PolicyTrafficLedgerRow(policy=PolicyId.THREE_SIGMA, upload_bytes_per_client=full_budget_payload),
+        PolicyTrafficLedgerRow(
+            policy=PolicyId.THREE_SIGMA, upload_bytes_per_client=full_budget_payload
+        ),
         PolicyTrafficLedgerRow(policy=PolicyId.DEV_F1_SELECT, upload_bytes_per_client=0),
         PolicyTrafficLedgerRow(
             policy=PolicyId.SUMMARY_STATISTIC_SELECT,
             upload_bytes_per_client=moment_payload + candidate_payload,
         ),
-        PolicyTrafficLedgerRow(policy=PolicyId.SUPERVISED_F1, upload_bytes_per_client=candidate_payload),
+        PolicyTrafficLedgerRow(
+            policy=PolicyId.SUPERVISED_F1, upload_bytes_per_client=candidate_payload
+        ),
         PolicyTrafficLedgerRow(policy=PolicyId.ORACLE_TEST, upload_bytes_per_client=0),
         PolicyTrafficLedgerRow(policy=PolicyId.FEDCRG, upload_bytes_per_client=reference_payload),
     )
@@ -193,6 +199,7 @@ class FinalTestEvidence:
 
 class ClientPolicyThreshold:
     """Selected threshold for one client/policy."""
+
     def __init__(self, policy: PolicyId, client_id: ClientId, threshold: Threshold | None) -> None:
         self.policy = policy
         self.client_id = client_id
@@ -201,6 +208,7 @@ class ClientPolicyThreshold:
 
 class UndefinedPolicyReason:
     """Closed domain of undefined-threshold reasons."""
+
     def __init__(self, policy: PolicyId, reason: FailureCode) -> None:
         self.policy = policy
         self.reason = reason
@@ -331,9 +339,7 @@ def three_sigma(clients: tuple[BenignPolicyEvidence, ...]) -> Threshold:
     return mean + 3.0 * population_std
 
 
-def f1_at_threshold(
-    client: SupervisedDevelopmentEvidence, threshold: Threshold
-) -> Metric:
+def f1_at_threshold(client: SupervisedDevelopmentEvidence, threshold: Threshold) -> Metric:
     """F1 of one development evidence pair at a threshold."""
     value = f1(confusion_matrix(client.scores, client.labels, threshold))
     return -1.0 if value is None else value

@@ -1,13 +1,15 @@
-from pathlib import Path
-from fedcrg.configuration.resolve import ExperimentConfigResolver
-from fedcrg.configuration.validate import validate_experiment_config
-from fedcrg.domain.enums import DatasetId, DetectorId, PolicyId
+"""Integration tests for primary configuration resolution and validation."""
+
+from __future__ import annotations
+
+from fedcrg.config import Study, validate_experiment_config
+from fedcrg.types import DatasetId, DetectorId, ExperimentId, PolicyId
 
 
 def test_primary_config_resolves_without_filename_inference() -> None:
-    config = ExperimentConfigResolver().resolve(Path("configs/experiments/primary/nbaiot.yaml"))
+    config = Study.load().resolve(ExperimentId.PRIMARY_NBAIOT)
     validate_experiment_config(config)
     assert config.dataset.id is DatasetId.NBAIOT
-    assert config.detector.id is DetectorId.AUTOENCODER
+    assert config.detector is not None and config.detector.id is DetectorId.AUTOENCODER
     assert PolicyId.FEDCRG in config.policies
     assert len(config.config_hash) == 64

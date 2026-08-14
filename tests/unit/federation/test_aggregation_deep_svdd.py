@@ -1,9 +1,12 @@
+"""Unit tests for aggregation, Deep-SVDD, and detector construction."""
+
+from __future__ import annotations
+
 import torch
-from fedcrg.configuration.detector_config import AutoencoderConfig, DeepSvddConfig
-from fedcrg.detectors.autoencoder import Autoencoder
-from fedcrg.detectors.deep_svdd import DeepSvdd
-from fedcrg.detectors.create_detector import create_detector
-from fedcrg.federation.aggregation import EqualMeanAggregator
+
+from fedcrg.config import AutoencoderConfig, DeepSvddConfig
+from fedcrg.learning.detectors import Autoencoder, DeepSvdd, create_detector
+from fedcrg.learning.federated import equal_client_mean
 
 
 def test_equal_mean_aggregation() -> None:
@@ -15,7 +18,7 @@ def test_equal_mean_aggregation() -> None:
         for param in b.parameters():
             param.fill_(3.0)
     target = a.clone()
-    EqualMeanAggregator().aggregate_into(target, [a, b])
+    target.load_state_dict(equal_client_mean([a, b]))
     for param in target.parameters():
         assert torch.allclose(param, torch.full_like(param, 2.0))
 

@@ -55,6 +55,7 @@ ReferenceEstimator = Callable[[Mapping[ClientId, np.ndarray], ProtocolConfig], R
 
 class ConfusionMatrix(BaseModel):
     """Four-cell confusion matrix over one threshold."""
+
     model_config = Frozen
 
     tp: ExceedanceCount
@@ -63,7 +64,9 @@ class ConfusionMatrix(BaseModel):
     fn: ExceedanceCount
 
 
-def confusion_matrix(scores: np.ndarray, labels: np.ndarray, threshold: Threshold) -> ConfusionMatrix:
+def confusion_matrix(
+    scores: np.ndarray, labels: np.ndarray, threshold: Threshold
+) -> ConfusionMatrix:
     """Build a confusion matrix for one threshold."""
     values = np.asarray(scores, dtype=np.float64)
     targets = np.asarray(labels, dtype=np.int64)
@@ -184,6 +187,7 @@ def auprc(scores: np.ndarray, labels: np.ndarray) -> Fpr:
 
 class ClientMetrics(BaseModel):
     """Frozen evaluation metrics for one client/policy."""
+
     model_config = Frozen
 
     benign_n: PositiveCount
@@ -210,6 +214,7 @@ class ClientMetrics(BaseModel):
 
 class PolicyEvaluation(BaseModel):
     """One client/policy evaluation outcome."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -221,6 +226,7 @@ class PolicyEvaluation(BaseModel):
 
 class FederationMetrics(BaseModel):
     """Frozen federation-level reliability and utility metrics."""
+
     model_config = Frozen
 
     policy: PolicyId
@@ -240,6 +246,7 @@ class FederationMetrics(BaseModel):
 
 class EvaluationBundle(BaseModel):
     """All client, federation, and protocol results of one cell."""
+
     model_config = Frozen
 
     clients: tuple[PolicyEvaluation, ...]
@@ -250,6 +257,7 @@ class EvaluationBundle(BaseModel):
 
 class AdmissionSummary(BaseModel):
     """Composition of reference, readiness, mismatch, and decision."""
+
     model_config = Frozen
 
     client_count: PositiveCount

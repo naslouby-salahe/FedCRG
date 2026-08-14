@@ -1,85 +1,97 @@
-from fedcrg.domain.enums import (
-    CalibrationReadinessState,
-    DecisionState,
-    MismatchOutcome,
-    ThresholdSource,
-)
-from fedcrg.domain.values import ConfidenceInterval, OperatingBand
-from fedcrg.decision.threshold_decision import ThresholdDecisionEngine
-from fedcrg.decision.results import (
-    CalibrationReadiness,
-    ContinuityDiagnostics,
-    MismatchEvidence,
+"""Unit tests for the deployment decision engine."""
+
+from __future__ import annotations
+
+import numpy as np
+
+from fedcrg.thresholding.metrics import ClientEvaluation
+from fedcrg.thresholding.readiness import (
+    CalibrationReadinessEvaluator,
+    DeploymentDecision,
     ReadinessPlan,
+    ReadinessPlanBuilder,
     ReferenceThreshold,
+    ThresholdDecision,
+)
+from fedcrg.types import DecisionState, OperatingBand
+from tests._fixtures import primary_protocol
+
+_BAND = OperatingBand(lower=0.005, upper=0.015)
+_PLAN = ReadinessPlanBuilder().build(2000, _BAND, 0.95)
+_SMALL_PLAN = ReadinessPlanBuilder().build(100, _BAND, 0.95)
+_REFERENCE = ReferenceThreshold(
+    value=0.75,
+    rank=2,
+    sample_count=4,
+    client_count=2,
+    samples_per_client=2,
 )
 
+_HIGH_CALIBRATION = np.linspace(0.5, 1.0, 2000)
+_HIGH_MISMATCH = np.linspace(0.8, 0.9, 736)
+_LOW_MISMATCH = np.linspace(0.1, 0.2, 736)
+_NO_MATERIAL_MISMATCH = np.concatenate((np.full(729, 0.6), np.full(7, 0.8)))
 
-def _reference() -> ReferenceThreshold:
-    return ReferenceThreshold(1.0, 10, 10, 1, 10)
 
-
-def _readiness(ready: bool = True, ties: int = 1) -> CalibrationReadiness:
-    plan = ReadinessPlan(
-        sample_count=100,
-        rank=99,
-        coverage_probability=0.99 if ready else 0.5,
-        state=CalibrationReadinessState.READY if ready else CalibrationReadinessState.NOT_READY,
-        band=OperatingBand(0.005, 0.015),
-        assurance=0.95,
+def _evaluate(calibration_scores, mismatch_scores, plan: ReadinessPlan) -> ThresholdDecision:
+    protocol = primary_protocol()
+    evaluator = CalibrationReadinessEvaluator()
+    readiness = evaluator.evaluate(np.asarray(calibration_scores, dtype=np.float64), plan)
+    mismatch = ClientEvaluation().mismatch_evaluator.evaluate(
+        scores=np.asarray(mismatch_scores, dtype=np.float64),
+        reference_threshold=_REFERENCE.value,
+        band=protocol.band,
+        confidence=protocol.mismatch_confidence,
     )
-    diagnostics = ContinuityDiagnostics(
-        unique_score_fraction=1.0,
-        duplicate_count=0,
-        selected_threshold_multiplicity=ties,
-        minimum_positive_spacing=0.01,
+    return DeploymentDecision().decide(
+        reference=_REFERENCE,
+        readiness=readiness,
+        mismatch=mismatch,
+        reject_calibration_ties=protocol.reject_calibration_ties,
     )
-    return CalibrationReadiness(plan, 2.0 if ready else None, diagnostics)
 
 
-def _mismatch(outcome: MismatchOutcome) -> MismatchEvidence:
-    return MismatchEvidence(1000, 20, 0.02, ConfidenceInterval(0.01, 0.03), outcome, 736, 0.5, 0.5)
+def test_decide_personalizes_when_evidence_holds() -> None:
+    decision = _evaluate(_HIGH_CALIBRATION, _HIGH_MISMATCH, _PLAN)
+    assert decision.state is DecisionState.PERSONALIZED
+    assert decision.threshold > _REFERENCE.value
+    assert decision.source.value == "local_calibration"
 
 
-def test_no_material_difference_always_retains_reference() -> None:
-    decision = ThresholdDecisionEngine().decide(
-        _reference(), _readiness(), _mismatch(MismatchOutcome.NO_MATERIAL_DIFFERENCE)
-    )
+def test_decide_retains_reference_when_no_material_mismatch() -> None:
+    decision = _evaluate(_HIGH_CALIBRATION, _NO_MATERIAL_MISMATCH, _PLAN)
     assert decision.state is DecisionState.REFERENCE_RETAINED
-    assert decision.source is ThresholdSource.REFERENCE
-    assert decision.threshold == 1.0
+    assert decision.threshold == _REFERENCE.value
+    assert decision.source.value == "reference"
 
 
-def test_insufficient_evidence_never_personalizes() -> None:
-    decision = ThresholdDecisionEngine().decide(
-        _reference(), _readiness(), _mismatch(MismatchOutcome.INSUFFICIENT_EVIDENCE)
+def test_decide_refuses_without_calibration_readiness() -> None:
+    decision = _evaluate(np.linspace(0.0, 0.4, 100), _HIGH_MISMATCH, _SMALL_PLAN)
+    assert decision.state is DecisionState.CALIBRATION_DEFICIT
+    assert decision.threshold == _REFERENCE.value
+
+
+def test_decide_honors_reject_calibration_ties_flag() -> None:
+    protocol = primary_protocol()
+    evaluator = CalibrationReadinessEvaluator()
+    readiness = evaluator.evaluate(_HIGH_CALIBRATION, _PLAN)
+    mismatch = ClientEvaluation().mismatch_evaluator.evaluate(
+        scores=_HIGH_MISMATCH,
+        reference_threshold=_REFERENCE.value,
+        band=protocol.band,
+        confidence=protocol.mismatch_confidence,
     )
-    assert decision.state is DecisionState.MISMATCH_EVIDENCE_INSUFFICIENT
-    assert decision.source is ThresholdSource.REFERENCE
-
-
-def test_personalization_requires_difference_and_ready_calibration() -> None:
-    assert (
-        ThresholdDecisionEngine()
-        .decide(_reference(), _readiness(), _mismatch(MismatchOutcome.HIGH))
-        .state
-        is DecisionState.PERSONALIZED
+    accepted = DeploymentDecision().decide(
+        reference=_REFERENCE,
+        readiness=readiness,
+        mismatch=mismatch,
+        reject_calibration_ties=False,
     )
+    assert accepted.state is not DecisionState.ASSUMPTION_VIOLATION
 
 
-def test_not_ready_calibration_retains_reference() -> None:
-    assert (
-        ThresholdDecisionEngine()
-        .decide(_reference(), _readiness(ready=False), _mismatch(MismatchOutcome.HIGH))
-        .state
-        is DecisionState.CALIBRATION_DEFICIT
-    )
-
-
-def test_calibration_tie_blocks_personalization() -> None:
-    assert (
-        ThresholdDecisionEngine()
-        .decide(_reference(), _readiness(ties=2), _mismatch(MismatchOutcome.HIGH))
-        .state
-        is DecisionState.ASSUMPTION_VIOLATION
-    )
+def test_decide_is_insensitive_to_mismatch_direction() -> None:
+    high = _evaluate(_HIGH_CALIBRATION, _HIGH_MISMATCH, _PLAN)
+    low = _evaluate(_HIGH_CALIBRATION, _LOW_MISMATCH, _PLAN)
+    assert high.state is DecisionState.PERSONALIZED
+    assert low.state is DecisionState.PERSONALIZED

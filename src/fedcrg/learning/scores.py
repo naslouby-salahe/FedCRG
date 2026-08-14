@@ -81,6 +81,7 @@ def sha256_file(path: Path) -> Sha256:
 
 class RoleScoreInput(BaseModel):
     """One role's scores plus row identities for scoring."""
+
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     role: DataRole
@@ -102,6 +103,7 @@ class RoleScoreInput(BaseModel):
 
 class ClientScoreInput(BaseModel):
     """All role inputs for one client."""
+
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     client_id: ClientId
@@ -116,6 +118,7 @@ class ClientScoreInput(BaseModel):
 
 class RoleScores(BaseModel):
     """Immutable float64 scores for one client/role partition."""
+
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     role: DataRole
@@ -153,6 +156,7 @@ class RoleScores(BaseModel):
 
 class RoleHash(BaseModel):
     """Role identity and score-array hash."""
+
     model_config = Frozen
 
     role: DataRole
@@ -161,6 +165,7 @@ class RoleHash(BaseModel):
 
 class ClientRoleHashes(BaseModel):
     """Per-role hashes for one client."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -169,6 +174,7 @@ class ClientRoleHashes(BaseModel):
 
 class ClientScoreSet(BaseModel):
     """All role score sets for one client."""
+
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     client_id: ClientId
@@ -183,6 +189,7 @@ class ClientScoreSet(BaseModel):
 
 class ScoreManifest(BaseModel):
     """Frozen score-cache manifest for one model seed."""
+
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     dataset: DatasetId
@@ -216,6 +223,7 @@ class ScoreManifest(BaseModel):
 
 class ClientCalibrationScores(BaseModel):
     """One client's calibration-role score partition."""
+
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     client_id: ClientId
@@ -232,6 +240,7 @@ class ClientCalibrationScores(BaseModel):
 
 class CalibrationScoreViews(BaseModel):
     """Seeded calibration-role views across clients."""
+
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     calibration_seed: CalibrationSeed
@@ -279,7 +288,14 @@ class CalibrationAssignment:
         reservoir_row_ids: tuple[RowId, ...],
     ) -> None:
         split = dataset.split
-        positions = tuple(range(split.reference_benign + split.mismatch_benign + split.calibration_benign + split.benign_guard))
+        positions = tuple(
+            range(
+                split.reference_benign
+                + split.mismatch_benign
+                + split.calibration_benign
+                + split.benign_guard
+            )
+        )
         if mode is CalibrationAssignmentMode.SEEDED_PERMUTATION:
             rng = np.random.Generator(
                 np.random.PCG64(_assignment_seed(dataset.id, calibration_seed, client_id))
@@ -371,6 +387,7 @@ class CalibrationScoreViewBuilder:
 
 class ScoreCacheMetadataRecord(BaseModel):
     """One partition's identity and hash in cache metadata."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -381,6 +398,7 @@ class ScoreCacheMetadataRecord(BaseModel):
 
 class ScoreCacheMetadata(BaseModel):
     """Frozen score-cache metadata document."""
+
     model_config = Frozen
 
     dataset: DatasetId
@@ -412,6 +430,7 @@ class ScoreCacheIdentity:
 @dataclass(frozen=True, slots=True)
 class ScoreRoleCacheRecord:
     """One role partition's identity and hash."""
+
     client_id: ClientId
     role: DataRole
     score_array_sha256: Sha256
@@ -421,6 +440,7 @@ class ScoreRoleCacheRecord:
 @dataclass(frozen=True, slots=True)
 class ScoreCacheDescriptor:
     """Cache identity and per-partition records."""
+
     identity: ScoreCacheIdentity
     cache_sha256: Sha256
     client_ids: tuple[ClientId, ...]
@@ -690,9 +710,7 @@ class ScoreCache:
 
     def _read_verified_metadata(self, root: Path) -> ScoreCacheMetadata:
         metadata_path = root / self.manifest_filename
-        metadata = ScoreCacheMetadata.model_validate_json(
-            metadata_path.read_text(encoding="utf-8")
-        )
+        metadata = ScoreCacheMetadata.model_validate_json(metadata_path.read_text(encoding="utf-8"))
         parquet_path = root / metadata.score_cache_file
         actual_hash = sha256_file(parquet_path)
         if actual_hash != metadata.score_cache_sha256:
@@ -728,9 +746,7 @@ class ScoreCache:
             role=role,
             values=frame["score_float64"].to_numpy(dtype=np.float64),
             client_id=client_id,
-            row_ids=tuple(
-                str(value) for value in frame[PreparedColumn.ROW_ID.value].astype(str)
-            ),
+            row_ids=tuple(str(value) for value in frame[PreparedColumn.ROW_ID.value].astype(str)),
             attack_groups=groups,
         )
 

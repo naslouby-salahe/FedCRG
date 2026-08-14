@@ -5,12 +5,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fedcrg.runtime.monitoring import (
+from fedcrg.runtime import (
     CudaTelemetry,
     ResourceMonitor,
     ResourceSample,
+    render_telemetry,
     write_telemetry,
-    write_telemetry_snapshot,
 )
 
 
@@ -23,7 +23,7 @@ def test_monitor_samples_process_and_system_resources() -> None:
     assert sample.timestamp
 
 
-def test_telemetry_appends_jsonl_and_snapshot(tmp_path: Path) -> None:
+def test_telemetry_appends_jsonl(tmp_path: Path) -> None:
     sample = ResourceSample(
         timestamp="2026-08-13T00:00:00+0000",
         process_ram_bytes=1,
@@ -41,9 +41,20 @@ def test_telemetry_appends_jsonl_and_snapshot(tmp_path: Path) -> None:
     assert payload["cpu_percent"] == 4.0
     assert payload["cuda"]["available"] is False
 
-    snapshot = tmp_path / "latest.json"
-    write_telemetry_snapshot(sample, snapshot)
-    assert json.loads(snapshot.read_text(encoding="utf-8"))["process_ram_bytes"] == 1
+
+def test_render_telemetry_is_deterministic_text() -> None:
+    sample = ResourceSample(
+        timestamp="2026-08-13T00:00:00+0000",
+        process_ram_bytes=1,
+        available_system_ram_bytes=2,
+        total_system_ram_bytes=3,
+        cpu_percent=4.0,
+        cuda=CudaTelemetry(available=False),
+    )
+    first = render_telemetry(sample)
+    second = render_telemetry(sample)
+    assert first == second
+    assert "cpu" in first
 
 
 def test_stream_bounds_sample_count() -> None:

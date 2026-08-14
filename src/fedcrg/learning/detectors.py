@@ -20,6 +20,7 @@ from fedcrg.types import ByteCount, Dimension, ParameterCount, PositiveCount, Sh
 
 class DetectorModel(torch.nn.Module, ABC):
     """Common detector contract: anomaly scores and state hashing."""
+
     @abstractmethod
     def anomaly_score(self, batch: torch.Tensor) -> torch.Tensor: ...
 
@@ -34,9 +35,7 @@ class DetectorModel(torch.nn.Module, ABC):
         return digest.hexdigest()
 
     def trainable_parameter_count(self) -> PositiveCount:
-        return sum(
-            parameter.numel() for parameter in self.parameters() if parameter.requires_grad
-        )
+        return sum(parameter.numel() for parameter in self.parameters() if parameter.requires_grad)
 
     def trainable_tensor_bytes(self) -> ByteCount:
         return sum(
@@ -53,7 +52,9 @@ def activation_module(activation: ActivationId) -> type[torch.nn.Module]:
     raise ValueError(f"Unsupported activation: {activation.value}")
 
 
-def autoencoder_parameter_count(input_dim: Dimension, hidden_dims: tuple[Dimension, ...]) -> ParameterCount:
+def autoencoder_parameter_count(
+    input_dim: Dimension, hidden_dims: tuple[Dimension, ...]
+) -> ParameterCount:
     """Derived trainable-parameter count of the symmetric biased autoencoder.
 
     The full dimension chain is ``input -> hidden -> reversed(hidden) -> input``
@@ -113,6 +114,7 @@ class Autoencoder(DetectorModel):
 
 class DeepSvdd(DetectorModel):
     """Deep-SVDD detector with frozen equal-mean center."""
+
     center: torch.Tensor
 
     def __init__(self, input_dim: Dimension, config: DeepSvddConfig) -> None:

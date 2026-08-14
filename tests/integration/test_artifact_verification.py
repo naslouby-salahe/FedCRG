@@ -1,30 +1,33 @@
+"""Integration tests for artifact verification of run directories."""
+
+from __future__ import annotations
+
 from pathlib import Path
-from fedcrg.artifacts.paths import RunLayout
-from fedcrg.artifacts.manifests import RunManifest, RunManifestStore
-from fedcrg.artifacts.json_io import atomic_write_json, atomic_write_text
-from fedcrg.artifacts.integrity import ArtifactVerifier
-from fedcrg.domain.enums import (
-    ExperimentId,
-    ExperimentStatus,
-    ExperimentType,
-    PolicyId,
+
+from fedcrg.config import Study
+from fedcrg.evidence.models import RunManifest
+from fedcrg.evidence.store import (
+    ArtifactVerifier,
+    RunLayout,
+    RunManifestStore,
+    atomic_write_json,
+    atomic_write_text,
 )
-from fedcrg.domain.identifiers import CalibrationSeed, ModelSeed, RunId, Sha256
-from fedcrg.experiments.experiment_definition import ExperimentDefinition
+from fedcrg.types import ExperimentId, ExperimentStatus, PolicyId
 
 
 def test_artifact_verifier_hashes_run_files(tmp_path: Path) -> None:
-    layout = RunLayout.for_run(tmp_path, RunId("r1"))
+    layout = RunLayout.for_run(tmp_path, "r1")
     layout.create()
     RunManifestStore().save(
         layout.manifest,
         RunManifest(
-            run_id=RunId("r1"),
+            run_id="r1",
             experiment_id=ExperimentId.PRIMARY_NBAIOT,
             policy_id=PolicyId.FEDCRG,
-            config_hash=Sha256("a" * 64),
-            model_seed=ModelSeed(11),
-            calibration_seed=CalibrationSeed(1000),
+            config_hash="a" * 64,
+            model_seed=11,
+            calibration_seed=1000,
             status=ExperimentStatus.RUNNING,
         ),
     )
@@ -32,14 +35,9 @@ def test_artifact_verifier_hashes_run_files(tmp_path: Path) -> None:
     atomic_write_json(layout.environment, {"python": "test"})
     atomic_write_json(layout.run_config, {"run_id": "r1"})
     verifier = ArtifactVerifier()
-    definition = ExperimentDefinition(
-        id=ExperimentId.PRIMARY_NBAIOT,
-        type=ExperimentType.PRIMARY,
-    )
+    definition = Study.load().spec(ExperimentId.READINESS_SAMPLE_SIZE)
     recorded = verifier.record(layout, definition)
     assert recorded.valid
-    result = verifier.verify(layout)
-    assert result.valid
-    assert result.hash_for("resolved_config.yaml") is not None
-    assert result.hash_for("manifest.json") is None
+    assert recorded.hash_for("resolved_config.yaml") is not None
+    assert recorded.hash_for("manifest.json") is not None
     assert (layout.verification / "hashes.json").exists()

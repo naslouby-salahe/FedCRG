@@ -74,6 +74,7 @@ _CLIENT_ID_ADAPTER = TypeAdapter(ClientId)
 
 class SyntheticCoverageResult(BaseModel):
     """Exact and empirical coverage for one synthetic condition."""
+
     model_config = Frozen
 
     experiment: ExperimentId
@@ -87,6 +88,7 @@ class SyntheticCoverageResult(BaseModel):
 
 class MismatchPowerResult(BaseModel):
     """Exact mismatch-declaration probability for one cell."""
+
     model_config = Frozen
 
     sample_count: SampleCount
@@ -96,6 +98,7 @@ class MismatchPowerResult(BaseModel):
 
 class RobustnessCell(BaseModel):
     """One stress-axis coverage cell."""
+
     model_config = Frozen
 
     axis: ExperimentAxisId
@@ -109,6 +112,7 @@ SyntheticCell = SyntheticCoverageResult | RobustnessCell | MismatchPowerResult
 
 class SyntheticExperimentEnvelope(BaseModel):
     """Locked ledger and cells of one synthetic experiment."""
+
     model_config = Frozen
 
     experiment_id: ExperimentId
@@ -121,6 +125,7 @@ class SyntheticExperimentEnvelope(BaseModel):
 
 class PairedBootstrapInterval(BaseModel):
     """Bootstrap interval over paired model-seed indices."""
+
     model_config = Frozen
 
     observed_difference: Metric
@@ -132,6 +137,7 @@ class PairedBootstrapInterval(BaseModel):
 
 class DescriptiveSummary(BaseModel):
     """Descriptive statistics of one value vector."""
+
     model_config = Frozen
 
     values: tuple[Metric, ...]
@@ -144,6 +150,7 @@ class DescriptiveSummary(BaseModel):
 
 class SplitSensitivitySummary(BaseModel):
     """Percentile summary of repeated calibration splits."""
+
     model_config = Frozen
 
     median: Metric
@@ -329,9 +336,7 @@ def exact_mismatch_power(
     low_counts: list[int] = []
     high_counts: list[int] = []
     for exceedances in range(sample_count + 1):
-        interval = clopper_pearson_interval(
-            BinomialCounts(exceedances, sample_count), confidence
-        )
+        interval = clopper_pearson_interval(BinomialCounts(exceedances, sample_count), confidence)
         if interval.upper < band.lower:
             low_counts.append(exceedances)
         elif interval.lower > band.upper:
@@ -418,7 +423,9 @@ class RunSyntheticExperiments:
     @staticmethod
     def _float_values(spec: ExperimentSpec, axis: ExperimentAxisId) -> tuple[Metric, ...]:
         values = spec.axis(axis).values
-        if not all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in values):
+        if not all(
+            isinstance(value, (int, float)) and not isinstance(value, bool) for value in values
+        ):
             raise TypeError(f"{spec.id.value}/{axis.value} must contain numbers")
         return tuple(float(value) for value in values)
 
@@ -466,7 +473,13 @@ class RunSyntheticExperiments:
         atomic_write_json(output, envelope)
         return output
 
-    def run(self, experiment_id: ExperimentId, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path:
+    def run(
+        self,
+        experiment_id: ExperimentId,
+        spec: ExperimentSpec,
+        config: ExperimentConfig,
+        output: Path,
+    ) -> Path:
         if experiment_id is ExperimentId.READINESS_THEOREM:
             return self._run_s1(spec, config, output)
         if experiment_id is ExperimentId.TARGET_FPR_SYNTHETIC:
@@ -584,6 +597,7 @@ class RunSyntheticExperiments:
 
 class FederationResultRecord(BaseModel):
     """One completed run's federation-endpoint record."""
+
     model_config = Frozen
 
     run_id: RunId
@@ -600,6 +614,7 @@ class FederationResultRecord(BaseModel):
 
 class RunConfigPayload(BaseModel):
     """Run-configuration envelope carrying the parameters object."""
+
     model_config = Frozen
 
     parameters: object
@@ -607,6 +622,7 @@ class RunConfigPayload(BaseModel):
 
 class RunConfigDataset(BaseModel):
     """Dataset identity embedded in a run-config payload."""
+
     model_config = Frozen
 
     id: DatasetId
@@ -614,6 +630,7 @@ class RunConfigDataset(BaseModel):
 
 class RunConfigParameters(BaseModel):
     """Parameters section of a run-config payload."""
+
     model_config = Frozen
 
     dataset: RunConfigDataset
@@ -629,7 +646,11 @@ def load_federation_results(run_dirs: tuple[Path, ...]) -> tuple[FederationResul
         manifest_path = run_dir / "manifest.json"
         federation_path = run_dir / "metrics" / "federation.json"
         config_path = run_dir / "run_config.json"
-        if not manifest_path.is_file() or not federation_path.is_file() or not config_path.is_file():
+        if (
+            not manifest_path.is_file()
+            or not federation_path.is_file()
+            or not config_path.is_file()
+        ):
             continue
         try:
             manifest = RunManifest.model_validate_json(manifest_path.read_text(encoding="utf-8"))
@@ -664,6 +685,7 @@ def load_federation_results(run_dirs: tuple[Path, ...]) -> tuple[FederationResul
 
 class ContrastMetricResult(BaseModel):
     """One confirmatory contrast metric result."""
+
     model_config = Frozen
 
     metric: Identifier
@@ -675,6 +697,7 @@ class ContrastMetricResult(BaseModel):
 
 class PolicyContrastResult(BaseModel):
     """All contrast metrics against one comparator policy."""
+
     model_config = Frozen
 
     comparator: PolicyId
@@ -740,14 +763,13 @@ def confirmatory_contrasts(
                     relative_difference=relative,
                 )
             )
-        results.append(
-        PolicyContrastResult(comparator=comparator, metrics=tuple(metrics))
-    )
+        results.append(PolicyContrastResult(comparator=comparator, metrics=tuple(metrics)))
     return tuple(results)
 
 
 class ThresholdStability(BaseModel):
     """Stability summary of one threshold vector."""
+
     model_config = Frozen
 
     count: PositiveCount
@@ -759,6 +781,7 @@ class ThresholdStability(BaseModel):
 
 class StateFrequency(BaseModel):
     """Observed frequency of one decision state."""
+
     model_config = Frozen
 
     state: DecisionState
@@ -767,6 +790,7 @@ class StateFrequency(BaseModel):
 
 class StateStability(BaseModel):
     """Transition and state-frequency summary."""
+
     model_config = Frozen
 
     count: PositiveCount
@@ -793,7 +817,9 @@ def summarize_state_stability(states: tuple[DecisionState, ...]) -> StateStabili
     """Transition and frequency summary of one state sequence."""
     if not states:
         raise ValueError("State stability requires at least one state")
-    transitions = sum(left is not right for left, right in zip(states[:-1], states[1:], strict=True))
+    transitions = sum(
+        left is not right for left, right in zip(states[:-1], states[1:], strict=True)
+    )
     counts = {state: states.count(state) for state in DecisionState}
     total = len(states)
     return StateStability(
@@ -801,14 +827,14 @@ def summarize_state_stability(states: tuple[DecisionState, ...]) -> StateStabili
         transition_count=transitions,
         transition_frequency=transitions / max(1, total - 1),
         state_frequencies=tuple(
-            StateFrequency(state=state, frequency=count / total)
-            for state, count in counts.items()
+            StateFrequency(state=state, frequency=count / total) for state, count in counts.items()
         ),
     )
 
 
 class SplitSensitivityRow(BaseModel):
     """Percentile summary for one model/policy/metric group."""
+
     model_config = Frozen
 
     model_seed: ModelSeed
@@ -821,7 +847,9 @@ class SplitSensitivityRow(BaseModel):
     calibration_split_count: PositiveCount
 
 
-def split_sensitivity(records: tuple[FederationResultRecord, ...]) -> tuple[SplitSensitivityRow, ...]:
+def split_sensitivity(
+    records: tuple[FederationResultRecord, ...],
+) -> tuple[SplitSensitivityRow, ...]:
     """Summarize repeated role permutations without treating them as independent subjects."""
     grouped: dict[tuple[ModelSeed, PolicyId, str], list[float]] = {}
     for row in records:
@@ -886,6 +914,7 @@ def contaminate_benign_scores(
 
 class MismatchCutoffCell(BaseModel):
     """Exact low/high exceedance cutoffs for one sample count."""
+
     model_config = Frozen
 
     sample_count: SampleCount
@@ -1017,7 +1046,9 @@ class ProtocolTablePrecomputer:
         lows: list[int] = []
         highs: list[int] = []
         for exceedances in range(sample_count + 1):
-            interval = clopper_pearson_interval(BinomialCounts(exceedances, sample_count), confidence)
+            interval = clopper_pearson_interval(
+                BinomialCounts(exceedances, sample_count), confidence
+            )
             if band.lower > 0.0 and interval.upper < band.lower:
                 lows.append(exceedances)
             if interval.lower > band.upper:
@@ -1110,7 +1141,9 @@ class RunBenchmark:
         mismatch_scores = rng.normal(size=split.mismatch_benign)
 
         plan = ReadinessPlanBuilder().build(
-            split.calibration_benign, self.config.protocol.band, self.config.protocol.readiness_assurance
+            split.calibration_benign,
+            self.config.protocol.band,
+            self.config.protocol.readiness_assurance,
         )
         readiness_evaluator = CalibrationReadinessEvaluator()
         mismatch_evaluator = ReferenceMismatchEvaluator()
@@ -1118,7 +1151,10 @@ class RunBenchmark:
         reference = build_reference_threshold(reference_scores, self.config.protocol.alpha)
         readiness = readiness_evaluator.evaluate(calibration_scores, plan)
         mismatch = mismatch_evaluator.evaluate(
-            mismatch_scores, reference.value, self.config.protocol.band, self.config.protocol.mismatch_confidence
+            mismatch_scores,
+            reference.value,
+            self.config.protocol.band,
+            self.config.protocol.mismatch_confidence,
         )
 
         primitives = (
@@ -1214,6 +1250,3 @@ def _timed_repetitions(
         p95_seconds=float(np.percentile(values, 95)),
         peak_rss_bytes=int(peak_rss_kilobytes) * 1024,
     )
-
-
-
