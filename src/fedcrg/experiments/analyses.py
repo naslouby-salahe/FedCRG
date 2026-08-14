@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import collections
 from collections.abc import Callable
+from enum import StrEnum
 from math import sqrt
 from pathlib import Path
-from enum import StrEnum
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, TypeAdapter
@@ -62,6 +63,35 @@ from fedcrg.types import (
 Frozen = ConfigDict(frozen=True)
 
 _CLIENT_ID_ADAPTER = TypeAdapter(ClientId)
+
+# Synthetic distribution shape parameters. draw_distribution() (sampling) and
+# distribution_cdf() (exact CDF) must use identical values or Monte Carlo
+# coverage silently stops matching the exact-probability comparison.
+_LOGNORMAL_MEAN = 0.0
+_LOGNORMAL_SIGMA = 1.0
+_GAMMA_SHAPE = 2.0
+_GAMMA_SCALE = 1.0
+_MIXTURE_WEIGHT = 0.1
+_MIXTURE_LOC = 3.0
+_MIXTURE_SCALE = 1.0
+
+# Contamination stress shifts the sample mean by this many standard
+# deviations in the configured direction.
+_CONTAMINATION_SHIFT = 3.0
+
+# Monte Carlo acceptance tolerance around the exact coverage probability:
+# a floor plus a multiple of the binomial standard error.
+_MIN_COVERAGE_TOLERANCE = 0.005
+_COVERAGE_TOLERANCE_Z = 4.0
+
+# Additive seed offset scale used to decorrelate PRNG streams across axis
+# values (phi, mean shift, contamination fraction) within one experiment.
+_SEED_DECORRELATION_SCALE = 1000
+
+_SPLIT_SENSITIVITY_PERCENTILES = (5, 25, 50, 75, 95)
+_IQR_PERCENTILES = (25, 75)
+_BOOTSTRAP_CI_PERCENTILES = (2.5, 97.5)
+_P95_PERCENTILE = 95
 
 
 class BenchmarkPrimitive(StrEnum):
@@ -162,11 +192,12 @@ def split_sensitivity_summary(values: tuple[Metric, ...]) -> SplitSensitivitySum
     data = np.asarray(values, dtype=np.float64)
     if len(data) == 0:
         raise ValueError("Split sensitivity requires values")
+    percentiles = np.percentile(data, _SPLIT_SENSITIVITY_PERCENTILES)
     return SplitSensitivitySummary(
-        median=float(np.median(data)),
-        iqr=float(np.percentile(data, 75) - np.percentile(data, 25)),
-        p05=float(np.percentile(data, 5)),
-        p95=float(np.percentile(data, 95)),
+        median=float(percentiles[2]),
+        iqr=float(percentiles[3] - percentiles[1]),
+        p05=float(percentiles[0]),
+        p95=float(percentiles[4]),
     )
 
 
@@ -184,7 +215,7 @@ def paired_model_seed_bootstrap(
     rng = np.random.Generator(np.random.PCG64(int(seed)))
     indices = rng.integers(0, len(left), size=(replicates, len(left)))
     differences = np.mean(left[indices] - right[indices], axis=1)
-    lower, upper = np.percentile(differences, [2.5, 97.5])
+    lower, upper = np.percentile(differences, _BOOTSTRAP_CI_PERCENTILES)
     return PairedBootstrapInterval(
         observed_difference=float(np.mean(left - right)),
         lower=float(lower),
@@ -201,30 +232,44 @@ def draw_distribution(
 ) -> np.ndarray:
     if size <= 0:
         raise ValueError("Synthetic sample size must be positive")
-    if distribution is SyntheticDistribution.NORMAL:
-        return rng.normal(size=size)
-    if distribution is SyntheticDistribution.LOGNORMAL:
-        return rng.lognormal(mean=0.0, sigma=1.0, size=size)
-    if distribution is SyntheticDistribution.GAMMA_SHAPE_2:
-        return rng.gamma(shape=2.0, scale=1.0, size=size)
-    if distribution is SyntheticDistribution.NORMAL_MIXTURE:
-        component = rng.random(size) < 0.1
-        values = rng.normal(size=size)
-        values[component] = rng.normal(loc=3.0, scale=1.0, size=int(component.sum()))
-        return values
-    raise AssertionError(f"Unhandled synthetic distribution: {distribution}")
+    match distribution:
+        case SyntheticDistribution.NORMAL:
+            return rng.normal(size=size)
+        case SyntheticDistribution.LOGNORMAL:
+            return rng.lognormal(mean=_LOGNORMAL_MEAN, sigma=_LOGNORMAL_SIGMA, size=size)
+        case SyntheticDistribution.GAMMA_SHAPE_2:
+            return rng.gamma(shape=_GAMMA_SHAPE, scale=_GAMMA_SCALE, size=size)
+        case SyntheticDistribution.NORMAL_MIXTURE:
+            component = rng.random(size) < _MIXTURE_WEIGHT
+            values = rng.normal(size=size)
+            if num_component := int(component.sum()):
+                values[component] = rng.normal(loc=_MIXTURE_LOC, scale=_MIXTURE_SCALE, size=num_component)
+            return values
+        case _:
+            raise AssertionError(f"Unhandled synthetic distribution: {distribution}")
 
 
 def distribution_cdf(distribution: SyntheticDistribution, threshold: Score) -> Metric:
-    if distribution is SyntheticDistribution.NORMAL:
-        return float(norm.cdf(threshold))
-    if distribution is SyntheticDistribution.LOGNORMAL:
-        return float(lognorm.cdf(threshold, s=1.0, scale=1.0))
-    if distribution is SyntheticDistribution.GAMMA_SHAPE_2:
-        return float(gamma.cdf(threshold, a=2.0, scale=1.0))
-    if distribution is SyntheticDistribution.NORMAL_MIXTURE:
-        return float(0.9 * norm.cdf(threshold) + 0.1 * norm.cdf(threshold, loc=3.0, scale=1.0))
-    raise AssertionError(f"Unhandled synthetic distribution: {distribution}")
+    match distribution:
+        case SyntheticDistribution.NORMAL:
+            return float(norm.cdf(threshold))
+        case SyntheticDistribution.LOGNORMAL:
+            return float(lognorm.cdf(threshold, s=_LOGNORMAL_SIGMA, scale=1.0))
+        case SyntheticDistribution.GAMMA_SHAPE_2:
+            return float(gamma.cdf(threshold, a=_GAMMA_SHAPE, scale=_GAMMA_SCALE))
+        case SyntheticDistribution.NORMAL_MIXTURE:
+            return float(
+                (1.0 - _MIXTURE_WEIGHT) * norm.cdf(threshold)
+                + _MIXTURE_WEIGHT * norm.cdf(threshold, loc=_MIXTURE_LOC, scale=_MIXTURE_SCALE)
+            )
+        case _:
+            raise AssertionError(f"Unhandled synthetic distribution: {distribution}")
+
+
+def _threshold(scores: np.ndarray, rank: PositiveCount) -> Score:
+    scores_copy = np.copy(scores)
+    scores_copy.partition(rank - 1)
+    return float(scores_copy[rank - 1])
 
 
 def iid_readiness_validation(
@@ -244,16 +289,18 @@ def iid_readiness_validation(
     )
     plan = ReadinessPlanBuilder().build(sample_count, band, assurance)
     rng = np.random.Generator(np.random.PCG64(int(seed)))
-    inside = 0
-    for _ in range(repetitions):
-        values = np.sort(draw_distribution(rng, distribution, sample_count), kind="stable")
-        threshold = float(values[plan.rank - 1])
-        future_fpr = 1.0 - distribution_cdf(distribution, threshold)
-        inside += int(band.lower <= future_fpr <= band.upper)
+    inside = sum(
+        band.lower <= (1.0 - distribution_cdf(
+            distribution,
+            _threshold(draw_distribution(rng, distribution, sample_count), plan.rank)
+        )) <= band.upper
+        for _ in range(repetitions)
+    )
     empirical = inside / repetitions
     tolerance = max(
-        0.005,
-        4.0 * sqrt(plan.coverage_probability * (1.0 - plan.coverage_probability) / repetitions),
+        _MIN_COVERAGE_TOLERANCE,
+        _COVERAGE_TOLERANCE_Z
+        * sqrt(plan.coverage_probability * (1.0 - plan.coverage_probability) / repetitions),
     )
     return SyntheticCoverageResult(
         experiment=experiment,
@@ -280,17 +327,18 @@ def contamination_validation(
         raise ValueError("Contamination fraction must be in [0,1]")
     plan = ReadinessPlanBuilder().build(sample_count, band, assurance)
     rng = np.random.Generator(np.random.PCG64(int(seed)))
-    inside = 0
     contamination_count = int(round(fraction * sample_count))
-    location = 3.0 if direction is ContaminationDirection.HIGH else -3.0
+    location = _CONTAMINATION_SHIFT if direction is ContaminationDirection.HIGH else -_CONTAMINATION_SHIFT
+    inside = 0
+
     for _ in range(repetitions):
         values = rng.normal(size=sample_count)
         if contamination_count:
             indices = rng.choice(sample_count, size=contamination_count, replace=False)
             values[indices] = rng.normal(loc=location, scale=1.0, size=contamination_count)
-        threshold = float(np.sort(values, kind="stable")[plan.rank - 1])
-        future_fpr = 1.0 - float(norm.cdf(threshold))
+        future_fpr = 1.0 - float(norm.cdf(_threshold(values, plan.rank)))
         inside += int(band.lower <= future_fpr <= band.upper)
+
     return SyntheticCoverageResult(
         experiment=ExperimentId.CALIBRATION_CONTAMINATION,
         condition=direction,
@@ -310,26 +358,24 @@ def exact_mismatch_power(
 ) -> MismatchPowerResult:
     if sample_count <= 0 or not 0.0 <= true_fpr <= 1.0:
         raise ValueError("Mismatch power requires n>0 and true_fpr in [0,1]")
-    low_counts: list[NonNegativeCount] = []
-    high_counts: list[NonNegativeCount] = []
+
+    low_max, high_min = -1, float('inf')
     for exceedances in range(sample_count + 1):
         interval = clopper_pearson_interval(BinomialCounts(exceedances, sample_count), confidence)
         if interval.upper < band.lower:
-            low_counts.append(exceedances)
+            low_max = max(low_max, exceedances)
         elif interval.lower > band.upper:
-            high_counts.append(exceedances)
+            high_min = min(high_min, exceedances)
+
     probability = 0.0
-    if low_counts:
-        probability += float(binom.cdf(max(low_counts), sample_count, true_fpr))
-    if high_counts:
-        probability += float(binom.sf(min(high_counts) - 1, sample_count, true_fpr))
+    if low_max >= 0:
+        probability += float(binom.cdf(low_max, sample_count, true_fpr))
+    if high_min <= sample_count:
+        probability += float(binom.sf(high_min - 1, sample_count, true_fpr))
+
     return MismatchPowerResult(
         sample_count=sample_count, true_fpr=true_fpr, declaration_probability=probability
     )
-
-
-def _threshold(scores: np.ndarray, rank: PositiveCount) -> Score:
-    return float(np.sort(scores, kind="stable")[rank - 1])
 
 
 def temporal_dependence_stress(
@@ -344,16 +390,18 @@ def temporal_dependence_stress(
         raise ValueError("AR(1) phi must be strictly inside (-1,1)")
     plan = ReadinessPlanBuilder().build(sample_count, band, assurance)
     rng = np.random.Generator(np.random.PCG64(int(seed)))
+    scale = np.sqrt(1.0 - phi**2)
     inside = 0
+
     for _ in range(repetitions):
         innovations = rng.normal(size=sample_count)
         series = np.empty(sample_count, dtype=np.float64)
         series[0] = innovations[0]
-        scale = np.sqrt(1.0 - phi**2)
         for index in range(1, sample_count):
             series[index] = phi * series[index - 1] + scale * innovations[index]
-        fpr = 1.0 - norm.cdf(_threshold(series, plan.rank))
-        inside += int(band.lower <= fpr <= band.upper)
+        future_fpr = 1.0 - float(norm.cdf(_threshold(series, plan.rank)))
+        inside += int(band.lower <= future_fpr <= band.upper)
+
     return RobustnessCell(
         axis=ExperimentAxisId.PHI,
         value=phi,
@@ -372,11 +420,10 @@ def calibration_shift_stress(
 ) -> RobustnessCell:
     plan = ReadinessPlanBuilder().build(sample_count, band, assurance)
     rng = np.random.Generator(np.random.PCG64(int(seed)))
-    inside = 0
-    for _ in range(repetitions):
-        threshold = _threshold(rng.normal(size=sample_count), plan.rank)
-        future_fpr = 1.0 - norm.cdf(threshold, loc=mean_shift, scale=1.0)
-        inside += int(band.lower <= future_fpr <= band.upper)
+    inside = sum(
+        band.lower <= (1.0 - float(norm.cdf(_threshold(rng.normal(size=sample_count), plan.rank), loc=mean_shift, scale=1.0))) <= band.upper
+        for _ in range(repetitions)
+    )
     return RobustnessCell(
         axis=ExperimentAxisId.MEAN_SHIFT,
         value=mean_shift,
@@ -396,9 +443,7 @@ class RunSyntheticExperiments:
     @staticmethod
     def _float_values(spec: ExperimentSpec, axis: ExperimentAxisId) -> tuple[Metric, ...]:
         values = spec.axis(axis).values
-        if not all(
-            isinstance(value, (int, float)) and not isinstance(value, bool) for value in values
-        ):
+        if not all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in values):
             raise TypeError(f"{spec.id.value}/{axis.value} must contain numbers")
         return tuple(float(value) for value in values)
 
@@ -438,11 +483,11 @@ class RunSyntheticExperiments:
             )
         if spec.workload.exact_cells and len(cells) != spec.workload.exact_cells:
             raise RuntimeError(
-                f"{spec.id.value} exact-cell ledger mismatch: "
+                f"{spec.id.value} cell ledger mismatch: "
                 f"{len(cells)} != {spec.workload.exact_cells}"
             )
-        from fedcrg.evidence.store import atomic_write_json
 
+        from fedcrg.evidence.store import atomic_write_json
         atomic_write_json(output, envelope)
         return output
 
@@ -459,9 +504,7 @@ class RunSyntheticExperiments:
             raise ValueError(f"Unsupported synthetic experiment: {experiment_id.value}") from None
         return runner(self, spec, config, output)
 
-    def _run_readiness_theorem(
-        self, spec: ExperimentSpec, config: ExperimentConfig, output: Path
-    ) -> Path:
+    def _run_readiness_theorem(self, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path:
         repetitions = self._int_values(spec, ExperimentAxisId.REPETITIONS)[0]
         cells = tuple(
             iid_readiness_validation(
@@ -479,32 +522,25 @@ class RunSyntheticExperiments:
         )
         return self.write(output, spec, cells, len(cells) * repetitions)
 
-    def _run_target_fpr_synthetic(
-        self, spec: ExperimentSpec, config: ExperimentConfig, output: Path
-    ) -> Path:
+    def _run_target_fpr_synthetic(self, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path:
         repetitions = self._int_values(spec, ExperimentAxisId.REPETITIONS)[0]
-        rows: list[SyntheticCoverageResult] = []
-        for cell in spec.coupled_cells:
-            alpha = float(cell.value(ExperimentAxisId.ALPHA))
-            sample_count = int(cell.value(ExperimentAxisId.CALIBRATION_N))
-            for distribution in self._distributions(spec):
-                rows.append(
-                    iid_readiness_validation(
-                        ExperimentId.TARGET_FPR_SYNTHETIC,
-                        distribution,
-                        sample_count,
-                        repetitions,
-                        alpha=alpha,
-                        rho=config.protocol.rho,
-                        assurance=config.protocol.readiness_assurance,
-                        seed=int(config.randomness.synthetic_seed + sample_count),
-                    )
-                )
-        return self.write(output, spec, tuple(rows), len(rows) * repetitions)
+        cells = tuple(
+            iid_readiness_validation(
+                ExperimentId.TARGET_FPR_SYNTHETIC,
+                distribution,
+                int(cell.value(ExperimentAxisId.CALIBRATION_N)),
+                repetitions,
+                alpha=float(cell.value(ExperimentAxisId.ALPHA)),
+                rho=config.protocol.rho,
+                assurance=config.protocol.readiness_assurance,
+                seed=int(config.randomness.synthetic_seed + int(cell.value(ExperimentAxisId.CALIBRATION_N))),
+            )
+            for cell in spec.coupled_cells
+            for distribution in self._distributions(spec)
+        )
+        return self.write(output, spec, cells, len(cells) * repetitions)
 
-    def _run_temporal_dependence(
-        self, spec: ExperimentSpec, config: ExperimentConfig, output: Path
-    ) -> Path:
+    def _run_temporal_dependence(self, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path:
         repetitions = self._int_values(spec, ExperimentAxisId.REPETITIONS)[0]
         cells = tuple(
             temporal_dependence_stress(
@@ -513,16 +549,14 @@ class RunSyntheticExperiments:
                 repetitions,
                 config.protocol.band,
                 config.protocol.readiness_assurance,
-                int(config.randomness.synthetic_seed + sample_count + int(phi * 1000)),
+                int(config.randomness.synthetic_seed + sample_count + int(phi * _SEED_DECORRELATION_SCALE)),
             )
             for phi in self._float_values(spec, ExperimentAxisId.PHI)
             for sample_count in self._int_values(spec, ExperimentAxisId.CALIBRATION_N)
         )
         return self.write(output, spec, cells, len(cells) * repetitions)
 
-    def _run_calibration_shift(
-        self, spec: ExperimentSpec, config: ExperimentConfig, output: Path
-    ) -> Path:
+    def _run_calibration_shift(self, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path:
         repetitions = self._int_values(spec, ExperimentAxisId.REPETITIONS)[0]
         cells = tuple(
             calibration_shift_stress(
@@ -530,16 +564,14 @@ class RunSyntheticExperiments:
                 repetitions,
                 config.protocol.band,
                 config.protocol.readiness_assurance,
-                int(config.randomness.synthetic_seed + int(shift * 1000)),
+                int(config.randomness.synthetic_seed + int(shift * _SEED_DECORRELATION_SCALE)),
                 sample_count=config.dataset.split.calibration_benign,
             )
             for shift in self._float_values(spec, ExperimentAxisId.MEAN_SHIFT)
         )
         return self.write(output, spec, cells, len(cells) * repetitions)
 
-    def _run_calibration_contamination(
-        self, spec: ExperimentSpec, config: ExperimentConfig, output: Path
-    ) -> Path:
+    def _run_calibration_contamination(self, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path:
         repetitions = self._int_values(spec, ExperimentAxisId.REPETITIONS)[0]
         cells = tuple(
             contamination_validation(
@@ -547,7 +579,7 @@ class RunSyntheticExperiments:
                 direction,
                 repetitions,
                 sample_count=config.dataset.split.calibration_benign,
-                seed=int(config.randomness.synthetic_seed + int(fraction * 1000)),
+                seed=int(config.randomness.synthetic_seed + int(fraction * _SEED_DECORRELATION_SCALE)),
                 band=config.protocol.band,
                 assurance=config.protocol.readiness_assurance,
             )
@@ -556,9 +588,7 @@ class RunSyntheticExperiments:
         )
         return self.write(output, spec, cells, len(cells) * repetitions)
 
-    def _run_mismatch_power(
-        self, spec: ExperimentSpec, config: ExperimentConfig, output: Path
-    ) -> Path:
+    def _run_mismatch_power(self, spec: ExperimentSpec, config: ExperimentConfig, output: Path) -> Path:
         cells = tuple(
             exact_mismatch_power(
                 sample_count,
@@ -607,37 +637,31 @@ def load_federation_results(run_dirs: tuple[Path, ...]) -> tuple[FederationResul
     rows: list[FederationResultRecord] = []
     for run_dir in run_dirs:
         layout = RunLayout(run_dir)
-        if (
-            not layout.manifest.is_file()
-            or not layout.federation_metrics.is_file()
-            or not layout.run_config.is_file()
-        ):
+        if not (layout.manifest.is_file() and layout.federation_metrics.is_file() and layout.run_config.is_file()):
             continue
         try:
             manifest = RunManifest.model_validate_json(layout.manifest.read_text(encoding="utf-8"))
+            if manifest.status is not ExperimentStatus.COMPLETE:
+                continue
             federation = load_json_model(layout.federation_metrics, FederationMetrics)
-            config_payload = RunConfig.model_validate_json(
-                layout.run_config.read_text(encoding="utf-8")
-            )
+            config_payload = RunConfig.model_validate_json(layout.run_config.read_text(encoding="utf-8"))
             dataset_id = config_payload.parameters.dataset.id
+            rows.append(
+                FederationResultRecord(
+                    run_id=manifest.run_id,
+                    experiment_id=manifest.experiment_id,
+                    dataset_id=dataset_id,
+                    model_seed=manifest.model_seed,
+                    calibration_seed=manifest.calibration_seed,
+                    policy=manifest.policy_id,
+                    mebe=federation.mebe,
+                    high_excess=federation.high_excess,
+                    band_violation_rate=federation.band_violation_rate,
+                    attack_balanced_macro_tpr=federation.attack_balanced_macro_tpr,
+                )
+            )
         except Exception:
             continue
-        if manifest.status is not ExperimentStatus.COMPLETE:
-            continue
-        rows.append(
-            FederationResultRecord(
-                run_id=manifest.run_id,
-                experiment_id=manifest.experiment_id,
-                dataset_id=dataset_id,
-                model_seed=manifest.model_seed,
-                calibration_seed=manifest.calibration_seed,
-                policy=manifest.policy_id,
-                mebe=federation.mebe,
-                high_excess=federation.high_excess,
-                band_violation_rate=federation.band_violation_rate,
-                attack_balanced_macro_tpr=federation.attack_balanced_macro_tpr,
-            )
-        )
     return tuple(rows)
 
 
@@ -682,38 +706,32 @@ def confirmatory_contrasts(
         )
     method_by_seed = {row.model_seed: row for row in selected if row.policy is PolicyId.FEDCRG}
     results: list[PolicyContrastResult] = []
+    common_seeds = tuple(sorted(expected_seeds))
+
     for comparator in comparators:
         comparator_by_seed = {row.model_seed: row for row in selected if row.policy is comparator}
         if set(comparator_by_seed) != expected_seeds:
-            raise ValueError(
-                f"Confirmatory comparator {comparator.value} is missing paired model seeds"
-            )
-        common_seeds = tuple(sorted(expected_seeds))
+            raise ValueError(f"Confirmatory comparator {comparator.value} is missing paired model seeds")
+
         metrics: list[ContrastMetricResult] = []
         for metric in ("mebe", "high_excess", "attack_balanced_macro_tpr"):
             left_values = tuple(getattr(method_by_seed[seed], metric) for seed in common_seeds)
             right_values = tuple(getattr(comparator_by_seed[seed], metric) for seed in common_seeds)
-            if any(value is None for value in left_values + right_values):
+            if None in left_values or None in right_values:
                 continue
-            left = tuple(float(value) for value in left_values)
-            right = tuple(float(value) for value in right_values)
+
+            left, right = tuple(map(float, left_values)), tuple(map(float, right_values))
             bootstrap = paired_model_seed_bootstrap(
-                left,
-                right,
-                replicates=bootstrap_replicates,
-                seed=bootstrap_seed,
+                left, right, replicates=bootstrap_replicates, seed=bootstrap_seed
             )
             comparator_mean = describe(right).mean
-            relative = (
-                bootstrap.observed_difference / comparator_mean if comparator_mean > 0.0 else None
-            )
             metrics.append(
                 ContrastMetricResult(
                     metric=metric,
                     method_summary=describe(left),
                     comparator_summary=describe(right),
                     paired_difference=bootstrap,
-                    relative_difference=relative,
+                    relative_difference=(bootstrap.observed_difference / comparator_mean) if comparator_mean > 0.0 else None,
                 )
             )
         results.append(PolicyContrastResult(comparator=comparator, metrics=tuple(metrics)))
@@ -750,10 +768,11 @@ def summarize_threshold_stability(values: tuple[Metric, ...]) -> ThresholdStabil
     data = np.asarray(values, dtype=np.float64)
     if data.ndim != 1 or len(data) == 0 or not np.isfinite(data).all():
         raise ValueError("Threshold stability requires finite non-empty values")
+    percentiles = np.percentile(data, _IQR_PERCENTILES)
     return ThresholdStability(
         count=len(data),
         standard_deviation=float(np.std(data, ddof=1)) if len(data) > 1 else 0.0,
-        iqr=float(np.percentile(data, 75) - np.percentile(data, 25)),
+        iqr=float(percentiles[1] - percentiles[0]),
         minimum=float(np.min(data)),
         maximum=float(np.max(data)),
     )
@@ -765,14 +784,16 @@ def summarize_state_stability(states: tuple[DecisionState, ...]) -> StateStabili
     transitions = sum(
         left is not right for left, right in zip(states[:-1], states[1:], strict=True)
     )
-    counts = {state: states.count(state) for state in DecisionState}
     total = len(states)
+    counts = collections.Counter(states)
+
     return StateStability(
         count=total,
         transition_count=transitions,
         transition_frequency=transitions / max(1, total - 1),
         state_frequencies=tuple(
-            StateFrequency(state=state, frequency=count / total) for state, count in counts.items()
+            StateFrequency(state=state, frequency=counts[state] / total)
+            for state in DecisionState
         ),
     )
 
@@ -796,44 +817,41 @@ class StabilityMetricId(StrEnum):
     ATTACK_BALANCED_MACRO_TPR = "attack_balanced_macro_tpr"
 
 
-def split_sensitivity(
-    records: tuple[FederationResultRecord, ...],
-) -> tuple[SplitSensitivityRow, ...]:
-    grouped: dict[tuple[ModelSeed, PolicyId, StabilityMetricId], list[Metric]] = {}
+def split_sensitivity(records: tuple[FederationResultRecord, ...]) -> tuple[SplitSensitivityRow, ...]:
+    grouped: dict[tuple[ModelSeed, PolicyId, StabilityMetricId], list[Metric]] = collections.defaultdict(list)
     for row in records:
         for metric in StabilityMetricId:
-            value = getattr(row, metric.value)
-            if value is None:
-                continue
-            grouped.setdefault((row.model_seed, row.policy, metric), []).append(float(value))
-    rows: list[SplitSensitivityRow] = []
-    for (model_seed, policy, metric), values in sorted(
-        grouped.items(),
-        key=lambda item: (int(item[0][0]), item[0][1].value, item[0][2].value),
-    ):
+            if (value := getattr(row, metric.value)) is not None:
+                grouped[(row.model_seed, row.policy, metric)].append(float(value))
+
+    def _row(key: tuple[ModelSeed, PolicyId, StabilityMetricId], values: list[Metric]) -> SplitSensitivityRow:
+        model_seed, policy, metric = key
         summary = split_sensitivity_summary(tuple(values))
-        rows.append(
-            SplitSensitivityRow(
-                model_seed=model_seed,
-                policy=policy,
-                metric=metric,
-                median=summary.median,
-                iqr=summary.iqr,
-                p05=summary.p05,
-                p95=summary.p95,
-                calibration_split_count=len(values),
-            )
+        return SplitSensitivityRow(
+            model_seed=model_seed,
+            policy=policy,
+            metric=metric,
+            median=summary.median,
+            iqr=summary.iqr,
+            p05=summary.p05,
+            p95=summary.p95,
+            calibration_split_count=len(values),
         )
-    return tuple(rows)
+
+    return tuple(
+        _row(key, values)
+        for key, values in sorted(
+            grouped.items(),
+            key=lambda item: (int(item[0][0]), item[0][1].value, item[0][2].value),
+        )
+    )
 
 
 def source_order_blocks(scores: np.ndarray, block_count: BlockCount) -> tuple[np.ndarray, ...]:
     values = np.asarray(scores, dtype=np.float64)
     if block_count <= 0 or len(values) < block_count:
         raise ValueError("Source-order block analysis needs at least one row per block")
-    return tuple(
-        np.asarray(block, dtype=np.float64) for block in np.array_split(values, block_count)
-    )
+    return tuple(np.asarray(block, dtype=np.float64) for block in np.array_split(values, block_count))
 
 
 def contaminate_benign_scores(
@@ -842,15 +860,16 @@ def contaminate_benign_scores(
     fraction: ContaminationFraction,
     seed: AnalysisSeed,
 ) -> np.ndarray:
-    values = np.asarray(benign, dtype=np.float64).copy()
-    attacks = np.asarray(attack_dev, dtype=np.float64)
     if not 0.0 <= fraction <= 1.0:
         raise ValueError("Contamination fraction must be in [0,1]")
+    values = np.asarray(benign, dtype=np.float64).copy()
+    attacks = np.asarray(attack_dev, dtype=np.float64)
     count = int(round(fraction * len(values)))
     if count == 0:
         return values
     if count > len(attacks):
         raise ValueError("Attack-development cache is too small for requested contamination")
+
     rng = np.random.Generator(np.random.PCG64(int(seed)))
     target = rng.choice(len(values), size=count, replace=False)
     source = rng.choice(len(attacks), size=count, replace=False)
@@ -880,31 +899,23 @@ class ProtocolTablePrecomputer:
         target_root = root or OutputsLayout(config.outputs_root).cache_analysis
         target_root.mkdir(parents=True, exist_ok=True)
         layout = OutputsLayout(config.outputs_root)
-        readiness_path = layout.readiness_plans_file
-        mismatch_path = layout.mismatch_cutoffs_file
-        cache = ReadinessPlanCache(readiness_path)
+
+        cache = ReadinessPlanCache(layout.readiness_plans_file)
         for sample_count, protocol in self._readiness_cells(config, spec):
-            cache.precompute(
-                sample_count,
-                protocol.band,
-                protocol.readiness_assurance,
-            )
+            cache.precompute(sample_count, protocol.band, protocol.readiness_assurance)
         cache.save()
 
         if self._has_axis(spec, ExperimentAxisId.MISMATCH_N):
-            mismatch_counts = tuple(
-                int(value) for value in spec.axis(ExperimentAxisId.MISMATCH_N).values
-            )
             mismatch_rows = tuple(
                 self._mismatch_cutoffs(
-                    sample_count,
+                    int(sample_count),
                     config.protocol.band,
                     config.protocol.mismatch_confidence,
                 )
-                for sample_count in mismatch_counts
+                for sample_count in spec.axis(ExperimentAxisId.MISMATCH_N).values
             )
             atomic_write_json(
-                mismatch_path,
+                layout.mismatch_cutoffs_file,
                 {
                     "band": config.protocol.band,
                     "confidence": config.protocol.mismatch_confidence,
@@ -915,7 +926,7 @@ class ProtocolTablePrecomputer:
                     "cells": mismatch_rows,
                 },
             )
-        return readiness_path, mismatch_path
+        return layout.readiness_plans_file, layout.mismatch_cutoffs_file
 
     @staticmethod
     def _has_axis(spec: ExperimentSpec, axis_id: ExperimentAxisId) -> bool:
@@ -926,14 +937,8 @@ class ProtocolTablePrecomputer:
     ) -> tuple[tuple[SampleCount, ProtocolConfig], ...]:
         cells: dict[tuple[SampleCount, Alpha, Fraction, Assurance], ProtocolConfig] = {}
 
-        def add(
-            sample_count: SampleCount,
-            *,
-            alpha: Alpha,
-            rho: Fraction,
-            assurance: Assurance,
-        ) -> None:
-            protocol = ProtocolConfig(
+        def add(sample_count: SampleCount, *, alpha: Alpha, rho: Fraction, assurance: Assurance) -> None:
+            cells[(sample_count, alpha, rho, assurance)] = ProtocolConfig(
                 id=config.protocol.id,
                 version=config.protocol.version,
                 alpha=alpha,
@@ -943,31 +948,18 @@ class ProtocolTablePrecomputer:
                 strict_exceedance=config.protocol.strict_exceedance,
                 reject_calibration_ties=config.protocol.reject_calibration_ties,
             )
-            cells[(sample_count, alpha, rho, assurance)] = protocol
 
         primary_n = config.dataset.split.calibration_benign
-        add(
-            primary_n,
-            alpha=config.protocol.alpha,
-            rho=config.protocol.rho,
-            assurance=config.protocol.readiness_assurance,
-        )
+        add(primary_n, alpha=config.protocol.alpha, rho=config.protocol.rho, assurance=config.protocol.readiness_assurance)
+
         if self._has_axis(spec, ExperimentAxisId.CALIBRATION_N):
             for value in spec.axis(ExperimentAxisId.CALIBRATION_N).values:
-                add(
-                    int(value),
-                    alpha=config.protocol.alpha,
-                    rho=config.protocol.rho,
-                    assurance=config.protocol.readiness_assurance,
-                )
+                add(int(value), alpha=config.protocol.alpha, rho=config.protocol.rho, assurance=config.protocol.readiness_assurance)
+
         if self._has_axis(spec, ExperimentAxisId.READINESS_ASSURANCE):
             for value in spec.axis(ExperimentAxisId.READINESS_ASSURANCE).values:
-                add(
-                    primary_n,
-                    alpha=config.protocol.alpha,
-                    rho=config.protocol.rho,
-                    assurance=float(value),
-                )
+                add(primary_n, alpha=config.protocol.alpha, rho=config.protocol.rho, assurance=float(value))
+
         add(
             primary_n,
             alpha=config.protocol.alpha,
@@ -977,6 +969,7 @@ class ProtocolTablePrecomputer:
                 config.statistics.familywise_alpha,
             ),
         )
+
         for cell in spec.coupled_cells:
             add(
                 int(cell.value(ExperimentAxisId.CALIBRATION_N)),
@@ -995,9 +988,7 @@ class ProtocolTablePrecomputer:
         lows: list[NonNegativeCount] = []
         highs: list[NonNegativeCount] = []
         for exceedances in range(sample_count + 1):
-            interval = clopper_pearson_interval(
-                BinomialCounts(exceedances, sample_count), confidence
-            )
+            interval = clopper_pearson_interval(BinomialCounts(exceedances, sample_count), confidence)
             if band.lower > 0.0 and interval.upper < band.lower:
                 lows.append(exceedances)
             if interval.lower > band.upper:
@@ -1043,10 +1034,7 @@ class RunBenchmark:
     def _environment_pin(self) -> Identifier:
         import platform
         import sys
-
-        import numpy as np
         import scipy
-
         return (
             f"{platform.system()}_{platform.processor()}_python{sys.version.split()[0]}_"
             f"numpy{np.__version__}_scipy{scipy.__version__}"
@@ -1056,7 +1044,6 @@ class RunBenchmark:
     def _pin_single_cpu() -> None:
         try:
             import os
-
             os.sched_setaffinity(0, {0})
         except (AttributeError, OSError):
             pass
@@ -1066,12 +1053,11 @@ class RunBenchmark:
         warmups = self._warmups()
         repetitions = self._repetitions()
         split = self.config.dataset.split
-        client_count = self.config.dataset.expected_clients or self.config.dataset.minimum_clients
         rng = np.random.default_rng(int(self.config.randomness.synthetic_seed))
+
+        client_count = self.config.dataset.expected_clients or self.config.dataset.minimum_clients
         reference_scores = {
-            _CLIENT_ID_ADAPTER.validate_python(f"c{index:02d}"): rng.normal(
-                size=split.reference_benign
-            )
+            _CLIENT_ID_ADAPTER.validate_python(f"c{index:02d}"): rng.normal(size=split.reference_benign)
             for index in range(client_count)
         }
         calibration_scores = rng.normal(size=split.calibration_benign)
@@ -1082,6 +1068,7 @@ class RunBenchmark:
             self.config.protocol.band,
             self.config.protocol.readiness_assurance,
         )
+
         readiness_evaluator = CalibrationReadinessEvaluator()
         mismatch_evaluator = ReferenceMismatchEvaluator()
         decision_engine = DeploymentDecision()
@@ -1095,29 +1082,13 @@ class RunBenchmark:
         )
 
         primitives = (
-            (
-                BenchmarkPrimitive.REFERENCE_CONSTRUCTION,
-                lambda: build_reference_threshold(reference_scores, self.config.protocol.alpha),
-            ),
-            (
-                BenchmarkPrimitive.READINESS_ORDER_STATISTIC,
-                lambda: readiness_evaluator.evaluate(calibration_scores, plan),
-            ),
+            (BenchmarkPrimitive.REFERENCE_CONSTRUCTION, lambda: build_reference_threshold(reference_scores, self.config.protocol.alpha)),
+            (BenchmarkPrimitive.READINESS_ORDER_STATISTIC, lambda: readiness_evaluator.evaluate(calibration_scores, plan)),
             (
                 BenchmarkPrimitive.MISMATCH_EVIDENCE,
-                lambda: mismatch_evaluator.evaluate(
-                    mismatch_scores,
-                    reference.value,
-                    self.config.protocol.band,
-                    self.config.protocol.mismatch_confidence,
-                ),
+                lambda: mismatch_evaluator.evaluate(mismatch_scores, reference.value, self.config.protocol.band, self.config.protocol.mismatch_confidence),
             ),
-            (
-                BenchmarkPrimitive.DEPLOYMENT_DECISION,
-                lambda: decision_engine.decide(
-                    reference, readiness, mismatch, self.config.protocol.reject_calibration_ties
-                ),
-            ),
+            (BenchmarkPrimitive.DEPLOYMENT_DECISION, lambda: decision_engine.decide(reference, readiness, mismatch, self.config.protocol.reject_calibration_ties)),
         )
 
         cells: list[BenchmarkCell] = []
@@ -1137,25 +1108,28 @@ class RunBenchmark:
                     peak_rss_bytes=timings.peak_rss_bytes,
                 )
             )
+
         report = BenchmarkReport(
             experiment_id=self.spec.id,
             environment=self._environment_pin(),
             cells=tuple(cells),
         )
-        from fedcrg.evidence.store import atomic_write_json
 
+        from fedcrg.evidence.store import atomic_write_json
         atomic_write_json(output, report)
         return output
 
     @staticmethod
     def _sample_count(primitive: BenchmarkPrimitive, split: SplitConfig) -> SampleCount:
-        mapping: dict[BenchmarkPrimitive, SampleCount] = {
-            BenchmarkPrimitive.REFERENCE_CONSTRUCTION: split.reference_benign,
-            BenchmarkPrimitive.READINESS_ORDER_STATISTIC: split.calibration_benign,
-            BenchmarkPrimitive.MISMATCH_EVIDENCE: split.mismatch_benign,
-            BenchmarkPrimitive.DEPLOYMENT_DECISION: split.calibration_benign,
-        }
-        return int(mapping[primitive])
+        match primitive:
+            case BenchmarkPrimitive.REFERENCE_CONSTRUCTION:
+                return split.reference_benign
+            case BenchmarkPrimitive.READINESS_ORDER_STATISTIC | BenchmarkPrimitive.DEPLOYMENT_DECISION:
+                return split.calibration_benign
+            case BenchmarkPrimitive.MISMATCH_EVIDENCE:
+                return split.mismatch_benign
+            case _:
+                raise AssertionError(f"Unhandled primitive: {primitive}")
 
 
 class TimedRepetitions(BaseModel):
@@ -1166,22 +1140,19 @@ class TimedRepetitions(BaseModel):
     peak_rss_bytes: ByteCount
 
 
-def _timed_repetitions(
-    primitive: Callable[[], BaseModel],
-    repetitions: RepetitionCount,
-) -> TimedRepetitions:
+def _timed_repetitions(primitive: Callable[[], BaseModel], repetitions: RepetitionCount) -> TimedRepetitions:
     import resource
     import time
 
-    timings: list[Duration] = []
-    for _ in range(repetitions):
+    timings = np.empty(repetitions, dtype=np.float64)
+    for index in range(repetitions):
         started = time.perf_counter()
         primitive()
-        timings.append(time.perf_counter() - started)
-    values = np.asarray(timings, dtype=np.float64)
+        timings[index] = time.perf_counter() - started
+
     peak_rss_kilobytes = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     return TimedRepetitions(
-        median_seconds=float(np.median(values)),
-        p95_seconds=float(np.percentile(values, 95)),
+        median_seconds=float(np.median(timings)),
+        p95_seconds=float(np.percentile(timings, _P95_PERCENTILE)),
         peak_rss_bytes=int(peak_rss_kilobytes) * 1024,
     )

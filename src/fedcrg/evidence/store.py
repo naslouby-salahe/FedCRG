@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
+import platform
+import subprocess
+import sys
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,46 +45,52 @@ ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
 def _jsonable(value: object) -> JsonValue:
-    if isinstance(value, BaseModel):
-        return value.model_dump(mode="json")
-    if isinstance(value, tuple):
-        return [_jsonable(item) for item in value]
-    if isinstance(value, list):
-        return [_jsonable(item) for item in value]
-    if isinstance(value, dict):
-        return {str(key): _jsonable(item) for key, item in value.items()}
-    if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
-    return str(value)
+    match value:
+        case BaseModel():
+            return value.model_dump(mode="json")
+        case tuple() | list():
+            return [_jsonable(item) for item in value]
+        case dict():
+            return {str(key): _jsonable(item) for key, item in value.items()}
+        case str() | int() | float() | bool() | None:
+            return value
+        case _:
+            return str(value)
+
+
+@contextlib.contextmanager
+def atomic_file(path: Path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.with_name(f".{path.name}.tmp-{uuid.uuid4().hex}")
+    try:
+        with temp_path.open("w", encoding="utf-8") as handle:
+            yield handle
+        os.replace(temp_path, path)
+    except Exception:
+        if temp_path.exists():
+            temp_path.unlink()
+        raise
 
 
 def atomic_write_json(path: Path, payload: object) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_name(f".{path.name}.tmp-{uuid.uuid4().hex}")
-    text = json.dumps(_jsonable(payload), indent=2, sort_keys=True) + "\n"
-    temp.write_text(text, encoding="utf-8")
-    os.replace(temp, path)
+    with atomic_file(path) as handle:
+        json.dump(_jsonable(payload), handle, indent=2, sort_keys=True)
+        handle.write("\n")
 
 
 def atomic_write_text(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_name(f".{path.name}.tmp-{uuid.uuid4().hex}")
-    temp.write_text(content, encoding="utf-8")
-    os.replace(temp, path)
+    with atomic_file(path) as handle:
+        handle.write(content)
 
 
 def write_jsonl(path: Path, records: tuple[BaseModel, ...]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_name(f".{path.name}.tmp-{uuid.uuid4().hex}")
-    with temp.open("w", encoding="utf-8") as handle:
+    with atomic_file(path) as handle:
         for record in records:
             handle.write(json.dumps(record.model_dump(mode="json"), sort_keys=True) + "\n")
-    os.replace(temp, path)
 
 
 def load_json_model(path: Path, model: type[ModelT]) -> ModelT:
-    raw: object = json.loads(path.read_text(encoding="utf-8"))
-    return model.model_validate(raw)
+    return model.model_validate_json(path.read_text(encoding="utf-8"))
 
 
 def load_yaml_mapping(path: Path) -> object:
@@ -113,26 +123,23 @@ class TrainingManifestStore(ModelStore[TrainingManifest]):
 
 class RunManifestStore(ModelStore[RunManifest]):
     model = RunManifest
-
     _TERMINAL_STATUSES = frozenset({ExperimentStatus.COMPLETE.value, ExperimentStatus.FAILED.value})
 
     def save(self, path: Path, manifest: RunManifest) -> None:
         if path.is_file():
             try:
                 existing = self.load(path)
-            except Exception:
-                existing = None
-            if (
-                existing is not None
-                and existing.status.value in self._TERMINAL_STATUSES
-                and existing.status is not manifest.status
-            ):
-                from fedcrg.types import ImmutableRunError
-
-                raise ImmutableRunError(
-                    f"Cannot overwrite a finalized run manifest: {path} "
-                    f"({existing.status.value} -> {manifest.status.value})"
-                )
+                if (
+                    existing.status.value in self._TERMINAL_STATUSES
+                    and existing.status is not manifest.status
+                ):
+                    from fedcrg.types import ImmutableRunError
+                    raise ImmutableRunError(
+                        f"Cannot overwrite a finalized run manifest: {path} "
+                        f"({existing.status.value} -> {manifest.status.value})"
+                    )
+            except (FileNotFoundError, ValueError):
+                pass
         super().save(path, manifest)
 
 
@@ -154,6 +161,7 @@ class CacheReferenceStore(ModelStore[CacheReference]):
             relative = resolved.relative_to(outputs_root.resolve()).as_posix()
         except ValueError:
             relative = resolved.as_posix()
+
         return CacheReference(
             relative_path=relative,
             sha256=sha256_file(path),
@@ -168,20 +176,21 @@ def build_run_id(
     policy: PolicyId,
 ) -> RunId:
     protocol = config.protocol
-    detector = config.detector
-    if detector is None:
+    if config.detector is None:
         raise ValueError("Run identity requires a real-data detector profile")
+
     alpha_ppm = round(protocol.alpha * 1_000_000)
     rho_bp = round(protocol.rho * 10_000)
     assurance_bp = round(protocol.readiness_assurance * 10_000)
     confidence_bp = round(protocol.mismatch_confidence * 10_000)
-    detector_label = "ae" if detector.id is DetectorId.AUTOENCODER else detector.id.value
-    prefix = (
+    detector_label = "ae" if config.detector.id is DetectorId.AUTOENCODER else config.detector.id.value
+
+    return (
         f"{config.dataset.id.value}__{detector_label}__ms{int(model_seed)}__"
         f"cs{int(calibration_seed)}__a{alpha_ppm}__r{rho_bp}__"
-        f"ga{assurance_bp}__gb{confidence_bp}__{policy.value.lower()}"
+        f"ga{assurance_bp}__gb{confidence_bp}__{policy.value.lower()}__"
+        f"cfg{config.config_hash[:12]}"
     )
-    return f"{prefix}__cfg{config.config_hash[:12]}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -198,34 +207,38 @@ class VerificationResult:
     hashes: tuple[FileHashRecord, ...]
 
     def hash_for(self, relative_path: Identifier) -> Sha256 | None:
-        for record in self.hashes:
-            if record.relative_path == relative_path:
-                return record.sha256
-        return None
+        return next((record.sha256 for record in self.hashes if record.relative_path == relative_path), None)
 
 
 class ArtifactVerifier:
     def _path_for(self, layout: RunLayout, artifact: ArtifactType) -> Path | None:
-        mapping = {
-            ArtifactType.RESOLVED_CONFIG: layout.resolved_config,
-            ArtifactType.DATASET_MANIFEST: layout.dataset_manifest,
-            ArtifactType.ELIGIBILITY_MANIFEST: layout.eligibility_manifest,
-            ArtifactType.SPLIT_MANIFEST: layout.split_manifest,
-            ArtifactType.PREPROCESSING_MANIFEST: layout.preprocessing_evidence,
-            ArtifactType.TRAINING_MANIFEST: layout.training_manifest,
-            ArtifactType.MODEL: layout.model_reference,
-            ArtifactType.SCORE_MANIFEST: layout.score_manifest,
-            ArtifactType.THRESHOLD_RECORDS: layout.threshold_records,
-            ArtifactType.METRICS: layout.metric_records,
-            ArtifactType.VERIFICATION: layout.hashes,
-        }
-        return mapping.get(artifact)
+        match artifact:
+            case ArtifactType.RESOLVED_CONFIG:
+                return layout.resolved_config
+            case ArtifactType.DATASET_MANIFEST:
+                return layout.dataset_manifest
+            case ArtifactType.ELIGIBILITY_MANIFEST:
+                return layout.eligibility_manifest
+            case ArtifactType.SPLIT_MANIFEST:
+                return layout.split_manifest
+            case ArtifactType.PREPROCESSING_MANIFEST:
+                return layout.preprocessing_evidence
+            case ArtifactType.TRAINING_MANIFEST:
+                return layout.training_manifest
+            case ArtifactType.MODEL:
+                return layout.model_reference
+            case ArtifactType.SCORE_MANIFEST:
+                return layout.score_manifest
+            case ArtifactType.THRESHOLD_RECORDS:
+                return layout.threshold_records
+            case ArtifactType.METRICS:
+                return layout.metric_records
+            case ArtifactType.VERIFICATION:
+                return layout.hashes
+            case _:
+                return None
 
-    def required_files(
-        self,
-        layout: RunLayout,
-        definition: ExperimentSpec,
-    ) -> tuple[Path, ...]:
+    def required_files(self, layout: RunLayout, definition: ExperimentSpec) -> tuple[Path, ...]:
         required = [
             layout.run_config,
             layout.resolved_config,
@@ -233,36 +246,33 @@ class ArtifactVerifier:
             layout.manifest,
         ]
         for artifact in definition.required_evidence:
-            path = self._path_for(layout, artifact)
-            if path is None:
-                continue
-            required.append(path)
+            if path := self._path_for(layout, artifact):
+                required.append(path)
         return tuple(required)
 
     def record(self, layout: RunLayout, definition: ExperimentSpec) -> VerificationResult:
         missing: list[PathString] = []
         mismatched: list[PathString] = []
         hashes: list[FileHashRecord] = []
+
         for path in self.required_files(layout, definition):
             relative = path.relative_to(layout.root).as_posix()
             if not path.is_file():
                 missing.append(relative)
                 continue
+
             digest = sha256_file(path)
             hashes.append(FileHashRecord(relative, digest))
-            expected = self._expected_hash(layout, relative)
-            if expected is not None and digest != expected:
+
+            if (expected := self._expected_hash(layout, relative)) and digest != expected:
                 mismatched.append(relative)
+
         if layout.verification.is_dir():
             atomic_write_json(
                 layout.hashes,
-                {
-                    "files": [
-                        {"relative_path": item.relative_path, "sha256": item.sha256}
-                        for item in hashes
-                    ]
-                },
+                {"files": [{"relative_path": item.relative_path, "sha256": item.sha256} for item in hashes]},
             )
+
         return VerificationResult(
             valid=not missing and not mismatched,
             missing=tuple(missing),
@@ -272,50 +282,41 @@ class ArtifactVerifier:
 
     @staticmethod
     def _expected_hash(layout: RunLayout, relative: Identifier) -> Sha256 | None:
-        reference_paths = {
-            layout.model_reference.relative_to(layout.root).as_posix(): layout.model_reference,
-            layout.score_reference.relative_to(layout.root).as_posix(): layout.score_reference,
-        }
-        reference = reference_paths.get(relative)
+        reference = None
+        if relative == layout.model_reference.relative_to(layout.root).as_posix():
+            reference = layout.model_reference
+        elif relative == layout.score_reference.relative_to(layout.root).as_posix():
+            reference = layout.score_reference
+
         if reference is None or not reference.is_file():
             return None
+
         try:
-            record = CacheReference.model_validate(
-                json.loads(reference.read_text(encoding="utf-8"))
-            )
-        except Exception:
+            return CacheReference.model_validate_json(reference.read_text(encoding="utf-8")).sha256
+        except (ValueError, json.JSONDecodeError):
             return None
-        return record.sha256
 
 
 def capture_environment(repository_root: Path) -> GitEnvironment:
-    import subprocess
+    import torch
 
     def run(*args: str) -> str:
         try:
-            result = subprocess.run(
+            return subprocess.run(
                 ["git", *args],
                 cwd=str(repository_root),
                 capture_output=True,
                 text=True,
                 check=True,
                 timeout=10,
-            )
-            return result.stdout.strip()
-        except Exception:
+            ).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
             return ""
 
     commit = run("rev-parse", "HEAD")
-    status = run("status", "--porcelain")
-    clean = not status
+    clean = not run("status", "--porcelain")
     patch = run("diff")
-    patch_hash: Sha256 | None = None
-    if patch:
-        patch_hash = sha256_text(patch)
-    import platform
-    import sys
-
-    import torch
+    patch_hash = sha256_text(patch) if patch else None
 
     pin = EnvironmentPin(
         python=sys.version.split()[0],
@@ -324,6 +325,7 @@ def capture_environment(repository_root: Path) -> GitEnvironment:
         commit=commit,
         patch_sha256=patch_hash,
     )
+
     return GitEnvironment(
         git_commit=commit,
         git_clean=clean,
