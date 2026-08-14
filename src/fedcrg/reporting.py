@@ -12,6 +12,7 @@ import json
 import pydantic
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -90,6 +91,29 @@ Frozen = ConfigDict(frozen=True)
 _FPR_ADAPTER = TypeAdapter(Fpr)
 
 
+class PublicationTableFilename(StrEnum):
+    """Reserved manuscript-table filenames under a publication's tables/ root."""
+
+    PROTOCOL_CONSTANTS = "table_1_protocol_constants.csv"
+    DATASET_INVENTORY = "table_2_dataset_inventory.csv"
+    PRIMARY_POLICY_RESULTS = "table_3_primary_policy_results.csv"
+    ADMISSION_STATES = "table_4_admission_states.csv"
+    ABLATIONS = "table_5_ablations.csv"
+    EXTERNAL_REPLICATION = "table_8_external_replication.csv"
+
+
+class RepositoryReportFilename(StrEnum):
+    """Reserved filenames under the repository report's reports/latest/ root."""
+
+    POLICY_FEDERATION_RESULTS = "policy_federation_results.csv"
+    PRIMARY_CONTRASTS = "primary_contrasts.json"
+    SPLIT_SENSITIVITY = "split_sensitivity.csv"
+    README = "README.md"
+
+
+_RUN_SUMMARY_FILENAME = "summary.md"
+
+
 def _run_manifest(run_dir: Path) -> RunManifest | None:
     manifest_path = RunLayout(run_dir).manifest
     if not manifest_path.is_file():
@@ -161,7 +185,7 @@ def build_run_report(run_dir: Path) -> Path:
             "load a detector or retrain a model.",
         ]
     )
-    output = layout.reports / "summary.md"
+    output = layout.reports / _RUN_SUMMARY_FILENAME
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return output
@@ -454,14 +478,14 @@ class PublicationPackageBuilder:
             self._table(
                 "Table 1 - Protocol constants",
                 lambda: self.tables.protocol_constants(
-                    config, table_root / "table_1_protocol_constants.csv"
+                    config, table_root / PublicationTableFilename.PROTOCOL_CONSTANTS.value
                 ),
             ),
             self._optional_table(
                 "Table 2 - Dataset inventory",
                 prepared_manifest,
                 lambda path: self.tables.dataset_inventory(
-                    path, table_root / "table_2_dataset_inventory.csv"
+                    path, table_root / PublicationTableFilename.DATASET_INVENTORY.value
                 ),
                 "prepared dataset manifest is unavailable",
             ),
@@ -469,7 +493,7 @@ class PublicationPackageBuilder:
                 "Table 3 - Primary policy results",
                 primary_runs,
                 lambda: self.tables.primary_policy_results(
-                    primary_runs, table_root / "table_3_primary_policy_results.csv"
+                    primary_runs, table_root / PublicationTableFilename.PRIMARY_POLICY_RESULTS.value
                 ),
                 "primary policy runs are unavailable",
             ),
@@ -477,7 +501,7 @@ class PublicationPackageBuilder:
                 "Table 4 - Admission states",
                 fedcrg_primary,
                 lambda: self.tables.admission_states_from_runs(
-                    fedcrg_primary, table_root / "table_4_admission_states.csv"
+                    fedcrg_primary, table_root / PublicationTableFilename.ADMISSION_STATES.value
                 ),
                 "FedCRG admission runs are unavailable",
             ),
@@ -485,7 +509,7 @@ class PublicationPackageBuilder:
                 "Table 5 - Ablations",
                 fedcrg_primary,
                 lambda: self.tables.ablations(
-                    primary_runs, table_root / "table_5_ablations.csv", config
+                    primary_runs, table_root / PublicationTableFilename.ABLATIONS.value, config
                 ),
                 "primary policy runs are unavailable",
             ),
@@ -793,6 +817,7 @@ def build_phase_transition_figure(
     axes[0].set_ylabel("in-band probability")
     axes[0].set_title("Local readiness evidence")
     minimum = minimum_bidirectional_sample_count(band.lower, confidence)
+    axes[1].set_xlim(min(gate_counts), max(gate_counts))
     axes[1].axvline(minimum, color="crimson", linestyle="--", linewidth=1.0)
     axes[1].set_xlabel("n_G")
     axes[1].set_ylabel("bidirectional minimum")
@@ -822,7 +847,7 @@ def _band_guide_lines() -> tuple[Fpr, Fpr, Fpr]:
 
 def build_per_client_operating_points_figure(output: Path, results_root: Path) -> Path:
     """Render per-client FPR operating points against the locked band lines."""
-    frame = _require_bundle_table(results_root, "table_3_primary_policy_results.csv")
+    frame = _require_bundle_table(results_root, PublicationTableFilename.PRIMARY_POLICY_RESULTS.value)
     if "client_id" not in frame.columns or "fpr" not in frame.columns:
         raise ValueError("primary policy results table lacks client_id/fpr columns")
     figure, axis = plt.subplots(figsize=(9, 5))
@@ -843,7 +868,7 @@ def build_per_client_operating_points_figure(output: Path, results_root: Path) -
 
 def build_reliability_utility_frontier_figure(output: Path, results_root: Path) -> Path:
     """Render the reliability-utility frontier (MEBE vs ABMacroTPR per policy)."""
-    frame = _require_bundle_table(results_root, "table_3_primary_policy_results.csv")
+    frame = _require_bundle_table(results_root, PublicationTableFilename.PRIMARY_POLICY_RESULTS.value)
     required = {"policy_id", "mebe", "attack_balanced_macro_tpr"}
     if not required.issubset(frame.columns):
         raise ValueError("primary policy results table lacks MEBE/ABMacroTPR columns")
@@ -896,7 +921,7 @@ def build_assumption_stress_figure(output: Path, results_root: Path) -> Path:
 
 def build_external_replication_figure(output: Path, results_root: Path) -> Path:
     """Render external-replication FPR operating points from the DIAD bundle."""
-    frame = _require_bundle_table(results_root, "table_8_external_replication.csv")
+    frame = _require_bundle_table(results_root, PublicationTableFilename.EXTERNAL_REPLICATION.value)
     if "client_id" not in frame.columns or "fpr" not in frame.columns:
         raise ValueError("external replication table lacks client_id/fpr columns")
     figure, axis = plt.subplots(figsize=(9, 5))
@@ -984,13 +1009,13 @@ def build_repository_report(outputs_root: Path, config: ExperimentConfig) -> Pat
     run_dirs = _completed_runs(outputs_root)
     builder = PublicationTableBuilder()
     policy_table = builder.federation_results(
-        run_dirs, reports_root / "policy_federation_results.csv"
+        run_dirs, reports_root / RepositoryReportFilename.POLICY_FEDERATION_RESULTS.value
     )
     records = load_federation_results(run_dirs)
     primary_records = tuple(
         row for row in records if row.experiment_id is ExperimentId.PRIMARY_NBAIOT
     )
-    contrasts_path = reports_root / "primary_contrasts.json"
+    contrasts_path = reports_root / RepositoryReportFilename.PRIMARY_CONTRASTS.value
     if primary_records:
         contrasts = confirmatory_contrasts(
             primary_records,
@@ -1012,7 +1037,7 @@ def build_repository_report(outputs_root: Path, config: ExperimentConfig) -> Pat
             "reason": "primary workload has not reconciled, confirmatory contrasts are withheld",
         }
     atomic_write_json(contrasts_path, contrasts_payload)
-    sensitivity_path = reports_root / "split_sensitivity.csv"
+    sensitivity_path = reports_root / RepositoryReportFilename.SPLIT_SENSITIVITY.value
     pd.DataFrame.from_records(
         [row.model_dump(mode="json") for row in split_sensitivity(primary_records)]
     ).to_csv(sensitivity_path, index=False)
@@ -1029,7 +1054,7 @@ def build_repository_report(outputs_root: Path, config: ExperimentConfig) -> Pat
         "ledgers. Missing experiments remain explicitly incomplete; report generation "
         "never fills missing evidence with inferred values.",
     ]
-    output = reports_root / "README.md"
+    output = reports_root / RepositoryReportFilename.README.value
     output.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return output
 
@@ -1109,7 +1134,6 @@ class ResultsBuilder:
         manifest = self._manifest(
             campaign_id,
             outputs_root,
-            destination,
             config,
             checksums,
             complete,
@@ -1259,7 +1283,6 @@ class ResultsBuilder:
     def _manifest(
         campaign_id: CampaignId,
         outputs_root: Path,
-        destination: Path,
         config: ExperimentConfig,
         checksums: tuple[ChecksumRecord, ...],
         complete: bool,
@@ -1288,7 +1311,6 @@ class ResultsVerifier:
         campaign_id: CampaignId,
         *,
         results_root: Path,
-        outputs_root: Path,
     ) -> ResultsVerification:
         destination = campaign_results_root(results_root, campaign_id)
         layout = ResultsBundleLayout(destination)
@@ -1338,12 +1360,10 @@ def build_results_bundle(
 
 def verify_results_bundle(
     campaign_id: CampaignId,
-    outputs_root: Path,
     results_root: Path,
 ) -> ResultsVerification:
     """Verify one results bundle's structure and checksums."""
     return ResultsVerifier().verify(
         campaign_id,
         results_root=results_root,
-        outputs_root=outputs_root,
     )

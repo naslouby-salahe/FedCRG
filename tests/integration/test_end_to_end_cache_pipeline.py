@@ -8,6 +8,7 @@ import numpy as np
 
 from fedcrg.config import ExperimentConfig
 from fedcrg.experiments.runner import ComputeScores, EvaluatePolicies, TrainDetector
+from fedcrg.paths import OutputsLayout
 from fedcrg.thresholding.readiness import ReadinessPlanCache
 from fedcrg.types import CalibrationAssignmentMode
 from tests._fixtures import (
@@ -36,7 +37,7 @@ def test_train_score_evaluate_cache_pipeline(tmp_path: Path) -> None:
         config, prepared, model_path, 11, training_manifest
     )
 
-    readiness_cache_path = config.outputs_root / "cache" / "analysis" / "readiness_plans.json"
+    readiness_cache_path = OutputsLayout(config.outputs_root).readiness_plans_file
     readiness_cache = ReadinessPlanCache(readiness_cache_path)
     readiness_cache.precompute(
         config.dataset.split.calibration_benign,

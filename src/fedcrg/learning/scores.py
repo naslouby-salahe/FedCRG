@@ -25,6 +25,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 from fedcrg.config import DatasetConfig
 from fedcrg.hashing import sha256_file
 from fedcrg.learning.detectors import DetectorModel
+from fedcrg.paths import ScoreCacheLayout
 from fedcrg.runtime import resolve_compute_device
 from fedcrg.types import (
     AttackGroupId,
@@ -452,9 +453,6 @@ class ScoreCacheDescriptor:
 class ScoreCache:
     """Atomic, hash-finalized Parquet score-cache persistence."""
 
-    filename = "score_cache.parquet"
-    manifest_filename = "manifest.json"
-
     def save(self, manifest: ScoreManifest, root: Path) -> ScoreManifest:
         validate_score_manifest(manifest)
         descriptor = self.save_stream(
@@ -489,7 +487,7 @@ class ScoreCache:
         root.parent.mkdir(parents=True, exist_ok=True)
         staging = root.parent / f".{root.name}.staging-{uuid.uuid4().hex}"
         staging.mkdir()
-        parquet_path = staging / self.filename
+        parquet_path = ScoreCacheLayout(staging).score
         writer = None
         records: list[ScoreRoleCacheRecord] = []
         observed_roles: dict[ClientId, set[DataRole]] = {}
@@ -615,7 +613,7 @@ class ScoreCache:
             training_spec_hash=identity.training_spec_hash,
             dataset_manifest_hash=identity.dataset_manifest_hash,
             preprocessing_hash=identity.preprocessing_hash,
-            score_cache_file=cls.filename,
+            score_cache_file=ScoreCacheLayout(staging).score.name,
             score_cache_sha256=cache_hash,
             client_ids=client_ids,
             records=tuple(
@@ -628,7 +626,7 @@ class ScoreCache:
                 for record in records
             ),
         )
-        (staging / cls.manifest_filename).write_text(
+        ScoreCacheLayout(staging).manifest.write_text(
             payload.model_dump_json(indent=2) + "\n", encoding="utf-8"
         )
 
@@ -713,7 +711,7 @@ class ScoreCache:
         return scores
 
     def _read_verified_metadata(self, root: Path) -> ScoreCacheMetadata:
-        metadata_path = root / self.manifest_filename
+        metadata_path = ScoreCacheLayout(root).manifest
         metadata = ScoreCacheMetadata.model_validate_json(metadata_path.read_text(encoding="utf-8"))
         parquet_path = root / metadata.score_cache_file
         actual_hash = sha256_file(parquet_path)

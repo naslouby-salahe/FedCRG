@@ -10,6 +10,7 @@ import pytest
 from pydantic import TypeAdapter
 
 from fedcrg.learning.scores import ClientScoreSet, RoleScores, ScoreCache, ScoreManifest
+from fedcrg.paths import ScoreCacheLayout
 from fedcrg.types import ClientId, DataRole, DatasetId
 
 _CLIENT_ID_ADAPTER = TypeAdapter(ClientId)
@@ -75,7 +76,7 @@ def test_score_cache_detects_tampering(tmp_path: Path) -> None:
     cache = ScoreCache()
     root = tmp_path / "cache"
     cache.save(manifest, root)
-    parquet_path = root / cache.filename
+    parquet_path = ScoreCacheLayout(root).score
     with open(parquet_path, "r+b") as handle:
         handle.seek(0)
         handle.write(b"\x00" * min(16, parquet_path.stat().st_size))

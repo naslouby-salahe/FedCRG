@@ -593,7 +593,6 @@ def results_verify(ctx: click.Context) -> None:
     verification = verify_results_bundle(
         study.campaign_id,
         results_root=study.paths.results_root,
-        outputs_root=study.paths.outputs_root,
     )
     _print(ResultsVerifyPayload(valid=verification.valid, problems=tuple(verification.problems)))
     if not verification.valid:

@@ -6,23 +6,24 @@ from pathlib import Path
 
 import pytest
 
+from fedcrg.paths import OutputsLayout
 from fedcrg.reporting import ResultsBuilder, ResultsVerifier, build_results_bundle
 
 
 def _write_fake_evidence(outputs_root: Path) -> None:
-    run_root = outputs_root / "runs" / "run_1"
-    (run_root / "metrics").mkdir(parents=True)
-    (run_root / "metrics" / "metric_record.jsonl").write_text(
+    layout = OutputsLayout(outputs_root)
+    run_layout = layout.run("run_1")
+    run_layout.metrics.mkdir(parents=True)
+    run_layout.metric_records.write_text(
         '{"run_id": "run_1", "fpr": 0.01}\n', encoding="utf-8"
     )
-    analysis_root = outputs_root / "cache" / "analysis"
-    analysis_root.mkdir(parents=True)
-    (analysis_root / "readiness_plans.json").write_text('{"plans": []}\n', encoding="utf-8")
-    publication = outputs_root / "reports" / "publication"
-    (publication / "tables").mkdir(parents=True)
-    (publication / "figures").mkdir()
-    (publication / "tables" / "table_1.csv").write_text("a,b\n1,2\n", encoding="utf-8")
-    (publication / "figures" / "figure_1.png").write_bytes(b"png")
+    layout.cache_analysis.mkdir(parents=True)
+    layout.readiness_plans_file.write_text('{"plans": []}\n', encoding="utf-8")
+    publication = layout.publication
+    publication.tables.mkdir(parents=True)
+    publication.figures.mkdir()
+    (publication.tables / "table_1.csv").write_text("a,b\n1,2\n", encoding="utf-8")
+    (publication.figures / "figure_1.png").write_bytes(b"png")
 
 
 @pytest.fixture()
@@ -36,7 +37,6 @@ def _verify(campaign_id: str, tmp_path: Path):
     return ResultsVerifier().verify(
         campaign_id,
         results_root=tmp_path / "results",
-        outputs_root=tmp_path / "outputs",
     )
 
 

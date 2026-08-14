@@ -776,7 +776,6 @@ class EvaluatePolicies:
         score_root: Path,
         calibration_seed: CalibrationSeed,
         mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
-        prepared_root: Path | None = None,
     ) -> EvaluationBundle:
         descriptor = self.score_cache.load_descriptor(score_root)
         self._validate_score_identity(config, descriptor)
@@ -791,7 +790,7 @@ class EvaluatePolicies:
             calibration_seed,
             mode,
         )
-        protocol_results = self._protocol_results(config, views, score_root)
+        protocol_results = self._protocol_results(config, views)
         benign_inputs = self._benign_inputs(views, protocol_results)
         supervised_requested = any(policy in SUPERVISED_POLICIES for policy in config.policies)
         supervised_inputs = (
@@ -947,7 +946,6 @@ class EvaluatePolicies:
         self,
         config: ExperimentConfig,
         views: CalibrationScoreViews,
-        score_root: Path,
     ) -> dict[ClientId, ClientEvaluationResult]:
         reference_by_client = {
             client_id: views.get(client_id, DataRole.REFERENCE).values
@@ -1134,7 +1132,6 @@ class PolicyCellMaterializer:
             caches.score_root,
             calibration_seed=calibration_seed,
             mode=assignment_mode,
-            prepared_root=caches.prepared_root,
         )
 
     def materialize_analysis(
@@ -1147,7 +1144,7 @@ class PolicyCellMaterializer:
         bundle: EvaluationBundle,
         assignment_mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
     ) -> FederationMetrics | None:
-        self._copy_manifests(config, layout, caches, calibration_seed, assignment_mode)
+        self._copy_manifests(layout, caches)
         self._write_cache_references(config, layout, caches)
         descriptor = self.score_cache.load_descriptor(caches.score_root)
         self.evaluator.write_policy_artifacts(
@@ -1229,11 +1226,8 @@ class PolicyCellMaterializer:
 
     def _copy_manifests(
         self,
-        config: ExperimentConfig,
         layout: RunLayout,
         caches: FrozenCacheInputs,
-        calibration_seed: CalibrationSeed,
-        assignment_mode: CalibrationAssignmentMode,
     ) -> None:
         prepared_layout = PreparedDatasetLayout(caches.prepared_root)
         self._copy(prepared_layout.manifest, layout.dataset_manifest)
