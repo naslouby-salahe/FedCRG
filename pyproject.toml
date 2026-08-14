@@ -67,6 +67,19 @@ ignore = ["E501"]
 [tool.pyright]
 include = ["src/fedcrg"]
 pythonVersion = "3.12"
-typeCheckingMode = "standard"
+typeCheckingMode = "strict"
 reportMissingImports = "error"
 reportMissingTypeStubs = "none"
+# Strongest practical strictness. The strict-mode Unknown* rules flag implicit
+# Any flowing from third-party APIs whose stubs do not pin types (pandas,
+# numpy, torch, scipy) and from the JSON/YAML parse boundary before pydantic
+# validates it; those rules stay at "warning" so the noise surfaces without
+# blocking on external typing gaps. Every explicit strict rule still errors.
+reportUnknownMemberType = "warning"
+reportUnknownVariableType = "warning"
+reportUnknownArgumentType = "warning"
+reportUnknownParameterType = "warning"
+# torch stubs declare nn.Linear.bias non-optional although bias=False yields
+# None at runtime; the guarded bias initialisation is correct, so the
+# always-true-comparison rule stays at warning.
+reportUnnecessaryComparison = "warning"

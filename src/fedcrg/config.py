@@ -65,6 +65,7 @@ from fedcrg.types import (
     ExperimentType,
     FeatureCount,
     FeatureName,
+    JsonValue,
     LearningRate,
     MetricDifference,
     ModelSeed,
@@ -259,13 +260,6 @@ class StudyConfig(BaseModel):
 class ExpectedBenignCounts(RootModel[dict[ClientId, PositiveCount]]):
     """Per-client expected benign row counts, keyed by the typed client id."""
 
-    @field_validator("root", mode="before")
-    @classmethod
-    def _coerce_client_keys(cls, value: object) -> dict[ClientId, PositiveCount] | object:
-        if isinstance(value, dict) and all(isinstance(key, str) for key in value):
-            return {str(key): item for key, item in value.items()}
-        return value
-
     def count_for(self, client_id: ClientId) -> PositiveCount | None:
         return self.root.get(client_id)
 
@@ -371,13 +365,6 @@ class DatasetCatalogue(RootModel[dict[DatasetId, DatasetConfig]]):
     """Frozen dataset-contract registry keyed by dataset identity."""
 
     """All dataset contracts, keyed by dataset id."""
-
-    @field_validator("root", mode="before")
-    @classmethod
-    def _coerce_keys(cls, value: object) -> dict[DatasetId, DatasetConfig] | object:
-        if isinstance(value, dict) and all(isinstance(key, str) for key in value):
-            return {DatasetId(key): item for key, item in value.items()}
-        return value
 
     def contract(self, dataset_id: DatasetId) -> DatasetConfig:
         try:
@@ -692,7 +679,7 @@ class ExperimentConfig(BaseModel):
         )
 
 
-def load_yaml_mapping(path: Path) -> object:
+def load_yaml_mapping(path: Path) -> dict[str, JsonValue]:
     """Load one configuration document before validation."""
     try:
         raw: object = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -700,9 +687,9 @@ def load_yaml_mapping(path: Path) -> object:
         raise ConfigurationError(f"Configuration file does not exist: {path}") from exc
     except yaml.YAMLError as exc:
         raise ConfigurationError(f"Invalid YAML in {path}: {exc}") from exc
-    if not isinstance(raw, dict) or not all(isinstance(key, str) for key in raw):
-        raise ConfigurationError(f"Configuration root must be a string-keyed mapping: {path}")
-    return raw
+    if not isinstance(raw, dict):
+        raise ConfigurationError(f"Configuration root must be a mapping: {path}")
+    return {str(key): value for key, value in raw.items()}
 
 
 def load_study(path: Path = Path("config/study.yaml")) -> StudyConfig:
@@ -713,8 +700,6 @@ def load_study(path: Path = Path("config/study.yaml")) -> StudyConfig:
 def load_dataset_registry(path: Path = Path("config/datasets.yaml")) -> DatasetCatalogue:
     """Load and validate the dataset contract registry."""
     root = load_yaml_mapping(path)
-    if not isinstance(root, dict):
-        raise ConfigurationError("datasets.yaml root must be a mapping")
     datasets = root.get("datasets")
     if not isinstance(datasets, dict):
         raise ConfigurationError("datasets.yaml must contain a 'datasets' mapping")
@@ -724,8 +709,6 @@ def load_dataset_registry(path: Path = Path("config/datasets.yaml")) -> DatasetC
 def load_experiment_catalogue(path: Path = Path("config/experiments.yaml")) -> ExperimentCatalogue:
     """Load and validate the experiment catalogue."""
     root = load_yaml_mapping(path)
-    if not isinstance(root, dict):
-        raise ConfigurationError("experiments.yaml root must be a mapping")
     experiments = root.get("experiments")
     if not isinstance(experiments, list):
         raise ConfigurationError("experiments.yaml must contain an 'experiments' list")

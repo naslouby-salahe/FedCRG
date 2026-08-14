@@ -156,6 +156,4 @@ def create_detector(input_dim: Dimension, config: DetectorConfig) -> DetectorMod
     """Construct the detector declared by one configuration."""
     if isinstance(config, AutoencoderConfig):
         return Autoencoder(input_dim, config)
-    if isinstance(config, DeepSvddConfig):
-        return DeepSvdd(input_dim, config)
-    raise TypeError(f"Unsupported detector configuration: {type(config)!r}")
+    return DeepSvdd(input_dim, config)

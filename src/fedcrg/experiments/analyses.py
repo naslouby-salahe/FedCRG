@@ -16,7 +16,7 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 from scipy.stats import binom, gamma, lognorm, norm
 
-from fedcrg.config import ExperimentConfig, ExperimentSpec, ProtocolConfig
+from fedcrg.config import ExperimentConfig, ExperimentSpec, ProtocolConfig, SplitConfig
 from fedcrg.thresholding.metrics import FederationMetrics
 from fedcrg.thresholding.readiness import (
     BinomialCounts,
@@ -1218,7 +1218,7 @@ class RunBenchmark:
         return output
 
     @staticmethod
-    def _sample_count(name: Identifier, split) -> SampleCount:
+    def _sample_count(name: Identifier, split: SplitConfig) -> SampleCount:
         mapping = {
             "reference_construction": split.reference_benign,
             "readiness_order_statistic": split.calibration_benign,

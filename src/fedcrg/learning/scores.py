@@ -76,17 +76,13 @@ _BASE_SCORE_ROLES = (
     DataRole.ATTACK_TEST,
 )
 
-_REQUIRED_BASE_ROLES = frozenset(_BASE_SCORE_ROLES)
-_FORBIDDEN_DERIVED_ROLES = frozenset(_CALIBRATION_ROLES)
-
-
-def _sha256_digest() -> hashlib._Hash:
-    return hashlib.sha256()
+_REQUIRED_BASE_ROLES = set(_BASE_SCORE_ROLES)
+_FORBIDDEN_DERIVED_ROLES = set(_CALIBRATION_ROLES)
 
 
 def sha256_file(path: Path) -> Sha256:
     """SHA-256 of one file using an IO-sized read chunk."""
-    digest = _sha256_digest()
+    digest = hashlib.sha256()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
@@ -156,7 +152,7 @@ class RoleScores(BaseModel):
 
     @property
     def sha256(self) -> Sha256:
-        digest = _sha256_digest()
+        digest = hashlib.sha256()
         digest.update(self.role.value.encode("utf-8"))
         digest.update(self.client_id.encode("utf-8"))
         for row_id, value in zip(self.row_ids, self.values, strict=True):
@@ -336,7 +332,7 @@ class CalibrationAssignment:
         return self._positions[role]
 
     def row_id_hash_for(self, role: DataRole) -> Sha256:
-        digest = _sha256_digest()
+        digest = hashlib.sha256()
         for index in self._positions[role]:
             digest.update(self._row_ids[index].encode("ascii"))
         return digest.hexdigest()

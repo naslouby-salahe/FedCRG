@@ -488,9 +488,7 @@ class FederatedTrainer:
         with torch.no_grad():
             for client_id in sorted(datasets):
                 dataset = datasets[client_id]
-                values = dataset.tensors[0] if isinstance(dataset, TensorDataset) else None
-                if values is None:
-                    raise TypeError("Round-20 diagnostic requires tensor-backed training datasets")
+                values = dataset.tensors[0]
                 values = values.to(dtype=torch.float32)
                 round20_scores.append(
                     round20_model.anomaly_score(values).cpu().numpy().astype(np.float64)

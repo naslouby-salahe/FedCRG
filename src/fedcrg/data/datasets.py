@@ -10,11 +10,10 @@ from __future__ import annotations
 
 import hashlib
 import re
-from enum import StrEnum
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
+from enum import StrEnum
 from pathlib import Path
-from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -354,20 +353,6 @@ def validate_split_disjointness(
         seen.update(role_ids)
 
 
-def _ensure_row_ids(
-    frame: pd.DataFrame,
-    dataset: DatasetId,
-    client_id: ClientId,
-    source: str,
-) -> pd.DataFrame:
-    result = frame.copy()
-    if PreparedColumn.ROW_ID.value not in result.columns:
-        result[PreparedColumn.ROW_ID.value] = [
-            stable_row_id(dataset, client_id, source, int(index)) for index in range(len(result))
-        ]
-    return result
-
-
 class CalibrationAssignmentBuilder:
     """Deterministic calibration-role positions within one client's reservoir."""
 
@@ -543,7 +528,8 @@ class NBaiotAdapter(DatasetAdapter):
                     f"{frame.shape[1]} columns, expected {self.expected_feature_count}"
                 )
             try:
-                numeric = cast(pd.DataFrame, frame.apply(pd.to_numeric, errors="raise"))
+                numeric = frame.apply(pd.to_numeric, errors="raise")
+                assert isinstance(numeric, pd.DataFrame)
             except Exception as exc:
                 raise DataIntegrityError(
                     f"{FailureCode.FEATURE_SCHEMA_MISMATCH.value}: non-numeric value in {path}"

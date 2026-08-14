@@ -119,19 +119,19 @@ class ModelStore(Generic[ModelT]):
         return load_json_model(path, self.model)
 
 
-class PreparedDatasetManifestStore(ModelStore):
+class PreparedDatasetManifestStore(ModelStore[PreparedDatasetManifest]):
     """Atomic store for prepared-dataset manifests."""
 
     model = PreparedDatasetManifest
 
 
-class TrainingManifestStore(ModelStore):
+class TrainingManifestStore(ModelStore[TrainingManifest]):
     """Atomic store for training manifests."""
 
     model = TrainingManifest
 
 
-class RunManifestStore(ModelStore):
+class RunManifestStore(ModelStore[RunManifest]):
     """Atomic store for run manifests.
 
     Completed and failed runs are immutable: once a manifest is recorded as
@@ -163,19 +163,19 @@ class RunManifestStore(ModelStore):
         super().save(path, manifest)
 
 
-class EligibilityManifestStore(ModelStore):
+class EligibilityManifestStore(ModelStore[EligibilityManifest]):
     """Atomic store for eligibility manifests."""
 
     model = EligibilityManifest
 
 
-class CalibrationAssignmentManifestStore(ModelStore):
+class CalibrationAssignmentManifestStore(ModelStore[CalibrationAssignmentManifest]):
     """Atomic store for calibration-assignment manifests."""
 
     model = CalibrationAssignmentManifest
 
 
-class CacheReferenceStore(ModelStore):
+class CacheReferenceStore(ModelStore[CacheReference]):
     """Atomic store for cache references."""
 
     model = CacheReference
