@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src" / "fedcrg"
 
@@ -106,6 +108,8 @@ def test_legacy_configs_tree_is_absent() -> None:
 
 
 def test_preprocessed_and_raw_data_roots() -> None:
+    if not (ROOT / "data").is_dir():
+        pytest.skip("data/ is gitignored runtime state; not provisioned in this environment")
     assert (ROOT / "data" / "preprocessed").is_dir()
     assert (ROOT / "data" / "raw").is_dir()
 

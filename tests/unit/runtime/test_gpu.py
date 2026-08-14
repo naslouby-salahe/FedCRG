@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 import torch
 
 from fedcrg.runtime import cuda_device_info, resolve_compute_device
@@ -11,7 +12,14 @@ def test_cpu_device_resolves_without_cuda() -> None:
     assert device.type == "cpu"
 
 
-def test_cuda_required_without_cuda_device_raises() -> None:
+def test_cuda_required_without_cuda_device_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    with pytest.raises(RuntimeError, match="requires CUDA"):
+        resolve_compute_device(ComputeDeviceId.CUDA)
+
+
+def test_cuda_resolves_when_available(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     device = resolve_compute_device(ComputeDeviceId.CUDA)
     assert device.type == "cuda"
 
