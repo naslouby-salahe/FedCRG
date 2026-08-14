@@ -18,7 +18,7 @@ from fedcrg.config import ExperimentConfig
 from fedcrg.data.datasets import ClientData, DatasetAdapter, hash_row_ids
 from fedcrg.data.preparation import PrepareData
 from fedcrg.evidence.models import PreparedDatasetManifest
-from fedcrg.evidence.store import PreparedLayout
+from fedcrg.paths import PreparedDatasetLayout
 from fedcrg.types import ClientId, DataIntegrityError, DatasetId
 from tests._fixtures import NBAIOT_CLIENT_IDS, nbaiot_dataset_config, primary_experiment_config
 
@@ -117,17 +117,17 @@ def test_valid_cache_is_reused_verbatim(prepared: PreparedState) -> None:
 
 def test_missing_manifest_triggers_rebuild(prepared: PreparedState) -> None:
     config, raw, preparer, adapter, cache, first = prepared
-    (cache / PreparedLayout.manifest_filename).unlink()
+    (PreparedDatasetLayout(cache).manifest).unlink()
     second = preparer.ensure_prepared(config, raw, adapter_override=adapter)
     assert _rebuild_marks_new_manifest(first, second)
-    assert (cache / PreparedLayout.manifest_filename).is_file()
+    assert (PreparedDatasetLayout(cache).manifest).is_file()
 
 
 def test_tampered_manifest_data_spec_hash_triggers_rebuild(prepared: PreparedState) -> None:
     import json
 
     config, raw, preparer, adapter, cache, first = prepared
-    manifest_path = cache / PreparedLayout.manifest_filename
+    manifest_path = PreparedDatasetLayout(cache).manifest
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     payload["data_spec_hash"] = "f" * 64
     manifest_path.write_text(json.dumps(payload), encoding="utf-8")
@@ -155,7 +155,7 @@ def test_missing_calibration_assignment_triggers_rebuild(prepared: PreparedState
     config, raw, preparer, adapter, cache, first = prepared
     import shutil
 
-    assignment_dir = cache / PreparedLayout.calibration_split_directory
+    assignment_dir = PreparedDatasetLayout(cache).seeded_splits
     shutil.rmtree(assignment_dir)
     second = preparer.ensure_prepared(config, raw, adapter_override=adapter)
     assert _rebuild_marks_new_manifest(first, second)
@@ -190,7 +190,7 @@ def test_preprocessing_parameters_are_fitted_on_training_rows_only(
 
     _config, _raw, _preparer, _adapter, cache, _first = prepared
     payload = json.loads(
-        (cache / PreparedLayout.preprocessing_filename).read_text(encoding="utf-8")
+        (PreparedDatasetLayout(cache).preprocessing).read_text(encoding="utf-8")
     )
     for client in payload["clients"]:
         train_path = cache / client["client_id"] / "train.csv"

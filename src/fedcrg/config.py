@@ -37,6 +37,7 @@ from pydantic import (
     model_validator,
 )
 
+from fedcrg.paths import ConfigLayout, StudyPaths
 from fedcrg.types import (
     ActivationId,
     AdamBeta,
@@ -237,17 +238,6 @@ class DeepSvddConfig(BaseModel):
 DetectorConfig = Annotated[AutoencoderConfig | DeepSvddConfig, Field(discriminator="id")]
 
 
-class StudyPaths(BaseModel):
-    """Repository layout roots; the CLI accepts no path options."""
-
-    model_config = FrozenModel
-
-    data_root: Path
-    preprocessed_root: Path
-    outputs_root: Path
-    results_root: Path
-
-
 class StudyConfig(BaseModel):
     """Everything study-wide: protocol, statistics, randomness, profiles, policies."""
 
@@ -266,6 +256,8 @@ class StudyConfig(BaseModel):
     def _validate(self) -> Self:
         if len(set(self.policies)) != len(self.policies):
             raise ValueError("Policy registry must be unique")
+        if set(self.policies) != set(PolicyId):
+            raise ValueError("Policy registry must contain the complete registered policy catalogue")
         for profile_id, detector in self.detector_profiles.items():
             if detector.id is DetectorId.DEEP_SVDD and profile_id not in self.training_profiles:
                 raise ValueError(f"Detector profile {profile_id!r} has no training profile")
@@ -410,8 +402,6 @@ class DatasetConfig(BaseModel):
 
 class DatasetCatalogue(RootModel[dict[DatasetId, DatasetConfig]]):
     """Frozen dataset-contract registry keyed by dataset identity."""
-
-    """All dataset contracts, keyed by dataset id."""
 
     def contract(self, dataset_id: DatasetId) -> DatasetConfig:
         try:
@@ -756,12 +746,15 @@ def load_yaml_mapping(path: Path) -> dict[str, JsonValue]:
     return {str(key): value for key, value in raw.items()}
 
 
-def load_study(path: Path = Path("config/study.yaml")) -> StudyConfig:
+_DEFAULT_CONFIG_LAYOUT = ConfigLayout()
+
+
+def load_study(path: Path = _DEFAULT_CONFIG_LAYOUT.study) -> StudyConfig:
     """Load and validate the study configuration."""
     return StudyConfig.model_validate(load_yaml_mapping(path))
 
 
-def load_dataset_registry(path: Path = Path("config/datasets.yaml")) -> DatasetCatalogue:
+def load_dataset_registry(path: Path = _DEFAULT_CONFIG_LAYOUT.datasets) -> DatasetCatalogue:
     """Load and validate the dataset contract registry."""
     root = load_yaml_mapping(path)
     datasets = root.get("datasets")
@@ -770,7 +763,9 @@ def load_dataset_registry(path: Path = Path("config/datasets.yaml")) -> DatasetC
     return DatasetCatalogue.model_validate(datasets)
 
 
-def load_experiment_catalogue(path: Path = Path("config/experiments.yaml")) -> ExperimentCatalogue:
+def load_experiment_catalogue(
+    path: Path = _DEFAULT_CONFIG_LAYOUT.experiments,
+) -> ExperimentCatalogue:
     """Load and validate the experiment catalogue."""
     root = load_yaml_mapping(path)
     experiments = root.get("experiments")
@@ -832,9 +827,9 @@ class Study:
     @classmethod
     def load(
         cls,
-        study_path: Path = Path("config/study.yaml"),
-        datasets_path: Path = Path("config/datasets.yaml"),
-        experiments_path: Path = Path("config/experiments.yaml"),
+        study_path: Path = _DEFAULT_CONFIG_LAYOUT.study,
+        datasets_path: Path = _DEFAULT_CONFIG_LAYOUT.datasets,
+        experiments_path: Path = _DEFAULT_CONFIG_LAYOUT.experiments,
     ) -> Study:
         return cls(
             study_config=load_study(study_path),
@@ -877,5 +872,3 @@ def validate_experiment_config(config: ExperimentConfig) -> None:
     registered = set(PolicyId)
     if any(policy not in registered for policy in config.policies):
         raise ConfigurationError("Experiment contains an unregistered policy")
-    if len(registered) != 12:
-        raise ConfigurationError("Policy catalogue must contain exactly 12 protocol policies")

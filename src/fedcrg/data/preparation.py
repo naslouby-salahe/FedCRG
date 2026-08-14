@@ -54,10 +54,10 @@ from fedcrg.evidence.models import (
 from fedcrg.evidence.store import (
     CalibrationAssignmentManifestStore,
     PreparedDatasetManifestStore,
-    PreparedLayout,
     atomic_write_json,
     sha256_file,
 )
+from fedcrg.paths import PreparedDatasetLayout, prepared_dataset_root
 from fedcrg.runtime import get_logger
 from fedcrg.types import (
     CalibrationAssignmentMode,
@@ -122,10 +122,11 @@ class PrepareData:
         return hashlib.sha256(payload).hexdigest()
 
     def prepared_root(self, config: ExperimentConfig, source_identity_hash: Sha256) -> Path:
-        return (
-            config.preprocessed_root
-            / config.dataset.id.value
-            / f"{config.data_spec_hash[:16]}-{source_identity_hash[:16]}"
+        return prepared_dataset_root(
+            config.preprocessed_root,
+            config.dataset.id,
+            config.data_spec_hash,
+            source_identity_hash,
         )
 
     def cache_root(self, config: ExperimentConfig, manifest: PreparedDatasetManifest) -> Path:
@@ -180,8 +181,9 @@ class PrepareData:
         sources: tuple[SourceFileManifest, ...],
         source_root: Path,
     ) -> PreparedDatasetManifest:
-        manifest_path = final_root / PreparedLayout.manifest_filename
-        preprocessing_path = final_root / PreparedLayout.preprocessing_filename
+        layout = PreparedDatasetLayout(final_root)
+        manifest_path = layout.manifest
+        preprocessing_path = layout.preprocessing
         if not manifest_path.is_file() or not preprocessing_path.is_file():
             raise DataIntegrityError("Prepared cache is missing manifest or preprocessing evidence")
         manifest = self.manifests.load_model(manifest_path)
@@ -275,7 +277,7 @@ class PrepareData:
                     include_source_order_assignment,
                 )
                 atomic_write_json(
-                    staging_root / PreparedLayout.preprocessing_filename, preprocessing
+                    PreparedDatasetLayout(staging_root).preprocessing, preprocessing
                 )
                 self._write_dataset_manifest(
                     staging_root,
@@ -285,12 +287,12 @@ class PrepareData:
                     preprocessing.feature_columns,
                     assignments,
                 )
-            shutil.rmtree(staging_root / PreparedLayout.raw_staging_directory, ignore_errors=True)
+            shutil.rmtree(PreparedDatasetLayout(staging_root).raw_staging, ignore_errors=True)
             os.replace(staging_root, final_root)
         except Exception:
             shutil.rmtree(staging_root, ignore_errors=True)
             raise
-        manifest = self.manifests.load_model(final_root / PreparedLayout.manifest_filename)
+        manifest = self.manifests.load_model(PreparedDatasetLayout(final_root).manifest)
         _LOGGER.info("prepared cache materialized %s", final_root)
         return manifest
 
@@ -379,14 +381,14 @@ class PrepareData:
 
     @staticmethod
     def _write_raw_splits(root: Path, splits: ClientSplits) -> None:
-        client_root = root / PreparedLayout.raw_staging_directory / splits.client_id
+        client_root = PreparedDatasetLayout(root).raw_staging / splits.client_id
         client_root.mkdir(parents=True, exist_ok=True)
         for item in splits.roles:
             item.frame.to_parquet(client_root / f"{item.role.value}.parquet", index=False)
 
     @staticmethod
     def _load_raw_splits(root: Path, client_id: ClientId) -> ClientSplits:
-        client_root = root / PreparedLayout.raw_staging_directory / client_id
+        client_root = PreparedDatasetLayout(root).raw_staging / client_id
         roles = tuple(
             RoleFrame(role=role, frame=pd.read_parquet(client_root / f"{role.value}.parquet"))
             for role in _BASE_ROLES
@@ -505,6 +507,7 @@ class PrepareData:
         seeded: dict[CalibrationSeed, list[ClientCalibrationManifest]],
         source_order: list[ClientCalibrationManifest],
     ) -> tuple[CalibrationAssignmentReference, ...]:
+        layout = PreparedDatasetLayout(root)
         references: list[CalibrationAssignmentReference] = []
         for seed, clients in sorted(seeded.items()):
             manifest = CalibrationAssignmentManifest(
@@ -512,10 +515,8 @@ class PrepareData:
                 mode=CalibrationAssignmentMode.SEEDED_PERMUTATION,
                 clients=tuple(clients),
             )
-            relative = PurePosixPath(
-                f"{PreparedLayout.calibration_split_directory}/c{int(seed)}.json"
-            )
-            path = root / relative
+            path = layout.seeded_splits / f"c{int(seed)}.json"
+            relative = PurePosixPath(path.relative_to(root).as_posix())
             self.calibration_assignment_manifests.save(path, manifest)
             references.append(
                 CalibrationAssignmentReference(
@@ -531,8 +532,8 @@ class PrepareData:
                 mode=CalibrationAssignmentMode.SOURCE_ORDER,
                 clients=tuple(source_order),
             )
-            relative = PurePosixPath(PreparedLayout.source_order_split_filename)
-            path = root / relative
+            path = layout.source_order_split
+            relative = PurePosixPath(path.relative_to(root).as_posix())
             self.calibration_assignment_manifests.save(path, manifest)
             references.append(
                 CalibrationAssignmentReference(
@@ -550,12 +551,9 @@ class PrepareData:
         config: ExperimentConfig,
         manifest: EligibilityManifest,
     ) -> None:
-        name = (
-            PreparedLayout.diad_eligibility_filename
-            if config.dataset.id is DatasetId.DIAD
-            else PreparedLayout.eligibility_filename
-        )
-        atomic_write_json(root / name, manifest)
+        layout = PreparedDatasetLayout(root)
+        path = layout.diad_eligibility if config.dataset.id is DatasetId.DIAD else layout.eligibility
+        atomic_write_json(path, manifest)
 
     def _write_dataset_manifest(
         self,
@@ -578,4 +576,4 @@ class PrepareData:
             external_replication_supported=config.dataset.id is DatasetId.DIAD,
             created_at=datetime.now(UTC),
         )
-        self.manifests.save(root / PreparedLayout.manifest_filename, manifest)
+        self.manifests.save(PreparedDatasetLayout(root).manifest, manifest)

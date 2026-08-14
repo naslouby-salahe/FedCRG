@@ -2,7 +2,7 @@
 
 No production module may hardcode an outputs/ path fragment or a prepared-data
 column name: every reserved path is owned by ``OutputsLayout`` in
-``evidence/store.py``, and every prepared column is a member of the
+``paths.py``, and every prepared column is a member of the
 ``PreparedColumn`` enum in ``types.py``.
 """
 
@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src" / "fedcrg"
 
-_PATH_OWNER = "evidence/store.py"
+_PATH_OWNER = "paths.py"
 # The owner module may name the literal fragments once; everyone else must use
 # the layout properties.
 _FORBIDDEN_FRAGMENTS = (
@@ -88,7 +88,7 @@ def test_prepared_column_names_come_from_the_enum() -> None:
 
 
 def test_outputs_layout_owns_every_reserved_path() -> None:
-    from fedcrg.evidence.store import OutputsLayout
+    from fedcrg.paths import OutputsLayout
 
     layout = OutputsLayout(Path("outputs"))
     assert layout.runs == Path("outputs/runs")

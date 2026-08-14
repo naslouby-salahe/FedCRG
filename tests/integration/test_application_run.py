@@ -7,8 +7,9 @@ from pathlib import Path
 import pytest
 
 from fedcrg.config import ExperimentConfig
-from fedcrg.evidence.store import RunLayout, RunManifestStore
+from fedcrg.evidence.store import RunManifestStore
 from fedcrg.experiments.runner import ExperimentPlan, RunExperiment
+from fedcrg.paths import RunLayout
 from fedcrg.types import (
     ExperimentId,
     ExperimentStatus,

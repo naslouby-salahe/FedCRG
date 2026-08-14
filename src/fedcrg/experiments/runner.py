@@ -8,6 +8,7 @@ from __future__ import annotations
 import shutil
 import time
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from graphlib import TopologicalSorter
 from pathlib import Path
 
@@ -29,11 +30,8 @@ from fedcrg.evidence.models import (
 from fedcrg.evidence.store import (
     ArtifactVerifier,
     CacheReferenceStore,
-    OutputsLayout,
     PreparedDatasetManifestStore,
-    PreparedLayout,
     build_run_id,
-    RunLayout,
     RunManifestStore,
     TrainingManifestStore,
     atomic_write_json,
@@ -42,6 +40,14 @@ from fedcrg.evidence.store import (
     write_jsonl,
 )
 from fedcrg.hashing import sha256_file
+from fedcrg.paths import (
+    OutputsLayout,
+    PreparedDatasetLayout,
+    RunLayout,
+    ScoreCacheLayout,
+    campaign_results_root,
+    campaign_status_path,
+)
 from fedcrg.learning.detectors import (
     DeepSvdd,
     DetectorModel,
@@ -299,7 +305,7 @@ class RunExperiment:
             raise ValueError(f"Policy {policy.value} is not configured for this experiment")
         plan = self.planner.create(experiment_id, config, model_seed, calibration_seed)
         run_id = build_run_id(config, model_seed, calibration_seed, policy)
-        layout = RunLayout.for_run(config.outputs_root, run_id)
+        layout = OutputsLayout(config.outputs_root).run(run_id)
         layout.create()
         self.manifests.save(
             layout.manifest,
@@ -439,8 +445,9 @@ class TrainDetector:
         if int(model_seed) not in config.randomness.model_seeds:
             raise ValueError(f"Model seed {int(model_seed)} is not configured")
 
-        prepared_manifest_path = prepared_root / PreparedLayout.manifest_filename
-        preprocessing_path = prepared_root / PreparedLayout.preprocessing_filename
+        prepared_layout = PreparedDatasetLayout(prepared_root)
+        prepared_manifest_path = prepared_layout.manifest
+        preprocessing_path = prepared_layout.preprocessing
         prepared_manifest = self.dataset_manifests.load_model(prepared_manifest_path)
         if prepared_manifest.data_spec_hash != config.data_spec_hash:
             raise ValueError("Prepared dataset data-spec hash does not match training config")
@@ -477,9 +484,10 @@ class TrainDetector:
 
         if config.detector is None:
             raise ValueError("Training requires a detector profile")
-        model_root = OutputsLayout(config.outputs_root).model_root(config, model_seed)
-        model_path = model_root / PreparedLayout.model_filename
-        manifest_path = model_root / PreparedLayout.training_filename
+        model_cache = OutputsLayout(config.outputs_root).model_cache(config, model_seed)
+        model_root = model_cache.root
+        model_path = model_cache.model
+        manifest_path = model_cache.training_manifest
         if model_path.exists() or manifest_path.exists():
             self._validate_existing_cache(
                 config,
@@ -594,8 +602,9 @@ class ComputeScores:
         model_seed: ModelSeed,
         training_manifest: Path,
     ) -> Path:
-        manifest_path = prepared_root / PreparedLayout.manifest_filename
-        preprocessing_path = prepared_root / PreparedLayout.preprocessing_filename
+        prepared_layout = PreparedDatasetLayout(prepared_root)
+        manifest_path = prepared_layout.manifest
+        preprocessing_path = prepared_layout.preprocessing
         prepared_manifest = self.dataset_manifests.load_model(manifest_path)
         if prepared_manifest.data_spec_hash != config.data_spec_hash:
             raise ValueError("Prepared dataset data-spec hash does not match scoring config")
@@ -633,7 +642,7 @@ class ComputeScores:
         )
         if config.detector is None:
             raise ValueError("Scoring requires a detector profile")
-        score_root = OutputsLayout(config.outputs_root).score_root(config, model_seed)
+        score_root = OutputsLayout(config.outputs_root).score_cache(config, model_seed).root
         if score_root.exists():
             descriptor = self.cache.load_descriptor(score_root)
             if descriptor.identity != identity:
@@ -1080,20 +1089,14 @@ class EvaluatePolicies:
         return decisions, metrics
 
 
+@dataclass(frozen=True, slots=True)
 class FrozenCacheInputs:
     """Frozen upstream cache paths for one model seed."""
 
-    def __init__(
-        self,
-        prepared_root: Path,
-        model_path: Path,
-        training_manifest: Path,
-        score_root: Path,
-    ) -> None:
-        self.prepared_root = prepared_root
-        self.model_path = model_path
-        self.training_manifest = training_manifest
-        self.score_root = score_root
+    prepared_root: Path
+    model_path: Path
+    training_manifest: Path
+    score_root: Path
 
 
 class PolicyCellMaterializer:
@@ -1169,15 +1172,17 @@ class PolicyCellMaterializer:
         config: ExperimentConfig,
         caches: FrozenCacheInputs,
     ) -> None:
-        prepared_manifest_path = caches.prepared_root / PreparedLayout.manifest_filename
-        preprocessing_path = caches.prepared_root / PreparedLayout.preprocessing_filename
+        prepared_layout = PreparedDatasetLayout(caches.prepared_root)
+        score_layout = ScoreCacheLayout(caches.score_root)
+        prepared_manifest_path = prepared_layout.manifest
+        preprocessing_path = prepared_layout.preprocessing
         required = (
             prepared_manifest_path,
             preprocessing_path,
             caches.model_path,
             caches.training_manifest,
-            caches.score_root / ScoreCache.filename,
-            caches.score_root / ScoreCache.manifest_filename,
+            score_layout.score,
+            score_layout.manifest,
         )
         missing = tuple(path for path in required if not path.is_file())
         if missing:
@@ -1230,22 +1235,11 @@ class PolicyCellMaterializer:
         calibration_seed: CalibrationSeed,
         assignment_mode: CalibrationAssignmentMode,
     ) -> None:
-        self._copy(
-            caches.prepared_root / PreparedLayout.manifest_filename,
-            layout.dataset_manifest,
-        )
-        self._copy(
-            caches.prepared_root / PreparedLayout.preprocessing_filename,
-            layout.preprocessing_evidence,
-        )
-        self._copy(
-            caches.training_manifest,
-            layout.training / PreparedLayout.training_filename,
-        )
-        self._copy(
-            caches.score_root / ScoreCache.manifest_filename,
-            layout.score_manifest,
-        )
+        prepared_layout = PreparedDatasetLayout(caches.prepared_root)
+        self._copy(prepared_layout.manifest, layout.dataset_manifest)
+        self._copy(prepared_layout.preprocessing, layout.preprocessing_evidence)
+        self._copy(caches.training_manifest, layout.training_manifest)
+        self._copy(ScoreCacheLayout(caches.score_root).manifest, layout.score_manifest)
 
     def _write_cache_references(
         self,
@@ -1260,18 +1254,18 @@ class PolicyCellMaterializer:
         self.references.save(
             layout.score_reference,
             self.references.build(
-                caches.score_root / ScoreCache.filename,
+                ScoreCacheLayout(caches.score_root).score,
                 config.outputs_root,
             ),
         )
 
 
+@dataclass(frozen=True, slots=True)
 class PolicyRunDirectory:
     """One policy run directory within a federation cell."""
 
-    def __init__(self, policy: PolicyId, path: Path) -> None:
-        self.policy = policy
-        self.path = path
+    policy: PolicyId
+    path: Path
 
 
 class FederationCellResult(BaseModel):
@@ -1547,10 +1541,7 @@ class CampaignStatusStore:
         self.campaigns_root = campaigns_root or OutputsLayout(outputs_root).campaigns
 
     def path_for(self, campaign_id: CampaignId) -> Path:
-        value = str(campaign_id)
-        if not value or "/" in value or ".." in value:
-            raise ValueError(f"Invalid campaign id: {value!r}")
-        return self.campaigns_root / f"{value}.json"
+        return campaign_status_path(self.campaigns_root, campaign_id)
 
     def save(self, status: CampaignStatus) -> Path:
         path = self.path_for(status.campaign_id)
@@ -1616,10 +1607,7 @@ class CampaignExecutor:
             try:
                 ProtocolTablePrecomputer().precompute(config, spec)
                 if spec.category in _ANALYSIS_CATEGORIES:
-                    output = (
-                        OutputsLayout(outputs_root).cache_analysis
-                        / f"{item.experiment_id.value}.json"
-                    )
+                    output = OutputsLayout(outputs_root).analysis_result(item.experiment_id)
                     if item.experiment_id is ExperimentId.COMPUTATIONAL_BENCHMARK:
                         RunBenchmark(spec, config).run(output)
                     else:
@@ -1659,7 +1647,7 @@ class CampaignExecutor:
     ) -> Identifier:
         from fedcrg.reporting import build_results_bundle
 
-        destination = results_root / str(campaign_id)
+        destination = campaign_results_root(results_root, campaign_id)
         if destination.exists():
             return destination.as_posix()
         return build_results_bundle(campaign_id, outputs_root, results_root).as_posix()

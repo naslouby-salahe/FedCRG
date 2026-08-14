@@ -8,16 +8,16 @@ from fedcrg.config import Study
 from fedcrg.evidence.models import RunManifest
 from fedcrg.evidence.store import (
     ArtifactVerifier,
-    RunLayout,
     RunManifestStore,
     atomic_write_json,
     atomic_write_text,
 )
+from fedcrg.paths import OutputsLayout
 from fedcrg.types import ExperimentId, ExperimentStatus, PolicyId
 
 
 def test_artifact_verifier_hashes_run_files(tmp_path: Path) -> None:
-    layout = RunLayout.for_run(tmp_path, "r1")
+    layout = OutputsLayout(tmp_path).run("r1")
     layout.create()
     RunManifestStore().save(
         layout.manifest,

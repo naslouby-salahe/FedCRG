@@ -639,7 +639,8 @@ class FederationResultRecord(BaseModel):
 def load_federation_results(run_dirs: tuple[Path, ...]) -> tuple[FederationResultRecord, ...]:
     """Load completed federation records from run directories."""
     from fedcrg.evidence.models import RunConfig, RunManifest
-    from fedcrg.evidence.store import RunLayout, load_json_model
+    from fedcrg.evidence.store import load_json_model
+    from fedcrg.paths import RunLayout
 
     rows: list[FederationResultRecord] = []
     for run_dir in run_dirs:
@@ -934,7 +935,8 @@ class ProtocolTablePrecomputer:
         spec: ExperimentSpec,
         root: Path | None = None,
     ) -> tuple[Path, Path]:
-        from fedcrg.evidence.store import OutputsLayout, atomic_write_json
+        from fedcrg.evidence.store import atomic_write_json
+        from fedcrg.paths import OutputsLayout
         from fedcrg.thresholding.readiness import ReadinessPlanCache
 
         target_root = root or OutputsLayout(config.outputs_root).cache_analysis

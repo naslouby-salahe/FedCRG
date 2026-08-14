@@ -10,7 +10,6 @@ validated Pydantic model serialized with ``model_dump_json``.
 
 from __future__ import annotations
 
-import json
 import platform
 import shutil
 from pathlib import Path
@@ -20,11 +19,11 @@ import numpy
 import pandas
 import scipy
 import torch
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from fedcrg.config import Study, validate_experiment_config
 from fedcrg.data.preparation import PrepareData
-from fedcrg.evidence.store import OutputsLayout, PreparedLayout
+from fedcrg.evidence.models import RunConfig, RunManifest
 from fedcrg.hashing import sha256_file
 from fedcrg.experiments.analyses import (
     ProtocolTablePrecomputer,
@@ -36,6 +35,13 @@ from fedcrg.experiments.runner import (
     CampaignStatusStore,
     CampaignWorkItem,
     RunAllExperiments,
+)
+from fedcrg.paths import (
+    ConfigLayout,
+    OutputsLayout,
+    PreparedDatasetLayout,
+    RunLayout,
+    prepared_dataset_family_root,
 )
 from fedcrg.reporting import (
     build_publication,
@@ -68,8 +74,6 @@ from fedcrg.types import (
     Sha256,
     Version,
 )
-
-from fedcrg.evidence.store import RunLayout
 
 _SYNTHETIC_CATEGORIES = frozenset({ExperimentType.SYNTHETIC, ExperimentType.BENCHMARK})
 
@@ -239,14 +243,16 @@ def _purge_experiment_evidence(experiment_id: ExperimentId, outputs_root: Path) 
     if not runs_root.is_dir():
         return
     for run_dir in runs_root.iterdir():
-        run_config = RunLayout(run_dir).run_config
-        if not run_config.is_file():
+        run_config_path = RunLayout(run_dir).run_config
+        if not run_config_path.is_file():
             continue
         try:
-            payload = json.loads(run_config.read_text(encoding="utf-8"))
-        except Exception:
+            run_config = RunConfig.model_validate_json(
+                run_config_path.read_text(encoding="utf-8")
+            )
+        except (OSError, ValidationError):
             continue
-        if payload.get("experiment_id") == experiment_id.value:
+        if run_config.experiment_id is experiment_id:
             shutil.rmtree(run_dir, ignore_errors=True)
 
 
@@ -353,7 +359,7 @@ def preprocess(ctx: click.Context, dataset_id: str | None, overwrite: bool) -> N
         experiment_id = _DATASET_EXPERIMENTS[dataset]
         config = study.resolve(experiment_id)
         if overwrite:
-            dataset_root = config.preprocessed_root / dataset.value
+            dataset_root = prepared_dataset_family_root(config.preprocessed_root, dataset)
             if dataset_root.is_dir():
                 shutil.rmtree(dataset_root)
         manifest = preparer.ensure_prepared(config, study.paths.data_root)
@@ -363,7 +369,7 @@ def preprocess(ctx: click.Context, dataset_id: str | None, overwrite: bool) -> N
                 dataset=dataset,
                 cache_root=cache_root.as_posix(),
                 data_spec_hash=config.data_spec_hash,
-                manifest_sha256=sha256_file(cache_root / PreparedLayout.manifest_filename),
+                manifest_sha256=sha256_file(PreparedDatasetLayout(cache_root).manifest),
             )
         )
 
@@ -378,13 +384,13 @@ def run(ctx: click.Context, experiment_id: str, overwrite: bool) -> None:
     experiment = ExperimentId(experiment_id)
     spec = study.spec(experiment)
     config = study.resolve(experiment)
-    outputs = config.outputs_root
+    outputs_root = config.outputs_root
     if overwrite:
-        _purge_experiment_evidence(experiment, outputs)
-    layout = OutputsLayout(outputs)
+        _purge_experiment_evidence(experiment, outputs_root)
+    layout = OutputsLayout(outputs_root)
     if spec.category in _SYNTHETIC_CATEGORIES:
         _precompute_protocol_tables(study, experiment)
-        output = layout.cache_analysis / f"{experiment.value}.json"
+        output = layout.analysis_result(experiment)
         if overwrite and output.is_file():
             output.unlink()
         if experiment is ExperimentId.COMPUTATIONAL_BENCHMARK:
@@ -419,8 +425,8 @@ def campaign(ctx: click.Context, overwrite: bool) -> None:
     """Execute the full experiment campaign from prepared data."""
     study = _study(ctx)
     campaign_id = study.campaign_id
-    outputs = study.paths.outputs_root
-    store = CampaignStatusStore(outputs_root=outputs)
+    outputs_root = study.paths.outputs_root
+    store = CampaignStatusStore(outputs_root=outputs_root)
     if overwrite:
         status_path = store.path_for(campaign_id)
         if status_path.is_file():
@@ -428,7 +434,7 @@ def campaign(ctx: click.Context, overwrite: bool) -> None:
     work_items = tuple(
         CampaignWorkItem(
             experiment_id=spec.id,
-            config_path=Path("config/study.yaml"),
+            config_path=ConfigLayout().study,
             prepared_root=study.paths.preprocessed_root,
         )
         for spec in study.catalogue.all()
@@ -436,7 +442,7 @@ def campaign(ctx: click.Context, overwrite: bool) -> None:
     status = CampaignExecutor(study=study).run(
         campaign_id,
         work_items,
-        outputs_root=outputs,
+        outputs_root=outputs_root,
         results_root=study.paths.results_root,
     )
     _print(
@@ -464,8 +470,8 @@ def campaign(ctx: click.Context, overwrite: bool) -> None:
 def status(ctx: click.Context, experiment_id: str | None) -> None:
     """Show run status for one experiment (or all experiments)."""
     study = _study(ctx)
-    outputs = study.paths.outputs_root
-    layout = OutputsLayout(outputs)
+    outputs_root = study.paths.outputs_root
+    layout = OutputsLayout(outputs_root)
     counts: dict[ExperimentId, RunStatusCounts] = {}
     runs_root = layout.runs
     if runs_root.is_dir():
@@ -474,12 +480,10 @@ def status(ctx: click.Context, experiment_id: str | None) -> None:
             if not run_layout.manifest.is_file():
                 continue
             try:
-                from fedcrg.evidence.models import RunManifest
-
                 manifest = RunManifest.model_validate_json(
                     run_layout.manifest.read_text(encoding="utf-8")
                 )
-            except Exception:
+            except (OSError, ValidationError):
                 continue
             counter = counts.setdefault(manifest.experiment_id, RunStatusCounts())
             counter.total += 1
@@ -503,7 +507,7 @@ def status(ctx: click.Context, experiment_id: str | None) -> None:
     campaign_stage: Identifier | None = None
     campaign_record: CampaignId | None = None
     try:
-        campaign_status = CampaignStatusStore(outputs_root=outputs).load(study.campaign_id)
+        campaign_status = CampaignStatusStore(outputs_root=outputs_root).load(study.campaign_id)
         campaign_record = campaign_status.campaign_id
         campaign_stage = (
             campaign_status.current_stage.value if campaign_status.current_stage else None
@@ -551,9 +555,9 @@ def report(ctx: click.Context) -> None:
     """Build the repository report and publication package from frozen evidence."""
     study = _study(ctx)
     config = study.resolve(ExperimentId.PRIMARY_NBAIOT)
-    outputs = study.paths.outputs_root
-    repository_report = build_repository_report(outputs, config)
-    publication_manifest = build_publication(config, outputs)
+    outputs_root = study.paths.outputs_root
+    repository_report = build_repository_report(outputs_root, config)
+    publication_manifest = build_publication(config, outputs_root)
     _print(
         ReportPayload(
             campaign_id=study.campaign_id,

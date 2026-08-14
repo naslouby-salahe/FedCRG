@@ -11,6 +11,7 @@ import json
 
 import pydantic
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -29,19 +30,22 @@ from fedcrg.evidence.models import (
 )
 from fedcrg.evidence.store import (
     ArtifactVerifier,
-    LayoutDirectory,
-    OutputsLayout,
-    ResultsBundleLayout,
-    RunLayout,
     atomic_write_json,
 )
 from fedcrg.hashing import sha256_file
+from fedcrg.paths import (
+    LayoutDirectory,
+    OutputsLayout,
+    PublicationLayout,
+    ResultsBundleLayout,
+    RunLayout,
+    campaign_results_root,
+)
 from fedcrg.experiments.analyses import (
     confirmatory_contrasts,
     load_federation_results,
     split_sensitivity,
 )
-from fedcrg.runtime import get_logger
 from fedcrg.thresholding.metrics import FederationMetrics
 from fedcrg.types import (
     Assurance,
@@ -85,8 +89,6 @@ Frozen = ConfigDict(frozen=True)
 
 _FPR_ADAPTER = TypeAdapter(Fpr)
 
-_LOGGER = get_logger(__name__)
-
 
 def _run_manifest(run_dir: Path) -> RunManifest | None:
     manifest_path = RunLayout(run_dir).manifest
@@ -104,16 +106,9 @@ def _completed_runs(outputs_root: Path) -> tuple[Path, ...]:
         return ()
     rows: list[Path] = []
     for path in sorted(p for p in runs_root.iterdir() if p.is_dir()):
-        manifest_path = RunLayout(path).manifest
-        if manifest_path.is_file():
-            try:
-                manifest = RunManifest.model_validate_json(
-                    manifest_path.read_text(encoding="utf-8")
-                )
-            except Exception:
-                continue
-            if manifest.status is ExperimentStatus.COMPLETE:
-                rows.append(path)
+        manifest = _run_manifest(path)
+        if manifest is not None and manifest.status is ExperimentStatus.COMPLETE:
+            rows.append(path)
     return tuple(rows)
 
 
@@ -397,38 +392,27 @@ class PublicationTableBuilder:
         return output
 
 
+@dataclass(frozen=True, slots=True)
 class PublicationPackage:
     """Tables, figures, and manifest of one publication."""
 
-    def __init__(
-        self,
-        tables: tuple[PublicationArtifact, ...],
-        figures: tuple[PublicationArtifact, ...],
-        manifest: Path,
-    ) -> None:
-        self.tables = tables
-        self.figures = figures
-        self.manifest = manifest
+    tables: tuple[PublicationArtifact, ...]
+    figures: tuple[PublicationArtifact, ...]
+    manifest: Path
 
     @property
     def complete(self) -> bool:
         return all(item.available for item in (*self.tables, *self.figures))
 
 
+@dataclass(frozen=True, slots=True)
 class PublicationArtifact:
     """One generated table or figure with availability."""
 
-    def __init__(
-        self,
-        name: Description,
-        path: Path | None,
-        available: bool,
-        reason: Description | None = None,
-    ) -> None:
-        self.name = name
-        self.path = path
-        self.available = available
-        self.reason = reason
+    name: Description
+    path: Path | None
+    available: bool
+    reason: Description | None = None
 
 
 class PublicationPackageBuilder:
@@ -445,9 +429,10 @@ class PublicationPackageBuilder:
         prepared_manifest: Path | None = None,
         destination: Path | None = None,
     ) -> PublicationPackage:
-        destination = destination or OutputsLayout(outputs_root).publication_root
-        table_root = destination / LayoutDirectory.TABLES.value
-        figure_root = destination / LayoutDirectory.FIGURES.value
+        destination = destination or OutputsLayout(outputs_root).publication.root
+        publication = PublicationLayout(destination)
+        table_root = publication.tables
+        figure_root = publication.figures
         table_root.mkdir(parents=True, exist_ok=True)
         figure_root.mkdir(parents=True, exist_ok=True)
 
@@ -555,7 +540,7 @@ class PublicationPackageBuilder:
                 ),
             ),
         )
-        manifest_path = destination / OutputsLayout(outputs_root).publication_manifest.name
+        manifest_path = publication.manifest
         atomic_write_json(
             manifest_path,
             {
@@ -992,11 +977,11 @@ def build_phase_transition_from_catalogue(output: Path) -> Path:
     )
 
 
-def build_repository_report(outputs: Path, config: ExperimentConfig) -> Path:
+def build_repository_report(outputs_root: Path, config: ExperimentConfig) -> Path:
     """Publication-oriented evidence index from every completed run."""
-    reports_root = OutputsLayout(outputs).reports / LayoutDirectory.LATEST.value
+    reports_root = OutputsLayout(outputs_root).reports / LayoutDirectory.LATEST.value
     reports_root.mkdir(parents=True, exist_ok=True)
-    run_dirs = _completed_runs(outputs)
+    run_dirs = _completed_runs(outputs_root)
     builder = PublicationTableBuilder()
     policy_table = builder.federation_results(
         run_dirs, reports_root / "policy_federation_results.csv"
@@ -1082,12 +1067,12 @@ class ResultsManifest(BaseModel):
     source_policy: Description
 
 
+@dataclass(frozen=True, slots=True)
 class ResultsVerification:
     """Validity and problems of one bundle verification."""
 
-    def __init__(self, valid: bool, problems: tuple[Identifier, ...]) -> None:
-        self.valid = valid
-        self.problems = problems
+    valid: bool
+    problems: tuple[Identifier, ...]
 
 
 class ResultsBuilder:
@@ -1100,26 +1085,26 @@ class ResultsBuilder:
         outputs_root: Path,
         results_root: Path,
     ) -> Path:
-        destination = results_root / str(campaign_id)
+        destination = campaign_results_root(results_root, campaign_id)
         layout = ResultsBundleLayout(destination)
         if destination.exists():
             raise FileExistsError(f"Results bundle already exists and is immutable: {destination}")
         for directory in layout.required_directories:
-            (destination / directory).mkdir(parents=True, exist_ok=True)
+            directory.mkdir(parents=True, exist_ok=True)
 
         study = Study.load()
         config = study.resolve(ExperimentId.PRIMARY_NBAIOT)
         self._write_resolved_configs(config, layout)
         self._copy_metrics(outputs_root, layout)
         self._copy_statistics(outputs_root, layout)
-        self._write_reports(outputs_root, layout)
-        self._write_provenance(outputs_root, layout)
+        self._write_reports(outputs_root, config, layout)
+        self._write_provenance(outputs_root, config, layout)
         self._copy_tables_and_figures(outputs_root, layout)
 
         # The manifest itself must be covered by the checksum ledger, so it is
         # written before the ledger is computed (checksums.json is the only
         # file excluded from its own ledger).
-        complete = self._evidence_complete(outputs_root)
+        complete = self._evidence_complete(study, outputs_root)
         checksums = self._checksums(layout)
         manifest = self._manifest(
             campaign_id,
@@ -1136,7 +1121,7 @@ class ResultsBuilder:
         return destination
 
     @staticmethod
-    def _evidence_complete(outputs_root: Path) -> bool:
+    def _evidence_complete(study: Study, outputs_root: Path) -> bool:
         """True when every registered real-data experiment cell has a completed run.
 
         The bundle manifest must never claim completeness for missing evidence:
@@ -1144,7 +1129,6 @@ class ResultsBuilder:
         (model seed, calibration seed, policy) cell of every real-data
         experiment exists as a completed run directory.
         """
-        study = Study.load()
         runs = _completed_runs(outputs_root)
         for spec in study.catalogue.all():
             if spec.category is ExperimentType.SYNTHETIC:
@@ -1187,18 +1171,10 @@ class ResultsBuilder:
             return
         records: list[MetricRecord] = []
         for run_root in sorted(path for path in runs_root.iterdir() if path.is_dir()):
+            manifest = _run_manifest(run_root)
+            if manifest is None or manifest.status is not ExperimentStatus.COMPLETE:
+                continue
             run_layout = RunLayout(run_root)
-            manifest_path = run_layout.manifest
-            if not manifest_path.is_file():
-                continue
-            try:
-                manifest = RunManifest.model_validate_json(
-                    manifest_path.read_text(encoding="utf-8")
-                )
-            except pydantic.ValidationError:
-                continue
-            if manifest.status is not ExperimentStatus.COMPLETE:
-                continue
             metric_path = run_layout.metric_records
             if not metric_path.is_file():
                 continue
@@ -1214,22 +1190,25 @@ class ResultsBuilder:
 
     @staticmethod
     def _copy_statistics(outputs_root: Path, layout: ResultsBundleLayout) -> None:
-        outputs = OutputsLayout(outputs_root)
+        outputs_layout = OutputsLayout(outputs_root)
         for source, target in (
-            (outputs.readiness_plans_file, layout.readiness_plans),
-            (outputs.mismatch_cutoffs_file, layout.mismatch_cutoffs),
+            (outputs_layout.readiness_plans_file, layout.readiness_plans),
+            (outputs_layout.mismatch_cutoffs_file, layout.mismatch_cutoffs),
         ):
             if source.is_file():
                 target.write_bytes(source.read_bytes())
 
-    def _write_reports(self, outputs_root: Path, layout: ResultsBundleLayout) -> None:
-        config = Study.load().resolve(ExperimentId.PRIMARY_NBAIOT)
+    def _write_reports(
+        self, outputs_root: Path, config: ExperimentConfig, layout: ResultsBundleLayout
+    ) -> None:
         report = build_repository_report(outputs_root, config)
         if report.is_file():
             (layout.reports / report.name).write_bytes(report.read_bytes())
 
     @staticmethod
-    def _write_provenance(outputs_root: Path, layout: ResultsBundleLayout) -> None:
+    def _write_provenance(
+        outputs_root: Path, config: ExperimentConfig, layout: ResultsBundleLayout
+    ) -> None:
         environment: GitEnvironment | None = None
         environment_path = OutputsLayout(outputs_root).environment_file
         if environment_path.is_file():
@@ -1242,21 +1221,20 @@ class ResultsBuilder:
                 "environment": (
                     environment.model_dump(mode="json") if environment is not None else None
                 ),
-                "prepared_data_root": "data/preprocessed/",
-                "outputs_root": str(outputs_root),
+                "prepared_data_root": config.preprocessed_root.as_posix(),
+                "outputs_root": outputs_root.as_posix(),
             },
         )
 
     @staticmethod
     def _copy_tables_and_figures(outputs_root: Path, layout: ResultsBundleLayout) -> None:
-        publication_root = OutputsLayout(outputs_root).publication_root
-        if not publication_root.exists():
+        publication = OutputsLayout(outputs_root).publication
+        if not publication.root.exists():
             return
-        for source_dir, target_dir in (
-            (LayoutDirectory.TABLES.value, layout.tables),
-            (LayoutDirectory.FIGURES.value, layout.figures),
+        for source, target_dir in (
+            (publication.tables, layout.tables),
+            (publication.figures, layout.figures),
         ):
-            source = publication_root / source_dir
             if not source.exists():
                 continue
             for path in source.iterdir():
@@ -1296,7 +1274,7 @@ class ResultsBuilder:
             detector_id=detector.id if detector is not None else None,
             model_seeds=tuple(config.randomness.model_seeds),
             calibration_seeds=tuple(config.dataset.calibration_seeds),
-            outputs_root=str(outputs_root),
+            outputs_root=outputs_root.as_posix(),
             file_count=file_count if file_count is not None else len(checksums),
             source_policy="all numerical content is derived from immutable FedCRG artifacts",
         )
@@ -1312,14 +1290,14 @@ class ResultsVerifier:
         results_root: Path,
         outputs_root: Path,
     ) -> ResultsVerification:
-        destination = results_root / str(campaign_id)
+        destination = campaign_results_root(results_root, campaign_id)
         layout = ResultsBundleLayout(destination)
         problems: list[Identifier] = []
         if not destination.exists():
             return ResultsVerification(False, (f"results bundle does not exist: {destination}",))
         for directory in layout.required_directories:
-            if not (destination / directory).is_dir():
-                problems.append(f"missing required bundle directory: {directory}")
+            if not directory.is_dir():
+                problems.append(f"missing required bundle directory: {directory.name}")
         manifest_path = layout.manifest
         if not manifest_path.is_file():
             problems.append("missing bundle manifest.json")

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fedcrg.evidence.store import RunLayout
+from fedcrg.paths import OutputsLayout
 from fedcrg.types import RunId
 
 
@@ -10,7 +10,7 @@ def test_run_layout_has_single_evidence_namespace(tmp_path: Path) -> None:
     run_id: RunId = (
         "nbaiot__ae__ms11__cs1000__a10000__r5000__ga9500__gb9500__fedcrg__cfg0123456789ab"
     )
-    layout = RunLayout.for_run(tmp_path, run_id)
+    layout = OutputsLayout(tmp_path).run(run_id)
 
     assert layout.root == tmp_path / "runs" / run_id
     assert layout.manifest == layout.root / "manifest.json"

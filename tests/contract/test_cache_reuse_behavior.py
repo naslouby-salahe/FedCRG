@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fedcrg.config import ExperimentConfig
-from fedcrg.evidence.store import OutputsLayout
+from fedcrg.paths import OutputsLayout
 from fedcrg.experiments.runner import ComputeScores, TrainDetector
 from tests._fixtures import diad_pipeline_config, write_prepared_diad
 
@@ -80,9 +80,9 @@ def test_calibration_seed_change_keeps_score_cache(tmp_path: Path) -> None:
     )
     second = compute.score_from_cache(changed, prepared, model_path, 11, training_manifest)
     assert second == first
-    assert OutputsLayout(changed.outputs_root).score_root(changed, 11) == OutputsLayout(
+    assert OutputsLayout(changed.outputs_root).score_cache(changed, 11).root == OutputsLayout(
         config.outputs_root
-    ).score_root(config, 11)
+    ).score_cache(config, 11).root
 
 
 def test_model_change_invalidates_dependent_score_cache(tmp_path: Path) -> None:
@@ -101,6 +101,6 @@ def test_model_change_invalidates_dependent_score_cache(tmp_path: Path) -> None:
     assert changed_model_path != model_path
     second = compute.score_from_cache(changed, prepared, changed_model_path, 11, changed_manifest)
     assert second != first
-    assert OutputsLayout(changed.outputs_root).score_root(changed, 11) != OutputsLayout(
+    assert OutputsLayout(changed.outputs_root).score_cache(changed, 11).root != OutputsLayout(
         config.outputs_root
-    ).score_root(config, 11)
+    ).score_cache(config, 11).root

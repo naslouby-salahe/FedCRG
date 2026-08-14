@@ -1,12 +1,12 @@
-"""Evidence persistence: immutable output layout, run identities, atomic
-JSON/JSONL writes, file hashing, and manifest stores."""
+"""Evidence persistence: atomic JSON/JSONL writes, file hashing, manifest
+stores, and artifact verification."""
 
 from __future__ import annotations
 
 import json
 import os
 import uuid
-from enum import StrEnum
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Generic, TypeVar
 
@@ -25,6 +25,7 @@ from fedcrg.evidence.models import (
     TrainingManifest,
 )
 from fedcrg.hashing import sha256_file, sha256_text
+from fedcrg.paths import RunLayout
 from fedcrg.types import (
     ArtifactType,
     CalibrationSeed,
@@ -40,63 +41,6 @@ from fedcrg.types import (
 )
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
-
-
-class LayoutDirectory(StrEnum):
-    """Reserved directory names of the immutable output layout."""
-
-    OUTPUTS = "outputs"
-    RUNS = "runs"
-    DATA = "data"
-    TRAINING = "training"
-    SCORES = "scores"
-    DECISIONS = "decisions"
-    METRICS = "metrics"
-    TABLES = "tables"
-    FIGURES = "figures"
-    REPORTS = "reports"
-    LOGS = "logs"
-    VERIFICATION = "verification"
-    CACHE = "cache"
-    MODELS = "models"
-    ANALYSIS = "analysis"
-    CAMPAIGNS = "campaigns"
-    MONITORING = "monitoring"
-    PUBLICATION = "publication"
-    LATEST = "latest"
-    STATISTICS = "statistics"
-    PROVENANCE = "provenance"
-    RESOLVED_CONFIGS = "resolved_configs"
-
-
-class LayoutArtifact(StrEnum):
-    """Reserved artifact filenames of the immutable output layout."""
-
-    MANIFEST = "manifest.json"
-    RUN_CONFIG = "run_config.json"
-    RESOLVED_CONFIG = "resolved_config.yaml"
-    ENVIRONMENT = "environment.json"
-    MODEL_REFERENCE = "model_reference.json"
-    SCORE_REFERENCE = "cache_reference.json"
-    THRESHOLD_RECORDS = "threshold_record.jsonl"
-    METRIC_RECORDS = "metric_record.jsonl"
-    FEDERATION = "federation.json"
-    ADMISSION = "admission.json"
-    EVALUATION_SUMMARY = "evaluation_summary.json"
-    DATASET_MANIFEST = "dataset_manifest.json"
-    PREPROCESSING = "preprocessing.json"
-    ELIGIBILITY = "eligibility.json"
-    CALIBRATION_ASSIGNMENT = "calibration_assignment.json"
-    TRAINING = "training.json"
-    HASHES = "hashes.json"
-    CHECKSUMS = "checksums.json"
-    PRIMARY_NBAIOT_CONFIG = "primary_nbaiot.json"
-    METRIC_RECORDS_BUNDLE = "metric_records.json"
-    READINESS_PLANS = "readiness_plans.json"
-    MISMATCH_CUTOFFS = "mismatch_cutoffs.json"
-    PROVENANCE = "provenance.json"
-    TELEMETRY = "telemetry.jsonl"
-    BENCHMARK = "benchmark.json"
 
 
 def _jsonable(value: object) -> JsonValue:
@@ -244,333 +188,6 @@ class CacheReferenceStore(ModelStore[CacheReference]):
         )
 
 
-class RunLayout:
-    """Immutable per-run output directory layout."""
-
-    def __init__(self, root: Path) -> None:
-        self.root = root
-
-    @classmethod
-    def for_run(cls, outputs_root: Path, run_id: RunId) -> RunLayout:
-        return cls(OutputsLayout(outputs_root).runs / str(run_id))
-
-    @property
-    def manifest(self) -> Path:
-        return self.root / LayoutArtifact.MANIFEST.value
-
-    @property
-    def run_config(self) -> Path:
-        return self.root / LayoutArtifact.RUN_CONFIG.value
-
-    @property
-    def resolved_config(self) -> Path:
-        return self.root / LayoutArtifact.RESOLVED_CONFIG.value
-
-    @property
-    def environment(self) -> Path:
-        return self.root / LayoutArtifact.ENVIRONMENT.value
-
-    @property
-    def data(self) -> Path:
-        return self.root / LayoutDirectory.DATA.value
-
-    @property
-    def training(self) -> Path:
-        return self.root / LayoutDirectory.TRAINING.value
-
-    @property
-    def model_reference(self) -> Path:
-        return self.training / LayoutArtifact.MODEL_REFERENCE.value
-
-    @property
-    def scores(self) -> Path:
-        return self.root / LayoutDirectory.SCORES.value
-
-    @property
-    def score_reference(self) -> Path:
-        return self.scores / LayoutArtifact.SCORE_REFERENCE.value
-
-    @property
-    def decisions(self) -> Path:
-        return self.root / LayoutDirectory.DECISIONS.value
-
-    @property
-    def threshold_records(self) -> Path:
-        return self.decisions / LayoutArtifact.THRESHOLD_RECORDS.value
-
-    @property
-    def metrics(self) -> Path:
-        return self.root / LayoutDirectory.METRICS.value
-
-    @property
-    def metric_records(self) -> Path:
-        return self.metrics / LayoutArtifact.METRIC_RECORDS.value
-
-    @property
-    def federation_metrics(self) -> Path:
-        return self.metrics / LayoutArtifact.FEDERATION.value
-
-    @property
-    def tables(self) -> Path:
-        return self.root / LayoutDirectory.TABLES.value
-
-    @property
-    def figures(self) -> Path:
-        return self.root / LayoutDirectory.FIGURES.value
-
-    @property
-    def reports(self) -> Path:
-        return self.root / LayoutDirectory.REPORTS.value
-
-    @property
-    def admission(self) -> Path:
-        return self.metrics / LayoutArtifact.ADMISSION.value
-
-    @property
-    def evaluation_summary(self) -> Path:
-        return self.reports / LayoutArtifact.EVALUATION_SUMMARY.value
-
-    @property
-    def dataset_manifest(self) -> Path:
-        return self.data / LayoutArtifact.DATASET_MANIFEST.value
-
-    @property
-    def preprocessing_evidence(self) -> Path:
-        return self.data / LayoutArtifact.PREPROCESSING.value
-
-    @property
-    def training_manifest(self) -> Path:
-        return self.training / LayoutArtifact.TRAINING.value
-
-    @property
-    def score_manifest(self) -> Path:
-        return self.scores / LayoutArtifact.MANIFEST.value
-
-    @property
-    def logs(self) -> Path:
-        return self.root / LayoutDirectory.LOGS.value
-
-    @property
-    def verification(self) -> Path:
-        return self.root / LayoutDirectory.VERIFICATION.value
-
-    @property
-    def hashes(self) -> Path:
-        return self.verification / LayoutArtifact.HASHES.value
-
-    def create(self) -> None:
-        self.root.mkdir(parents=True, exist_ok=False)
-        for directory in (
-            self.data,
-            self.training,
-            self.scores,
-            self.decisions,
-            self.metrics,
-            self.tables,
-            self.figures,
-            self.reports,
-            self.logs,
-            self.verification,
-        ):
-            directory.mkdir()
-
-
-class PreparedLayout:
-    """Reserved prepared-cache artifact names: manifests, preprocessing and
-    eligibility evidence, training manifests, model files, raw staging, and
-    calibration-split files."""
-
-    manifest_filename = "manifest.json"
-    preprocessing_filename = "preprocessing.json"
-    eligibility_filename = "eligibility.json"
-    diad_eligibility_filename = "diad_eligibility.json"
-    training_filename = "training.json"
-    model_filename = "model.pt"
-    raw_staging_directory = "_raw"
-    calibration_split_directory = "splits/seeded"
-    source_order_split_filename = "splits/source_order.json"
-
-
-class OutputsLayout:
-    """Reserved outputs/ directory tree: runs, caches, campaigns, logs,
-    monitoring, reports, environment and telemetry files."""
-
-    def __init__(self, outputs_root: Path = Path(LayoutDirectory.OUTPUTS.value)) -> None:
-        self.outputs_root = outputs_root
-
-    @property
-    def runs(self) -> Path:
-        return self.outputs_root / LayoutDirectory.RUNS.value
-
-    @property
-    def cache(self) -> Path:
-        return self.outputs_root / LayoutDirectory.CACHE.value
-
-    @property
-    def cache_models(self) -> Path:
-        return self.cache / LayoutDirectory.MODELS.value
-
-    @property
-    def cache_scores(self) -> Path:
-        return self.cache / LayoutDirectory.SCORES.value
-
-    @property
-    def cache_analysis(self) -> Path:
-        return self.cache / LayoutDirectory.ANALYSIS.value
-
-    @property
-    def campaigns(self) -> Path:
-        return self.outputs_root / LayoutDirectory.CAMPAIGNS.value
-
-    @property
-    def logs(self) -> Path:
-        return self.outputs_root / LayoutDirectory.LOGS.value
-
-    @property
-    def monitoring(self) -> Path:
-        return self.outputs_root / LayoutDirectory.MONITORING.value
-
-    @property
-    def reports(self) -> Path:
-        return self.outputs_root / LayoutDirectory.REPORTS.value
-
-    @property
-    def publication_root(self) -> Path:
-        return self.reports / LayoutDirectory.PUBLICATION.value
-
-    @property
-    def publication_manifest(self) -> Path:
-        return self.publication_root / LayoutArtifact.MANIFEST.value
-
-    @property
-    def environment_file(self) -> Path:
-        return self.outputs_root / LayoutArtifact.ENVIRONMENT.value
-
-    @property
-    def telemetry_file(self) -> Path:
-        return self.monitoring / LayoutArtifact.TELEMETRY.value
-
-    @property
-    def benchmark_report(self) -> Path:
-        return self.reports / LayoutArtifact.BENCHMARK.value
-
-    @property
-    def readiness_plans_file(self) -> Path:
-        return self.cache_analysis / LayoutArtifact.READINESS_PLANS.value
-
-    @property
-    def mismatch_cutoffs_file(self) -> Path:
-        return self.cache_analysis / LayoutArtifact.MISMATCH_CUTOFFS.value
-
-    def model_root(
-        self,
-        config: ExperimentConfig,
-        model_seed: ModelSeed,
-    ) -> Path:
-        if config.detector is None:
-            raise ValueError("Model cache requires a detector profile")
-        return (
-            self.cache_models
-            / config.dataset.id.value
-            / config.detector.id.value
-            / f"m{int(model_seed)}"
-            / config.training_spec_hash[:16]
-        )
-
-    def score_root(
-        self,
-        config: ExperimentConfig,
-        model_seed: ModelSeed,
-    ) -> Path:
-        if config.detector is None:
-            raise ValueError("Score cache requires a detector profile")
-        return (
-            self.cache_scores
-            / config.dataset.id.value
-            / config.detector.id.value
-            / f"m{int(model_seed)}"
-            / config.training_spec_hash[:16]
-        )
-
-
-class ResultsBundleLayout:
-    """Reserved publication-bundle artifact names under results/<campaign-id>/."""
-
-    def __init__(self, root: Path) -> None:
-        self.root = root
-
-    @property
-    def manifest(self) -> Path:
-        return self.root / LayoutArtifact.MANIFEST.value
-
-    @property
-    def checksums(self) -> Path:
-        return self.root / LayoutArtifact.CHECKSUMS.value
-
-    @property
-    def resolved_configs(self) -> Path:
-        return self.root / LayoutDirectory.RESOLVED_CONFIGS.value
-
-    @property
-    def metrics(self) -> Path:
-        return self.root / LayoutDirectory.METRICS.value
-
-    @property
-    def statistics(self) -> Path:
-        return self.root / LayoutDirectory.STATISTICS.value
-
-    @property
-    def tables(self) -> Path:
-        return self.root / LayoutDirectory.TABLES.value
-
-    @property
-    def figures(self) -> Path:
-        return self.root / LayoutDirectory.FIGURES.value
-
-    @property
-    def reports(self) -> Path:
-        return self.root / LayoutDirectory.REPORTS.value
-
-    @property
-    def provenance(self) -> Path:
-        return self.root / LayoutDirectory.PROVENANCE.value
-
-    @property
-    def primary_nbaiot_config(self) -> Path:
-        return self.resolved_configs / LayoutArtifact.PRIMARY_NBAIOT_CONFIG.value
-
-    @property
-    def metric_records(self) -> Path:
-        return self.metrics / LayoutArtifact.METRIC_RECORDS_BUNDLE.value
-
-    @property
-    def readiness_plans(self) -> Path:
-        return self.statistics / LayoutArtifact.READINESS_PLANS.value
-
-    @property
-    def mismatch_cutoffs(self) -> Path:
-        return self.statistics / LayoutArtifact.MISMATCH_CUTOFFS.value
-
-    @property
-    def provenance_json(self) -> Path:
-        return self.provenance / LayoutArtifact.PROVENANCE.value
-
-    @property
-    def required_directories(self) -> tuple[Identifier, ...]:
-        return tuple(
-            directory.value
-            for directory in (
-                LayoutDirectory.METRICS,
-                LayoutDirectory.STATISTICS,
-                LayoutDirectory.TABLES,
-                LayoutDirectory.FIGURES,
-                LayoutDirectory.REPORTS,
-                LayoutDirectory.PROVENANCE,
-                LayoutDirectory.RESOLVED_CONFIGS,
-            )
-        )
-
-
 def build_run_id(
     config: ExperimentConfig,
     model_seed: ModelSeed,
@@ -595,28 +212,22 @@ def build_run_id(
     return f"{prefix}__cfg{config.config_hash[:12]}"
 
 
+@dataclass(frozen=True, slots=True)
 class FileHashRecord:
     """One file's relative path and SHA-256."""
 
-    def __init__(self, relative_path: Identifier, sha256: Sha256) -> None:
-        self.relative_path = relative_path
-        self.sha256 = sha256
+    relative_path: Identifier
+    sha256: Sha256
 
 
+@dataclass(frozen=True, slots=True)
 class VerificationResult:
     """Outcome of an artifact verification audit."""
 
-    def __init__(
-        self,
-        valid: bool,
-        missing: tuple[Identifier, ...],
-        mismatched: tuple[Identifier, ...],
-        hashes: tuple[FileHashRecord, ...],
-    ) -> None:
-        self.valid = valid
-        self.missing = missing
-        self.mismatched = mismatched
-        self.hashes = hashes
+    valid: bool
+    missing: tuple[Identifier, ...]
+    mismatched: tuple[Identifier, ...]
+    hashes: tuple[FileHashRecord, ...]
 
     def hash_for(self, relative_path: Identifier) -> Sha256 | None:
         for record in self.hashes:
@@ -632,8 +243,8 @@ class ArtifactVerifier:
         mapping = {
             ArtifactType.RESOLVED_CONFIG: layout.resolved_config,
             ArtifactType.DATASET_MANIFEST: layout.dataset_manifest,
-            ArtifactType.ELIGIBILITY_MANIFEST: layout.data / LayoutArtifact.ELIGIBILITY.value,
-            ArtifactType.SPLIT_MANIFEST: layout.data / LayoutArtifact.CALIBRATION_ASSIGNMENT.value,
+            ArtifactType.ELIGIBILITY_MANIFEST: layout.eligibility_manifest,
+            ArtifactType.SPLIT_MANIFEST: layout.split_manifest,
             ArtifactType.PREPROCESSING_MANIFEST: layout.preprocessing_evidence,
             ArtifactType.TRAINING_MANIFEST: layout.training_manifest,
             ArtifactType.MODEL: layout.model_reference,

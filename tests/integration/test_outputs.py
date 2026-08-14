@@ -7,12 +7,13 @@ from pathlib import Path
 import pytest
 
 from fedcrg.evidence.models import RunManifest
-from fedcrg.evidence.store import RunLayout, RunManifestStore
+from fedcrg.evidence.store import RunManifestStore
+from fedcrg.paths import OutputsLayout
 from fedcrg.types import ExperimentId, ExperimentStatus, ImmutableRunError, PolicyId
 
 
 def test_completed_run_manifest_is_immutable(tmp_path: Path) -> None:
-    layout = RunLayout.for_run(tmp_path, "run-1")
+    layout = OutputsLayout(tmp_path).run("run-1")
     layout.create()
     store = RunManifestStore()
 

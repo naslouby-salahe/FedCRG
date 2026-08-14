@@ -10,7 +10,7 @@ import pandas as pd
 from fedcrg.config import ExperimentConfig
 from fedcrg.data.datasets import ClientData, DatasetAdapter
 from fedcrg.data.preparation import PrepareData
-from fedcrg.evidence.store import PreparedLayout
+from fedcrg.paths import PreparedDatasetLayout
 from fedcrg.types import ClientId, DatasetId
 from tests._fixtures import NBAIOT_CLIENT_IDS, nbaiot_dataset_config, primary_experiment_config
 
@@ -74,9 +74,10 @@ def test_prepare_data_writes_preprocessed_roles_and_evidence(tmp_path: Path) -> 
         config, tmp_path / "raw", adapter_override=FakeAdapter(tmp_path / "raw")
     )
     cache = preparer.cache_root(config, manifest)
-    assert (cache / PreparedLayout.manifest_filename).exists()
-    assert (cache / PreparedLayout.preprocessing_filename).exists()
-    assert (cache / PreparedLayout.eligibility_filename).exists()
+    layout = PreparedDatasetLayout(cache)
+    assert layout.manifest.exists()
+    assert layout.preprocessing.exists()
+    assert layout.eligibility.exists()
     train = pd.read_csv(cache / "nb01" / "train.csv")
     assert train["f1"].between(0.0, 1.0).all()
     assert train["f2"].eq(0.0).all()
