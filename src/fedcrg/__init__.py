@@ -1,4 +1,7 @@
-"""FedCRG package."""
+"""FedCRG: evidence-admitted calibration readiness for client-specific
+thresholding in federated IoT anomaly detection."""
 
-__version__ = "0.2.0"
-__protocol_version__ = "2.0"
+from fedcrg.config import Study
+from fedcrg.types import FedCRGError
+
+__all__ = ["Study", "FedCRGError"]

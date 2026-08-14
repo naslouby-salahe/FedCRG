@@ -25,10 +25,6 @@ TIGHT_TOLERANCE = 1.0e-12
 EXACT_BETA_TOLERANCE = 1.0e-10
 COARSE_TOLERANCE = 1.0e-9
 
-# ---------------------------------------------------------------------------
-# Semantic scalar aliases
-# ---------------------------------------------------------------------------
-
 NonNegativeInt = Annotated[int, Field(ge=0)]
 PositiveInt = Annotated[int, Field(gt=0)]
 NonNegativeFloat = Annotated[float, Field(ge=0.0)]
@@ -84,6 +80,48 @@ Fraction = Probability
 ContaminationFraction = Probability
 TrueFpr = Probability
 
+Percentage = Annotated[float, Field(ge=0.0, le=100.0)]
+
+Position = NonNegativeInt
+
+ParameterCount = PositiveInt
+
+RngSeed = Annotated[int, Field(ge=0, le=0xFFFFFFFFFFFFFFFF)]
+
+Loss = Annotated[float, Field(ge=0.0)]
+
+Correlation = Annotated[float, Field(ge=-1.0, le=1.0)]
+
+Version = Annotated[
+    str,
+    StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$"),
+]
+
+Description = Annotated[str, StringConstraints(min_length=0, max_length=512)]
+
+JsonValue = (
+    str
+    | int
+    | float
+    | bool
+    | None
+    | tuple["JsonValue", ...]
+    | list["JsonValue"]
+    | dict[str, "JsonValue"]
+)
+
+LogLevel = Annotated[
+    str,
+    StringConstraints(pattern=r"^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$"),
+]
+
+Timestamp = Annotated[
+    str,
+    StringConstraints(pattern=r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"),
+]
+
+Duration = Annotated[float, Field(ge=0.0)]
+
 Identifier = Annotated[
     str,
     StringConstraints(
@@ -114,6 +152,15 @@ CampaignId = Annotated[
         pattern=r"^[a-z0-9][a-z0-9._-]*$",
     ),
 ]
+PlanKey = Annotated[
+    str,
+    StringConstraints(
+        min_length=1,
+        max_length=256,
+        strip_whitespace=True,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._=|:-]*$",
+    ),
+]
 RunId = Annotated[
     str,
     StringConstraints(
@@ -140,11 +187,6 @@ GitCommit = Annotated[
 ]
 SourceFileId = Annotated[str, StringConstraints(min_length=1, strip_whitespace=True)]
 
-# ---------------------------------------------------------------------------
-# Value objects
-# ---------------------------------------------------------------------------
-
-
 class OperatingBand(BaseModel):
     """Closed benign false-positive-rate operating band [lower, upper]."""
 
@@ -162,7 +204,6 @@ class OperatingBand(BaseModel):
     def contains(self, value: Fpr) -> bool:
         return self.lower <= value <= self.upper
 
-
 class ConfidenceInterval(BaseModel):
     """Two-sided exact confidence interval inside [0, 1]."""
 
@@ -176,7 +217,6 @@ class ConfidenceInterval(BaseModel):
         if self.lower > self.upper:
             raise ValueError("Confidence interval must satisfy lower <= upper")
         return self
-
 
 @dataclass(frozen=True, slots=True)
 class BinomialCounts:
@@ -193,7 +233,6 @@ class BinomialCounts:
     def exceedance_rate(self) -> Fpr:
         return self.x / self.n
 
-
 @dataclass(frozen=True, slots=True)
 class ClassMoments:
     """Pooled mean and standard deviation of one supervised class's scores."""
@@ -201,21 +240,13 @@ class ClassMoments:
     mean: Score
     std: Spacing
 
-
-# ---------------------------------------------------------------------------
-# Finite protocol identities
-# ---------------------------------------------------------------------------
-
-
 class ProtocolId(StrEnum):
     FEDCRG = "fedcrg"
-
 
 class DatasetId(StrEnum):
     NBAIOT = "nbaiot"
     DIAD = "diad"
     SYNTHETIC = "synthetic"
-
 
 class DatasetFeatureContractId(StrEnum):
     NBAIOT_LOCKED_115 = "nbaiot_locked_115"
@@ -223,11 +254,9 @@ class DatasetFeatureContractId(StrEnum):
     DIAD_TRAINING_NUMERIC_SAFE = "diad_training_numeric_safe"
     SYNTHETIC = "synthetic"
 
-
 class DetectorId(StrEnum):
     AUTOENCODER = "autoencoder"
     DEEP_SVDD = "deep_svdd"
-
 
 class DataRole(StrEnum):
     TRAIN = "train"
@@ -240,23 +269,19 @@ class DataRole(StrEnum):
     ATTACK_DEV = "attack_dev"
     ATTACK_TEST = "attack_test"
 
-
 class CalibrationAssignmentMode(StrEnum):
     SEEDED_PERMUTATION = "seeded_permutation"
     SOURCE_ORDER = "source_order"
 
-
 class CalibrationReadinessState(StrEnum):
     READY = "READY"
     NOT_READY = "NOT_READY"
-
 
 class MismatchOutcome(StrEnum):
     LOW = "LOW_MISMATCH"
     HIGH = "HIGH_MISMATCH"
     NO_MATERIAL_DIFFERENCE = "NO_MATERIAL_MISMATCH_DEMONSTRATED"
     INSUFFICIENT_EVIDENCE = "GATE_B_INSUFFICIENT"
-
 
 class DecisionState(StrEnum):
     REFERENCE_RETAINED = "NO_MATERIAL_MISMATCH_DEMONSTRATED"
@@ -265,11 +290,9 @@ class DecisionState(StrEnum):
     MISMATCH_EVIDENCE_INSUFFICIENT = "GATE_B_INSUFFICIENT"
     ASSUMPTION_VIOLATION = "CALIBRATION_ASSUMPTION_VIOLATION"
 
-
 class ThresholdSource(StrEnum):
     REFERENCE = "reference"
     LOCAL_CALIBRATION = "local_calibration"
-
 
 class DecisionReason(StrEnum):
     NO_MATERIAL_DIFFERENCE = "NO_MATERIAL_MISMATCH_DEMONSTRATED"
@@ -277,7 +300,6 @@ class DecisionReason(StrEnum):
     CALIBRATION_NOT_READY = "calibration_not_ready"
     INSUFFICIENT_MISMATCH_EVIDENCE = "insufficient_mismatch_evidence"
     CALIBRATION_TIE = "calibration_tie"
-
 
 class FailureCode(StrEnum):
     DATASET_COUNT_MISMATCH = "DATASET_COUNT_MISMATCH"
@@ -308,37 +330,29 @@ class FailureCode(StrEnum):
     DATA_DRIFT_STRESS = "DATA_DRIFT_STRESS"
     NONDETERMINISTIC_PARITY_FAIL = "NONDETERMINISTIC_PARITY_FAIL"
 
-
 class EligibilityStatus(StrEnum):
     ELIGIBLE = "eligible"
     EXCLUDED = "excluded"
 
-
 class ActivationId(StrEnum):
     TANH = "tanh"
-
 
 class ComputeDeviceId(StrEnum):
     CPU = "cpu"
     CUDA = "cuda"
 
-
 class DeepSvddCenterMode(StrEnum):
     EQUAL_MEAN_OF_CLIENT_INITIAL_EMBEDDINGS = "equal_mean_of_client_initial_embeddings"
-
 
 class ChronologyStatus(StrEnum):
     VERIFIED = "verified"
     SOURCE_ORDER_ONLY = "source_order_only"
 
-
 class AggregationId(StrEnum):
     EQUAL_CLIENT_MEAN = "equal_client_mean"
 
-
 class OptimizerId(StrEnum):
     ADAM = "adam"
-
 
 class PolicyId(StrEnum):
     REFERENCE_QUANTILE = "reference_quantile"
@@ -354,7 +368,6 @@ class PolicyId(StrEnum):
     ORACLE_TEST = "oracle_test"
     FEDCRG = "fedcrg"
 
-
 class CampaignStatusValue(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
@@ -363,11 +376,9 @@ class CampaignStatusValue(StrEnum):
     BLOCKED = "blocked"
     SKIPPED = "skipped"
 
-
 class PolicyEvaluationStatus(StrEnum):
     EVALUATED = "evaluated"
     UNDEFINED = "undefined"
-
 
 class ExperimentId(StrEnum):
     READINESS_THEOREM = "readiness_theorem"
@@ -391,7 +402,6 @@ class ExperimentId(StrEnum):
     COMPUTATIONAL_BENCHMARK = "computational_benchmark"
     DIAD_FEATURE_SENSITIVITY = "diad_feature_sensitivity"
 
-
 class ExperimentAxisId(StrEnum):
     DISTRIBUTION = "distribution"
     CALIBRATION_N = "calibration_n"
@@ -410,24 +420,20 @@ class ExperimentAxisId(StrEnum):
     ASSIGNMENT = "assignment"
     WARMUPS = "warmups"
 
-
 class SyntheticDistribution(StrEnum):
     NORMAL = "normal"
     LOGNORMAL = "lognormal"
     GAMMA_SHAPE_2 = "gamma2"
     NORMAL_MIXTURE = "normal_mixture"
 
-
 class ContaminationDirection(StrEnum):
     HIGH = "high"
     LOW = "low"
-
 
 class MultiplicityProcedure(StrEnum):
     BONFERRONI_READINESS = "bonferroni_readiness"
     BONFERRONI_MISMATCH = "bonferroni_mismatch"
     HOLM_DIRECTIONAL = "holm_directional"
-
 
 class ExperimentType(StrEnum):
     SYNTHETIC = "synthetic"
@@ -436,7 +442,6 @@ class ExperimentType(StrEnum):
     ROBUSTNESS = "robustness"
     EXTERNAL_VALIDATION = "external_validation"
     BENCHMARK = "benchmark"
-
 
 class ExperimentStatus(StrEnum):
     PENDING = "pending"
@@ -448,7 +453,6 @@ class ExperimentStatus(StrEnum):
     FAILED = "failed"
     BLOCKED = "blocked"
     INVALID = "invalid"
-
 
 class ArtifactType(StrEnum):
     RESOLVED_CONFIG = "resolved_config"
@@ -466,25 +470,20 @@ class ArtifactType(StrEnum):
     REPORT = "report"
     VERIFICATION = "verification"
 
-
 class SupervisedClassLabel(IntEnum):
     """Binary class label carried by supervised-development evidence."""
 
     BENIGN = 0
     ATTACK = 1
 
-
 class FedCRGError(Exception):
     """Base exception for FedCRG failures."""
-
 
 class ConfigurationError(FedCRGError):
     """Raised when configuration cannot be resolved or validated."""
 
-
 class DataIntegrityError(FedCRGError):
     """Raised when dataset or split integrity is violated."""
-
 
 class ImmutableRunError(FedCRGError):
     """Raised when application code tries to mutate a completed run."""
