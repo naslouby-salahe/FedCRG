@@ -7,8 +7,6 @@ FedCRG is a **post-training operating-point governance protocol**. It does not i
 1. the federation reference threshold is shown to be materially outside the client’s pre-registered benign FPR band; and
 2. an independent local calibration sample is large enough to construct an order-statistic threshold with the locked finite-sample in-band readiness assurance.
 
-The normative research specification is [`docs/roadmap.md`](docs/roadmap.md). The live roadmap-to-code control document is [`docs/FedCRG Audit Matrix.md`](docs/FedCRG%20Audit%20Matrix.md).
-
 ## Repository architecture
 
 ```text
