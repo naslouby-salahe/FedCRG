@@ -154,6 +154,7 @@ def prepared_dataset_root(
     data_spec_hash: Sha256,
     source_identity_hash: Sha256,
 ) -> Path:
+    """Keys the prepared-dataset cache on both the data spec and the raw source identity, so either changing invalidates the cache."""
     return (
         prepared_dataset_family_root(preprocessed_root, dataset_id)
         / f"{data_spec_hash[:16]}-{source_identity_hash[:16]}"
@@ -303,6 +304,7 @@ class RunLayout:
         return self.verification / LayoutArtifact.HASHES
 
     def create(self) -> None:
+        """Fails if the run directory already exists, so an existing run's artifacts are never silently reused or overwritten."""
         self.root.mkdir(parents=True, exist_ok=False)
         for directory in (
             self.data,
@@ -414,6 +416,7 @@ def campaign_results_root(results_root: Path, campaign_id: CampaignId) -> Path:
 
 
 def campaign_status_path(campaigns_root: Path, campaign_id: CampaignId) -> Path:
+    """Rejects path separators and traversal sequences since campaign_id becomes a filename component."""
     value = str(campaign_id)
     if not value or "/" in value or ".." in value:
         raise ValueError(f"Invalid campaign id: {value!r}")

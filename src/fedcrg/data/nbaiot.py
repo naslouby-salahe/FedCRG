@@ -94,6 +94,7 @@ class NBaiotAdapter(DatasetAdapter):
         return tuple(self._map_directories())
 
     def load_client(self, client_id: ClientId) -> ClientData:
+        """Concatenate per-attack-file CSVs in source order; N-BaIoT provenance carries no verified timestamps."""
         try:
             directory = self._map_directories()[client_id]
         except KeyError as exc:
@@ -128,6 +129,7 @@ class NBaiotAdapter(DatasetAdapter):
         client_id: ClientId,
         attack_group: AttackGroupId | None,
     ) -> pd.DataFrame:
+        """Any non-numeric or non-finite value is a hard parse failure; N-BaIoT permits no imputation."""
         frames: list[pd.DataFrame] = []
         for path in sorted(files):
             frame = pd.read_csv(str(path))

@@ -42,6 +42,7 @@ from fedcrg.types import (
 
 
 def _jsonable(value: object) -> JsonValue:
+    """Recursively coerce a value to JSON-safe types, falling back to ``str()`` for anything without a dedicated case (e.g. enums, paths)."""
     match value:
         case BaseModel():
             return value.model_dump(mode="json")
@@ -59,6 +60,7 @@ def _jsonable(value: object) -> JsonValue:
 
 @contextlib.contextmanager
 def atomic_file(path: Path):
+    """Write through a sibling temp file and ``os.replace`` so readers never observe a partially written artifact; the temp file is removed if writing fails."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = path.with_name(f".{path.name}.tmp-{uuid.uuid4().hex}")
     try:
@@ -125,6 +127,7 @@ class RunManifestStore(ModelStore[RunManifest]):
     _TERMINAL_STATUSES = frozenset({ExperimentStatus.COMPLETE, ExperimentStatus.FAILED})
 
     def save(self, path: Path, manifest: RunManifest) -> None:
+        """Refuse to overwrite a run manifest that already reached a terminal status with a different status."""
         if path.is_file():
             try:
                 existing = self.load(path)
@@ -175,6 +178,7 @@ def build_run_id(
     calibration_seed: CalibrationSeed,
     policy: PolicyId,
 ) -> RunId:
+    """Encode the run's identity into a stable, filesystem-safe string; float parameters are rounded to fixed-precision integers so the id is reproducible."""
     protocol = config.protocol
     if config.detector is None:
         raise ValueError("Run identity requires a real-data detector profile")
@@ -289,6 +293,7 @@ class ArtifactVerifier:
 
     @staticmethod
     def _expected_hash(layout: RunLayout, relative: Identifier) -> Sha256 | None:
+        """Look up the frozen hash for the model or score cache; other artifact types have no reference to compare against."""
         reference = None
         if relative == layout.model_reference.relative_to(layout.root).as_posix():
             reference = layout.model_reference

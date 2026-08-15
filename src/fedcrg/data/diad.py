@@ -67,6 +67,7 @@ class DiadAdapter(DatasetAdapter):
         return value.strip().lower()
 
     def _client_id(self, normalized_mac: MacAddress) -> ClientId:
+        """Hash the MAC into an opaque client id; the MAC itself is partition metadata and never enters the feature matrix."""
         digest = hashlib.sha256(normalized_mac.encode("ascii")).hexdigest()[
             : self._client_id_mac_digest_length
         ]
@@ -119,6 +120,8 @@ class DiadAdapter(DatasetAdapter):
             selected = frame.loc[normalized.isin(macs)].copy()
             if selected.empty:
                 continue
+            # DIAD tolerates missing values (coerced to NaN); NBaiotAdapter raises instead because
+            # N-BaIoT permits no imputation.
             numeric = selected[list(self.dataset.feature_names)].apply(
                 pd.to_numeric, errors="coerce"
             )
@@ -201,6 +204,7 @@ class NumericSafeFeatureContract(BaseModel):
 
 
 def _is_forbidden_name(column: FeatureName, derivation: DiadFeatureDerivation) -> bool:
+    """Excludes direct identifiers (MAC/IP/port/protocol/text fields) and prepared-column metadata from model input."""
     excluded = frozenset(derivation.excluded_feature_exact) | set(PreparedColumn)
     lowered = column.lower()
     if column in excluded or lowered in {value.lower() for value in excluded}:
@@ -212,6 +216,7 @@ def derive_numeric_safe_features(
     training_frames: tuple[ClientTrainingFrame, ...],
     derivation: DiadFeatureDerivation,
 ) -> NumericSafeFeatureContract:
+    """Intersects numeric, non-identifier columns across all eligible clients' training rows only."""
     if not training_frames:
         raise ValueError("The derived feature contract requires eligible-client training frames")
     common = set.intersection(*(set(item.frame.columns) for item in training_frames))

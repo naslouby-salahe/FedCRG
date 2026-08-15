@@ -212,6 +212,8 @@ def _purge_experiment_evidence(experiment_id: ExperimentId, outputs_root: Path) 
         try:
             run_config = RunConfig.model_validate_json(run_config_path.read_text(encoding="utf-8"))
         except (OSError, ValidationError):
+            # An unreadable run_config can't be attributed to this experiment; leave it alone
+            # rather than guess, so --overwrite never deletes evidence it can't identify.
             continue
         if run_config.experiment_id is experiment_id:
             shutil.rmtree(run_dir, ignore_errors=True)
@@ -517,7 +519,6 @@ def report(ctx: click.Context) -> None:
 
 @cli.group(name="results")
 def results_group() -> None:
-    # Click group callback: subcommands below attach to this group and carry the behavior.
     pass
 
 

@@ -97,6 +97,7 @@ def cosine_learning_rate(
     initial: LearningRate,
     final: LearningRate,
 ) -> LearningRate:
+    """Same rate applies to every local epoch within a round; only round_index moves the schedule."""
     if rounds <= 0 or not 0 <= round_index < rounds:
         raise ValueError("round_index must be inside the configured training horizon")
     if rounds == 1:
@@ -112,6 +113,7 @@ def epoch_seed(
     round_index: RoundIndex,
     epoch: EpochCount,
 ) -> RngSeed:
+    """Derives a deterministic shuffle seed from (model_seed, client_id, round, epoch) so reruns are reproducible."""
     text = f"fedcrg|training|{model_seed}|{client_id}|{round_index}|{epoch}"
     digest = hashlib.sha256(text.encode("utf-8")).digest()
     return int.from_bytes(digest[:8], "big", signed=False) & 0x7FFFFFFFFFFFFFFF
@@ -121,6 +123,7 @@ StateDict = dict[str, torch.Tensor]
 
 
 def equal_client_mean(models: Sequence[DetectorModel]) -> StateDict:
+    """Aggregates by unweighted arithmetic mean across clients, not by sample count, so large clients don't dominate."""
     if not models:
         raise ValueError("At least one client model is required")
 
@@ -209,6 +212,7 @@ class FederatedClient:
         round_index: RoundIndex,
     ) -> tuple[DetectorModel, ClientRoundResult]:
         model = global_model.clone().to(self.device)
+        # Rebuilt every round: Adam moments must not leak across global rounds.
         optimizer = torch.optim.Adam(
             model.parameters(),
             lr=learning_rate,
@@ -304,6 +308,8 @@ class FederatedServer:
 
 
 class FederatedTrainer:
+    """The confirmatory model is always the state after the last configured round; any earlier checkpoint captured here is diagnostic only and never feeds back into training."""
+
     diagnostic_round_index = 19
 
     def train(

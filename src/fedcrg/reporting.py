@@ -111,6 +111,7 @@ def _run_manifest(run_dir: Path) -> RunManifest | None:
     try:
         return RunManifest.model_validate_json(manifest_path.read_text(encoding="utf-8"))
     except pydantic.ValidationError:
+        # An unreadable manifest is treated as an incomplete run rather than an error.
         return None
 
 
@@ -561,6 +562,7 @@ class PublicationPackageBuilder:
         return PublicationPackage(tables, figures, manifest_path)
 
     def _table(self, name: Description, builder: Callable[[], Path]) -> PublicationArtifact:
+        """Catches a builder's failure and records it as an unavailable artifact instead of aborting the rest of the package."""
         try:
             path = builder()
         except Exception as exc:
@@ -1054,6 +1056,7 @@ class ResultsBuilder:
         outputs_root: Path,
         results_root: Path,
     ) -> Path:
+        """Assembles a new results bundle for a campaign; refuses to touch an existing one, since bundles are immutable once built."""
         destination = campaign_results_root(results_root, campaign_id)
         layout = ResultsBundleLayout(destination)
         if destination.exists():
@@ -1089,6 +1092,8 @@ class ResultsBuilder:
     def _evidence_complete(study: Study, outputs_root: Path) -> bool:
         runs = _completed_runs(outputs_root)
         for spec in study.catalogue.all():
+            # Synthetic and benchmark workloads have no seed/policy grid to count against,
+            # so completeness is only meaningful for the empirical experiments.
             if spec.category is ExperimentType.SYNTHETIC:
                 continue
             if spec.id is ExperimentId.COMPUTATIONAL_BENCHMARK:
@@ -1155,6 +1160,7 @@ class ResultsBuilder:
         ):
             if source.is_file():
                 resolved_target = target.resolve()
+                # Guards against a symlink or misconfigured layout writing outside the bundle.
                 if resolved_target.parent != layout.statistics.resolve():
                     raise DataIntegrityError(
                         f"Statistics artifact escapes the statistics directory: {target}"

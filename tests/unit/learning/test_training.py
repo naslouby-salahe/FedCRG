@@ -63,6 +63,6 @@ def test_client_fraction_below_one_is_rejected() -> None:
         _config(fraction=0.5)
 
 
-def test_training_records_numerical_contamination() -> None:
+def test_cosine_learning_rate_rejects_round_index_at_horizon() -> None:
     with pytest.raises((ValueError, FloatingPointError)):
         cosine_learning_rate(3, 3, 0.2, 0.01)

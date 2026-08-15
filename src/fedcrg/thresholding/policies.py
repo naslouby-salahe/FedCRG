@@ -211,6 +211,7 @@ def _finite_vector(values: np.ndarray, name: Identifier) -> np.ndarray:
 
 
 def empirical_quantile(scores: np.ndarray, alpha: Alpha) -> Threshold:
+    """Order-statistic quantile using the same rank convention as the reference threshold, so comparator baselines are apples-to-apples."""
     values = np.asarray(scores, dtype=np.float64)
     if values.ndim != 1 or len(values) == 0:
         raise ValueError("Quantile thresholds require a non-empty one-dimensional array")
@@ -257,6 +258,7 @@ def tune_shrinkage(
     alpha: Alpha,
     n0_candidates: tuple[SampleCount, ...],
 ) -> NonNegativeInt:
+    """Pick the pseudo-count n0 minimizing mean absolute mismatch-set FPR error across clients over the candidate grid."""
     if not n0_candidates:
         raise ValueError("Shrinkage tuning requires at least one candidate n0")
     best_n0 = n0_candidates[0]
@@ -291,6 +293,7 @@ def tune_shrinkage(
 
 
 def shrinkage(client: BenignPolicyEvidence, alpha: Alpha, n0: NonNegativeInt) -> Threshold:
+    """Blend local and reference thresholds, weighting the local estimate by n_calibration/(n_calibration+n0) so it dominates as calibration data grows."""
     local = empirical_quantile(client.calibration_scores, alpha)
     n_calibration = len(client.calibration_scores)
     weight = n_calibration / (n_calibration + n0)
@@ -327,6 +330,7 @@ def _pooled_moments(
     clients: tuple[SupervisedDevelopmentEvidence, ...],
     label: SupervisedClassLabel,
 ) -> ClassMoments:
+    """Combine per-client mean/variance into pooled moments without re-touching raw scores (law of total variance)."""
     counts: list[NonNegativeCount] = []
     means: list[Score] = []
     variances = []
@@ -352,6 +356,7 @@ def summary_statistic_threshold(
     clients: tuple[SupervisedDevelopmentEvidence, ...],
     candidate_count: CandidateCount,
 ) -> Threshold | None:
+    """Search for the best F1 threshold only inside the overlap of the benign and attack mean+-3*std envelopes; undefined if the classes don't overlap."""
     if candidate_count <= 0:
         raise ValueError("candidate_count must be positive")
     benign = _pooled_moments(clients, SupervisedClassLabel.BENIGN)
@@ -395,6 +400,7 @@ def oracle_choice(
     candidates: tuple[Threshold, Threshold, Threshold],
     band: OperatingBand,
 ) -> Threshold:
+    """Pick the candidate with least band error (ties broken by highest TPR) using held-out final-test evidence; not a deployable policy, only an upper-bound comparator."""
     ranked: list[_OracleCandidate] = []
     benign_labels = np.zeros(len(client.benign_test_scores), dtype=np.int64)
     attack_labels = np.ones(len(client.attack_test_scores), dtype=np.int64)

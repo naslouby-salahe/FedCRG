@@ -100,6 +100,7 @@ def validate_split_disjointness(
     splits: ClientSplits,
     row_id_column: PreparedColumn = PreparedColumn.ROW_ID,
 ) -> None:
+    """Every role's rows must be pairwise disjoint; a leaked row would invalidate downstream statistical guarantees."""
     seen: set[RowId] = set()
     for role in DataRole:
         frame = splits.try_get(role)
@@ -125,6 +126,7 @@ class CalibrationAssignmentBuilder:
         calibration_seed: CalibrationSeed,
         mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
     ) -> CalibrationRoleAssignment:
+        """Splits the calibration reservoir into reference/mismatch/calibration/guard roles from a seeded permutation (or, in SOURCE_ORDER mode, the identity order) so each role sees only its own disjoint slice."""
         split = config.split
         reservoir_total = (
             split.reference_benign
@@ -202,6 +204,7 @@ class BaseSplitBuilder:
         config: DatasetConfig,
         attack_split_seed: RngSeed,
     ) -> ClientSplits:
+        """Consumes benign rows in source order — train, then the calibration reservoir, then benign test — so later roles never influence the fitted training boundary."""
         split = config.split
         benign = data.benign.reset_index(drop=True)
 
@@ -247,6 +250,7 @@ class BaseSplitBuilder:
             chosen = rng.choice(len(members), size=development.for_group(group), replace=False)
             dev_rows.extend(int(members[index]) for index in chosen)
 
+        # Everything not drawn into the fixed development budget is final-test-only attack data.
         dev_index = set(dev_rows)
         test_rows = [i for i in range(len(attack)) if i not in dev_index]
 
@@ -286,6 +290,7 @@ class BaseSplitBuilder:
         development_budget: PositiveCount,
         reserve_per_group: PositiveCount,
     ) -> AttackGroupAllocation:
+        """DIAD's uneven attack-group sizes get a capacity-aware waterfill; N-BaIoT's near-even groups get an equal split with hard failure on shortfall."""
         if dataset is DatasetId.DIAD:
             capacities = AttackGroupAllocation(
                 groups=tuple(
@@ -340,6 +345,7 @@ class BaseSplitBuilder:
         capacities: AttackGroupAllocation,
         development_budget: PositiveCount,
     ) -> AttackGroupAllocation:
+        """Assigns the development budget one row at a time to whichever under-capacity group has the fewest rows so far, balancing across category/subtype without exceeding any group's capacity."""
         if not groups:
             raise DataIntegrityError("Attack development allocation requires groups")
 

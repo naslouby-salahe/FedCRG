@@ -53,6 +53,8 @@ class ScoreCacheColumn(StrEnum):
     ATTACK_FAMILY_TEST_ONLY = "attack_family_test_only"
 
 
+# Calibration roles are derived per-seed views over the reservoir role and must
+# never be written into the physical score cache; only the base roles below are persisted.
 _CALIBRATION_ROLES = frozenset(
     (
         DataRole.REFERENCE,
@@ -255,6 +257,8 @@ def truncate_view(role_scores: RoleScores, sample_count: SampleCount) -> RoleSco
 
 
 class CalibrationAssignment:
+    """Partitions a client's reservoir rows into calibration roles by seeded permutation, so each calibration_seed yields a reproducible but distinct split."""
+
     def __init__(
         self,
         client_id: ClientId,
@@ -418,6 +422,8 @@ class ScoreCacheDescriptor:
 
 
 class ScoreCache:
+    """A cache directory, once written, is immutable — every threshold policy must consume the same cached scores rather than trigger a re-run."""
+
     def save(self, manifest: ScoreManifest, root: Path) -> ScoreManifest:
         validate_score_manifest(manifest)
         descriptor = self.save_stream(
@@ -761,6 +767,8 @@ def validate_score_manifest(manifest: ScoreManifest) -> None:
 
 
 class ScoreComputer:
+    """Scores are label-blind: only feature values are read, never attack/malicious labels."""
+
     def compute(
         self,
         model: DetectorModel,
@@ -780,6 +788,8 @@ class ScoreComputer:
         with torch.inference_mode():
             for start in range(0, n_samples, batch_size):
                 end = start + batch_size
+                # Forward pass runs in float32; results are widened to float64 for storage
+                # so downstream statistical calculations get consistent precision.
                 batch = torch.as_tensor(
                     values[start:end],
                     dtype=torch.float32,

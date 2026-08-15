@@ -78,6 +78,8 @@ def autoencoder_tensor_bytes(input_dim: Dimension, hidden_dims: tuple[Dimension,
 
 
 class Autoencoder(DetectorModel):
+    """Per-sample anomaly score is mean feature-wise reconstruction MSE."""
+
     def __init__(self, input_dim: Dimension, config: AutoencoderConfig) -> None:
         super().__init__()
         dims = (input_dim, *config.hidden_dims)
@@ -100,6 +102,8 @@ class Autoencoder(DetectorModel):
 
 
 class DeepSvdd(DetectorModel):
+    """Anomaly score is squared Euclidean distance from a center that is frozen after initialization."""
+
     center: torch.Tensor
 
     def __init__(self, input_dim: Dimension, config: DeepSvddConfig) -> None:
@@ -117,6 +121,7 @@ class DeepSvdd(DetectorModel):
         return cast(torch.Tensor, self.encoder(batch))
 
     def initialize_center(self, batches: list[torch.Tensor]) -> None:
+        """Sets the center once, before training, as the equal-client average of per-client mean embeddings; must not be called again afterward."""
         if not batches:
             raise ValueError("At least one batch is required to initialize the center")
 

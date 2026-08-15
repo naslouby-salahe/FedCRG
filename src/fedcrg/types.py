@@ -39,6 +39,8 @@ MetricDifference = Annotated[float, Field()]
 LearningRate = PositiveFloat
 OptimizerEpsilon = PositiveFloat
 XavierGain = PositiveFloat
+# Bounds collapse to a single point deliberately: weight decay is locked at 0 and client
+# participation is locked at full (1.0) for the duration of the study.
 WeightDecay = Annotated[float, Field(ge=0.0, le=0.0)]
 ClientFraction = Annotated[float, Field(ge=1.0, le=1.0)]
 RoundCount = PositiveInt
@@ -322,11 +324,14 @@ class CalibrationReadinessState(StrEnum):
 class MismatchOutcome(StrEnum):
     LOW = "LOW_MISMATCH"
     HIGH = "HIGH_MISMATCH"
+    # An absence of demonstrated mismatch, not a finding that the reference threshold is correct.
     NO_MATERIAL_DIFFERENCE = "NO_MATERIAL_MISMATCH_DEMONSTRATED"
     INSUFFICIENT_EVIDENCE = "GATE_B_INSUFFICIENT"
 
 
 class DecisionState(StrEnum):
+    # Reference threshold stays in force because no material mismatch was demonstrated — this is
+    # an absence of evidence, not evidence that the reference threshold is correct.
     REFERENCE_RETAINED = "NO_MATERIAL_MISMATCH_DEMONSTRATED"
     PERSONALIZED = "LOCAL_PERSONALIZE"
     CALIBRATION_DEFICIT = "CALIBRATION_DEFICIT"

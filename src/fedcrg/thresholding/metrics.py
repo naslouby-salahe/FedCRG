@@ -79,6 +79,7 @@ def confusion_matrix(
 
 
 def _ratio(numerator: NonNegativeCount, denominator: NonNegativeCount) -> Fraction | None:
+    # zero denominator (e.g. no malicious records) is undefined, not 0
     return float(numerator / denominator) if denominator else None
 
 
@@ -140,6 +141,7 @@ def attack_balanced_tpr(
     attack_groups: np.ndarray,
     threshold: Threshold,
 ) -> Tpr | None:
+    """Average recall over the attack subtypes present for this client, so a subtype the client never saw is excluded rather than scored as 0."""
     values = np.asarray(scores, dtype=np.float64)
     targets = np.asarray(labels, dtype=np.int64)
 
@@ -201,6 +203,8 @@ class PolicyEvaluation(BaseModel):
 
 
 class FederationMetrics(BaseModel):
+    """mebe = mean band error; mafe = mean absolute FPR error from target alpha; high_excess is the worst-client high-side excess."""
+
     model_config = Frozen
 
     policy: PolicyId
@@ -332,6 +336,7 @@ def aggregate_policy(
 def assert_ranking_metric_invariance(
     evaluations: tuple[PolicyEvaluation, ...], tolerance: Tolerance
 ) -> None:
+    """AUROC/AUPRC depend only on score ranking, not the chosen threshold, so a given client's values must match across policies."""
     by_client: dict[ClientId, tuple[list[Fpr], list[Fpr]]] = {}
 
     for row in evaluations:

@@ -93,6 +93,7 @@ class DatasetAdapter(ABC):
 
 
 def hash_row_ids(values: Iterable[RowId | str]) -> Sha256:
+    """Order-independent digest, used to assert role sets are pairwise disjoint without storing raw ids."""
     normalized = sorted(str(value) for value in values)
     payload = "\n".join(normalized).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
@@ -235,6 +236,7 @@ class ClientEligibilityEvaluator:
     def attack_development_capacity(
         data: ClientData, reserve_per_group: PositiveCount
     ) -> SampleCount:
+        """Rows available for the attack-development budget after reserving `reserve_per_group` final-test rows per group."""
         if data.attack.empty or PreparedColumn.ATTACK_GROUP not in data.attack.columns:
             return 0
         counts = data.attack[PreparedColumn.ATTACK_GROUP].astype(str).value_counts()

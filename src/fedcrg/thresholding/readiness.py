@@ -117,6 +117,7 @@ class ClientEvaluationResult(BaseModel):
 
 
 def reference_rank(sample_count: SampleCount, alpha: Alpha) -> PositiveCount:
+    """Order-statistic rank giving exact or conservative (1-alpha) coverage under a finite sample."""
     if sample_count <= 0:
         raise ValueError("sample_count must be positive")
     return min(sample_count, math.ceil((sample_count + 1) * (1.0 - alpha)))
@@ -135,6 +136,7 @@ def build_reference_threshold(
     if samples_per_client == 0:
         raise ValueError("Reference score arrays must be non-empty")
     if any(arr.size != samples_per_client for arr in arrays):
+        # equal contribution per client keeps high-traffic clients from dominating the pooled order statistic
         raise ValueError("Each client must contribute the same number of reference scores")
 
     pooled = np.concatenate(arrays)
@@ -154,6 +156,7 @@ def build_reference_threshold(
 def coverage_probability(
     rank: PositiveCount, sample_count: SampleCount, band: OperatingBand
 ) -> CoverageProbability:
+    """P[a <= FPR(tau_r) <= b] under repeated benign sampling, since FPR at the r-th order statistic is Beta(n+1-r, r)."""
     if not 1 <= rank <= sample_count:
         raise ValueError("rank must be inside [1, sample_count]")
     upper_shape = sample_count + 1 - rank
@@ -167,6 +170,7 @@ class ReadinessPlanBuilder:
     def build(
         self, sample_count: SampleCount, band: OperatingBand, assurance: Assurance
     ) -> ReadinessPlan:
+        """Select the rank maximizing coverage probability, purely from (n, band, assurance) before any scores are observed."""
         if sample_count <= 0:
             raise ValueError("sample_count must be positive")
         if not 0.0 < assurance < 1.0:
@@ -180,6 +184,7 @@ class ReadinessPlanBuilder:
         )
 
         max_prob = np.max(probs)
+        # ties broken toward the larger rank: it is the more conservative (higher) threshold
         close_mask = np.isclose(probs, max_prob, rtol=0.0, atol=1e-15)
         best_rank = int(np.max(ranks[close_mask]))
         best_probability = float(probs[best_rank - 1])
@@ -280,6 +285,7 @@ class ReadinessPlanCache:
 
 class CalibrationReadinessEvaluator:
     def evaluate(self, scores: np.ndarray, plan: ReadinessPlan) -> CalibrationReadiness:
+        """Apply a rank chosen from `plan` (fixed before these scores were seen) to pick the local threshold."""
         values = np.asarray(scores, dtype=np.float64)
         if values.ndim != 1 or values.size != plan.sample_count:
             raise ValueError("Observed calibration size does not match the frozen readiness plan")
@@ -299,6 +305,7 @@ class CalibrationReadinessEvaluator:
 def continuity_diagnostics(
     scores: np.ndarray, selected_rank: PositiveCount
 ) -> ContinuityDiagnostics:
+    """Multiplicity > 1 at the selected rank means duplicate values there, violating the continuous-score assumption the rank formula relies on."""
     values = np.asarray(scores, dtype=np.float64)
     if values.ndim != 1 or values.size == 0:
         raise ValueError("Continuity diagnostics require a non-empty score vector")
@@ -323,6 +330,7 @@ def continuity_diagnostics(
 def familywise_readiness_assurance(
     client_count: PositiveCount, familywise_alpha: Probability
 ) -> Assurance:
+    """Bonferroni-split per-client assurance so the fleet-wide false-readiness rate stays under `familywise_alpha`."""
     if client_count <= 0:
         raise ValueError("client_count must be positive")
     if not 0.0 < familywise_alpha < 1.0:
@@ -333,6 +341,7 @@ def familywise_readiness_assurance(
 def clopper_pearson_interval(
     counts: BinomialCounts, confidence: ConfidenceLevel
 ) -> ConfidenceInterval:
+    """Exact two-sided binomial confidence interval via the incomplete-beta inverse, with no normal approximation."""
     if not 0.0 < confidence < 1.0:
         raise ValueError("confidence must be in (0, 1)")
     tail = (1.0 - confidence) / 2.0
@@ -350,6 +359,7 @@ def clopper_pearson_interval(
 def minimum_bidirectional_sample_count(
     lower_band: Fpr, confidence: ConfidenceLevel
 ) -> SampleCount | None:
+    """Smallest n_G for which x=0 exceedances can still put the Clopper-Pearson upper bound under `lower_band`; None when `lower_band` is 0 and any n suffices."""
     if not 0.0 <= lower_band < 1.0:
         raise ValueError("lower_band must be in [0, 1)")
     if not 0.0 < confidence < 1.0:
@@ -375,6 +385,7 @@ class ReferenceMismatchEvaluator:
         band: OperatingBand,
         confidence: ConfidenceLevel,
     ) -> MismatchEvidence:
+        """NO_MATERIAL_DIFFERENCE means mismatch was not established at this confidence, not that the reference threshold is correct."""
         values = np.asarray(scores, dtype=np.float64)
         if values.ndim != 1 or values.size == 0:
             raise ValueError("Mismatch evidence requires a non-empty one-dimensional array")
@@ -441,6 +452,7 @@ def bonferroni_fleet_sensitivity(
     *,
     familywise_alpha: Probability,
 ) -> tuple[FleetMismatchDecision, ...]:
+    """Bonferroni-corrected Clopper-Pearson intervals per client so `familywise_alpha` bounds the fleet-wide false-mismatch rate."""
     if not counts_by_client:
         return ()
 
@@ -473,6 +485,7 @@ def _holm_rejected(
     hypotheses: list[DirectionalHypothesis],
     alpha: Probability,
 ) -> set[tuple[ClientId, MismatchOutcome]]:
+    """Holm step-down: reject in ascending p-value order against alpha/(remaining count), stop at the first non-rejection."""
     ordered = sorted(
         hypotheses,
         key=lambda item: (item.p_value, item.client_id, item.outcome),
@@ -494,6 +507,7 @@ def holm_directional_fleet_sensitivity(
     *,
     familywise_alpha: Probability,
 ) -> tuple[FleetMismatchDecision, ...]:
+    """Holm-corrected test across both LOW and HIGH hypotheses for every client, pooled into one family so `familywise_alpha` still bounds the fleet-wide error rate."""
     hypotheses = []
     diagnostics = {}
 
@@ -547,6 +561,7 @@ class DeploymentDecision:
         mismatch: MismatchEvidence,
         reject_calibration_ties: bool,
     ) -> ThresholdDecision:
+        """Five-state machine: personalization is admitted only when mismatch is proven, Gate A is ready, and the selected rank has no tie."""
         tie_count = readiness.tie_count
 
         if mismatch.outcome is MismatchOutcome.INSUFFICIENT_EVIDENCE:

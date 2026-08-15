@@ -60,6 +60,8 @@ def configure_logging(logs_root: Path | None = None, level: LogLevel | None = No
         format=_FORMAT,
         datefmt="%H:%M:%S",
         handlers=handlers,
+        # force=True so a later call (e.g. a new run reconfiguring the log path)
+        # replaces prior handlers instead of stacking duplicate output.
         force=True,
     )
 
@@ -102,6 +104,7 @@ def cuda_device_info() -> CudaDeviceInfo:
 
 
 def resolve_compute_device(device: ComputeDeviceId) -> torch.device:
+    """Raises rather than silently substituting CPU when CUDA is requested but absent."""
     if device is ComputeDeviceId.CUDA and not torch.cuda.is_available():
         raise RuntimeError(
             "The frozen experiment configuration requires CUDA, but no CUDA device is "
@@ -165,6 +168,8 @@ class ResourceMonitor:
             process_ram_bytes=self._process.memory_info().rss,
             available_system_ram_bytes=memory.available,
             total_system_ram_bytes=memory.total,
+            # interval=None is non-blocking but measures against the previous call;
+            # the first sample from a given process is therefore always 0.0.
             cpu_percent=self._process.cpu_percent(interval=None),
             cuda=cuda,
         )
@@ -260,4 +265,6 @@ def render_cache_status(
     console = Console()
     outcome = CacheOutcome.HIT if hit else CacheOutcome.MISS
     suffix = f" ({detail})" if detail else ""
+    # markup=False: the literal "[hit]"/"[miss]" prefix would otherwise be parsed
+    # as a Rich style tag.
     console.print(f"[{outcome}] {cache_kind} {target}{suffix}", markup=False)

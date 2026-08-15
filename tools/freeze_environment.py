@@ -1,4 +1,4 @@
-"""Freeze exact runtime distribution versions after the first validated protocol run."""
+"""Snapshot pinned dependency versions (via ``pip freeze``) to requirements.lock, tagged with the current git commit."""
 
 import subprocess
 from pathlib import Path

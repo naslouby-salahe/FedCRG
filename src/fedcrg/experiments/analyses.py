@@ -170,6 +170,7 @@ def describe(values: tuple[Metric, ...]) -> DescriptiveSummary:
 def split_sensitivity_summary(
     values: tuple[Metric, ...], percentiles_config: tuple[Percentage, ...]
 ) -> SplitSensitivitySummary:
+    """`percentiles_config` must be five ascending percentiles ordered (p05, p25, p50, p75, p95); positions are read positionally below."""
     data = np.asarray(values, dtype=np.float64)
     if len(data) == 0:
         raise ValueError("Split sensitivity requires values")
@@ -190,6 +191,7 @@ def paired_model_seed_bootstrap(
     seed: AnalysisSeed,
     ci_percentiles: tuple[Percentage, Percentage],
 ) -> PairedBootstrapInterval:
+    """Resample model-seed indices jointly for `method` and `comparator` so each replicate keeps the method/comparator pairing within a seed, then interval the resampled paired differences."""
     left = np.asarray(method, dtype=np.float64)
     right = np.asarray(comparator, dtype=np.float64)
     if left.shape != right.shape or left.ndim != 1 or len(left) == 0:
@@ -263,6 +265,7 @@ def distribution_cdf(
 
 
 def _threshold(scores: np.ndarray, rank: PositiveCount) -> Score:
+    """`rank` is the 1-based order statistic (rank=1 is the smallest score)."""
     scores_copy = np.copy(scores)
     scores_copy.partition(rank - 1)
     return float(scores_copy[rank - 1])
@@ -280,6 +283,7 @@ def iid_readiness_validation(
     seed: AnalysisSeed,
     synthetic: SyntheticConfig,
 ) -> SyntheticCoverageResult:
+    """Check the plan's exact coverage probability against empirical Monte Carlo coverage on i.i.d. draws from `distribution`, within a tolerance sized to the Monte Carlo standard error."""
     band = OperatingBand(
         lower=max(0.0, alpha * (1.0 - rho)),
         upper=min(1.0, alpha * (1.0 + rho)),
@@ -329,6 +333,7 @@ def contamination_validation(
     assurance: Assurance,
     synthetic: SyntheticConfig,
 ) -> SyntheticCoverageResult:
+    """Empirical-only coverage check (no `accepted` verdict) for calibration data contaminated with a shifted component, used to probe robustness rather than to validate an exact guarantee."""
     if not 0.0 <= fraction <= 1.0:
         raise ValueError("Contamination fraction must be in [0,1]")
     plan = ReadinessPlanBuilder().build(sample_count, band, assurance)
@@ -369,6 +374,9 @@ def exact_mismatch_power(
     if sample_count <= 0 or not 0.0 <= true_fpr <= 1.0:
         raise ValueError("Mismatch power requires n>0 and true_fpr in [0,1]")
 
+    # Enumerate exceedance counts whose Clopper-Pearson interval falls entirely below/above the
+    # band, i.e. counts that would trigger a mismatch declaration; sum their binomial mass under
+    # true_fpr to get the exact probability of declaring a mismatch.
     low_max, high_min = -1, float("inf")
     for exceedances in range(sample_count + 1):
         interval = clopper_pearson_interval(BinomialCounts(exceedances, sample_count), confidence)
@@ -396,6 +404,7 @@ def temporal_dependence_stress(
     assurance: Assurance,
     seed: AnalysisSeed,
 ) -> RobustnessCell:
+    """Empirical coverage of the readiness band when calibration scores follow an AR(1) process instead of the i.i.d. assumption the plan was built under."""
     if not -1.0 < phi < 1.0:
         raise ValueError("AR(1) phi must be strictly inside (-1,1)")
     plan = ReadinessPlanBuilder().build(sample_count, band, assurance)
@@ -428,6 +437,7 @@ def calibration_shift_stress(
     seed: AnalysisSeed,
     sample_count: SampleCount,
 ) -> RobustnessCell:
+    """Empirical coverage of the readiness band when the deployment-time score distribution has drifted by `mean_shift` from the calibration-time distribution used to build the plan."""
     plan = ReadinessPlanBuilder().build(sample_count, band, assurance)
     rng = np.random.Generator(np.random.PCG64(int(seed)))
     inside = sum(
@@ -497,6 +507,8 @@ class RunSyntheticExperiments:
             actual_cells=len(cells),
             cells=cells,
         )
+        # Guards against an experiment silently running fewer trials/cells than declared in its
+        # spec (e.g. an axis was dropped), which would invalidate the reported coverage figures.
         if spec.workload.monte_carlo_trials and actual_trials != spec.workload.monte_carlo_trials:
             raise RuntimeError(
                 f"{spec.id} trial ledger mismatch: "
@@ -679,6 +691,7 @@ class FederationResultRecord(BaseModel):
 
 
 def load_federation_results(run_dirs: tuple[Path, ...]) -> tuple[FederationResultRecord, ...]:
+    """Load completed, well-formed runs and skip anything incomplete, missing, or malformed rather than failing the whole aggregation over one bad run directory."""
     from fedcrg.evidence.models import RunConfig, RunManifest
     from fedcrg.evidence.store import load_json_model
     from fedcrg.paths import RunLayout
@@ -746,6 +759,7 @@ def confirmatory_contrasts(
     bootstrap_replicates: BootstrapReplicateCount,
     bootstrap_ci_percentiles: tuple[Percentage, Percentage],
 ) -> tuple[PolicyContrastResult, ...]:
+    """Contrast FedCRG against each comparator policy at a fixed calibration seed, pairing rows by model seed so the bootstrap resamples matched (method, comparator) pairs from the same federation run rather than independent samples."""
     comparators = (
         PolicyId.GLOBAL_QUANTILE,
         PolicyId.LOCAL_QUANTILE,
@@ -791,6 +805,8 @@ def confirmatory_contrasts(
                     method_summary=describe(left),
                     comparator_summary=describe(right),
                     paired_difference=bootstrap,
+                    # Not applicable rather than a division artifact when the comparator's own
+                    # metric is zero or undefined.
                     relative_difference=(bootstrap.observed_difference / comparator_mean)
                     if comparator_mean > 0.0
                     else None,
@@ -853,7 +869,7 @@ def summarize_state_stability(states: tuple[DecisionState, ...]) -> StateStabili
     return StateStability(
         count=total,
         transition_count=transitions,
-        transition_frequency=transitions / max(1, total - 1),
+        transition_frequency=transitions / max(1, total - 1),  # avoids /0 for a single state
         state_frequencies=tuple(
             StateFrequency(state=state, frequency=counts[state] / total) for state in DecisionState
         ),
@@ -882,6 +898,7 @@ class StabilityMetricId(StrEnum):
 def split_sensitivity(
     records: tuple[FederationResultRecord, ...], percentiles_config: tuple[Percentage, ...]
 ) -> tuple[SplitSensitivityRow, ...]:
+    """Summarize each (model seed, policy, metric) group across its calibration-role permutations; these are repeated repartitions of the same fixed data, not independent samples, so only the distributional summary (median/IQR/percentiles) is reported."""
     grouped: dict[tuple[ModelSeed, PolicyId, StabilityMetricId], list[Metric]] = (
         collections.defaultdict(list)
     )
@@ -1072,6 +1089,7 @@ class ProtocolTablePrecomputer:
         band: OperatingBand,
         confidence: ConfidenceLevel,
     ) -> MismatchCutoffCell:
+        """Largest exceedance count still declared low and smallest still declared high, i.e. the two exceedance-count cutoffs at which a mismatch declaration flips."""
         lows: list[NonNegativeCount] = []
         highs: list[NonNegativeCount] = []
         for exceedances in range(sample_count + 1):
@@ -1132,6 +1150,8 @@ class RunBenchmark:
 
     @staticmethod
     def _pin_single_cpu() -> None:
+        # Reduces scheduler-induced timing variance in the benchmark; best-effort since CPU
+        # affinity is not available on every platform.
         try:
             import os
 

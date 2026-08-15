@@ -117,6 +117,7 @@ class ProtocolConfig(BaseModel):
 
     @property
     def band(self) -> OperatingBand:
+        """Derive the acceptable false-positive-rate band from alpha and rho, clamped to [0, 1]."""
         return OperatingBand(
             lower=max(0.0, self.alpha * (1.0 - self.rho)),
             upper=min(1.0, self.alpha * (1.0 + self.rho)),
@@ -140,6 +141,7 @@ class StatisticsConfig(BaseModel):
 
     @property
     def utility_margin_allowance(self) -> MetricDifference:
+        """Negated margin, expressing the allowance as a signed difference bound rather than a magnitude."""
         return -self.utility_margin
 
 
@@ -243,6 +245,8 @@ class StudyConfig(BaseModel):
 
     @model_validator(mode="after")
     def _validate(self) -> Self:
+        # Every registered PolicyId must be configured here, not merely a subset, so an
+        # experiment can never silently reference a policy the study never set up.
         if len(set(self.policies)) != len(self.policies):
             raise ValueError("Policy registry must be unique")
         if set(self.policies) != set(PolicyId):
@@ -672,6 +676,8 @@ class ExperimentConfig(BaseModel):
             )
 
     def serialized_payload(self) -> str:
+        # outputs_root/preprocessed_root are filesystem locations, not logical config, so they
+        # are excluded to keep config_hash stable across machines and output directory moves.
         payload = self.model_dump(mode="json", exclude={"outputs_root", "preprocessed_root"})
         return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
@@ -681,6 +687,7 @@ class ExperimentConfig(BaseModel):
 
     @property
     def data_spec_hash(self) -> Sha256:
+        """Hash of everything that determines the prepared dataset cache, excluding calibration seeds so re-seeding calibration does not force re-preprocessing."""
         specification = DataSpecification(
             dataset=self.dataset,
             attack_split_seed=self.randomness.attack_split_seed,
@@ -692,6 +699,7 @@ class ExperimentConfig(BaseModel):
 
     @property
     def training_spec_hash(self) -> Sha256:
+        """Falls back to data_spec_hash when no detector/training is bound, since synthetic experiments have no model to key a training cache on."""
         if self.detector is None or self.training is None:
             return self.data_spec_hash
         specification = TrainingSpecification(
@@ -747,6 +755,7 @@ def resolve_experiment_config(
     *,
     dataset_id: DatasetId | None = None,
 ) -> ExperimentConfig:
+    """Overlay an experiment spec's overrides (calibration seeds, model seeds) onto the study's defaults."""
     chosen = dataset_id or (spec.datasets[0] if spec.datasets else spec.dataset)
     if chosen is None:
         raise ConfigurationError(f"Experiment {spec.id} declares no dataset")
@@ -827,6 +836,7 @@ class Study:
 
 
 def validate_experiment_config(config: ExperimentConfig) -> None:
+    """Cross-field invariants that need a resolved config and so cannot live in a pydantic validator."""
     if config.dataset.id is not DatasetId.SYNTHETIC and not config.randomness.model_seeds:
         raise ConfigurationError("Real-data experiments require at least one model seed")
     if config.detector is not None and config.training is not None:

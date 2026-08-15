@@ -102,6 +102,7 @@ class PreparedDatasetManifest(BaseModel):
 
     @property
     def deterministic_payload_sha256(self) -> Sha256:
+        """Hash the manifest excluding ``created_at`` so re-running preparation on identical data reproduces the same digest."""
         payload = self.model_dump(
             mode="json",
             exclude={"created_at", "deterministic_payload_sha256"},
@@ -271,6 +272,8 @@ class ChecksumRecord(BaseModel):
 
 
 class CacheReference(BaseModel):
+    """Content hash of a frozen cache artifact (e.g. a trained model or score cache), recorded so later reads can detect drift."""
+
     model_config = Frozen
 
     relative_path: Identifier
@@ -299,5 +302,6 @@ class EnvironmentPin(BaseModel):
 
     @property
     def sha256(self) -> Sha256:
+        """Identify this exact interpreter/library/platform/commit combination for reproducibility checks."""
         serialized = self.model_dump_json().encode("utf-8")
         return hashlib.sha256(serialized).hexdigest()

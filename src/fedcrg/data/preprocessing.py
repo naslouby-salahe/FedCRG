@@ -62,6 +62,7 @@ class PreprocessingModel(BaseModel):
         return match
 
     def transform(self, frame: pd.DataFrame, client_id: ClientId) -> pd.DataFrame:
+        """Scale by global (cross-client) min/max; output is intentionally left unclipped to [0, 1] to preserve anomaly-score geometry."""
         features = list(self.feature_columns)
         values = frame.loc[:, features].to_numpy(dtype=np.float64, copy=True)
         parameters = self.parameters_for(client_id)
@@ -80,6 +81,7 @@ class PreprocessingModel(BaseModel):
         minima = np.asarray(self.global_minima, dtype=np.float64)
         span = np.asarray(self.global_maxima, dtype=np.float64) - minima
 
+        # Constant features (span == 0) are left at 0 rather than dividing by zero.
         scaled = np.zeros_like(values)
         np.divide(values - minima, span, out=scaled, where=span.astype(bool))
 
@@ -138,6 +140,7 @@ class TrainOnlyPreprocessing:
         *,
         finite_rate_minimum: Probability | None = None,
     ) -> ClientPreprocessingStatistics:
+        """Fits local min/max/median from this client's training rows only, for later federated aggregation."""
         columns = self.validate_training_rows(
             splits,
             dataset,
@@ -180,6 +183,7 @@ class TrainOnlyPreprocessing:
         statistics: tuple[ClientPreprocessingStatistics, ...],
         dataset: DatasetId,
     ) -> PreprocessingModel:
+        """Elementwise min/max of clients' local extrema; this is federated communication of derived statistics, not a privacy-preserving computation."""
         if not statistics:
             raise DataIntegrityError("Cannot fit preprocessing without clients")
 

@@ -213,6 +213,7 @@ class DependencyResolver:
         )
 
     def order(self, experiment_ids: tuple[ExperimentId, ...]) -> tuple[ExperimentId, ...]:
+        """Topologically sort the requested experiments together with every transitive dependency they pull in."""
         expanded = set(experiment_ids)
         stack = list(experiment_ids)
         while stack:
@@ -314,6 +315,7 @@ class RunExperiment:
         policy: PolicyId,
         repository_root: Path,
     ) -> tuple[ExperimentPlan, RunLayout]:
+        """Materialize a fresh run directory and manifest, advancing it to READY before any actual work runs."""
         if policy not in config.policies:
             raise ValueError(f"Policy {policy} is not configured for this experiment")
 
@@ -364,6 +366,7 @@ class RunExperiment:
         runner: Callable[[ExperimentPlan, RunLayout], FederationMetrics | None],
         repository_root: Path,
     ) -> tuple[FederationMetrics | None, RunLayout]:
+        """Run one experiment cell to completion, marking the manifest FAILED and re-raising on any error instead of leaving it stuck mid-lifecycle."""
         plan, layout = self.prepare(
             experiment_id, config, model_seed, calibration_seed, policy, repository_root
         )
@@ -482,6 +485,7 @@ class TrainDetector:
         prepared_root: Path,
         model_seed: ModelSeed,
     ) -> tuple[Path, Path]:
+        """Return the cached frozen model for this model seed, validating it against the current config, or train and cache one if absent."""
         if int(model_seed) not in config.randomness.model_seeds:
             raise ValueError(f"Model seed {int(model_seed)} is not configured")
 
@@ -726,6 +730,7 @@ class ComputeScores:
         model_seed: ModelSeed,
         training_manifest: Path,
     ) -> Path:
+        """Return the cached score set for this frozen model, or compute and cache one if absent; the frozen model's weights must hash to the exact value recorded at training time."""
         prepared_layout = PreparedDatasetLayout(prepared_root)
         prepared_manifest = self.dataset_manifests.load_model(prepared_layout.manifest)
 
@@ -934,6 +939,7 @@ class EvaluatePolicies:
         calibration_seed: CalibrationSeed,
         mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
     ) -> EvaluationBundle:
+        """Evaluate every configured policy for all clients under one calibration-seed repartitioning of the frozen score cache."""
         descriptor = self.score_cache.load_descriptor(score_root)
         self._validate_score_identity(config, descriptor)
 
@@ -1001,6 +1007,8 @@ class EvaluatePolicies:
         }
 
         if len(calibration_sizes) != 1:
+            # readiness is evaluated once against a shared sample size, so it cannot be
+            # computed unless every client's calibration view has the same length.
             raise ValueError("Calibration evidence count must be identical across clients")
 
         plan = self.protocol.require_readiness(calibration_sizes.pop(), config.protocol)
@@ -1200,6 +1208,7 @@ class PolicyCellMaterializer:
         return next((item for item in bundle.federations if item.policy is policy), None)
 
     def validate_upstream(self, config: ExperimentConfig, caches: FrozenCacheInputs) -> None:
+        """Fail loudly if the prepared-dataset, training, and score-cache artifacts are missing or their provenance chain is broken."""
         prepared_layout = PreparedDatasetLayout(caches.prepared_root)
         score_layout = ScoreCacheLayout(caches.score_root)
 
@@ -1354,6 +1363,7 @@ class FederationCellMaterializer:
         policies: tuple[PolicyId, ...] | None = None,
         assignment_mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
     ) -> FederationCellResult:
+        """Evaluate the federation once for this (model_seed, calibration_seed) pair and persist the result separately per policy through its own run lifecycle."""
         selected = config.policies if policies is None else policies
         if not selected:
             raise ValueError("At least one policy must be materialized")
@@ -1436,6 +1446,7 @@ class RunAllExperiments:
         *,
         calibration_seeds: tuple[CalibrationSeed, ...] | None = None,
     ) -> WorkloadExecution:
+        """Train/score once per configured model seed, then materialize a federation cell for every (model_seed, calibration_seed) combination."""
         seed_values = calibration_seeds or tuple(
             int(seed) for seed in config.dataset.calibration_seeds
         )
@@ -1590,6 +1601,7 @@ class CampaignExecutor:
         outputs_root: Path,
         results_root: Path | None = None,
     ) -> CampaignStatus:
+        """Resume from any previously recorded status, skipping completed experiments; unlike a single run, a failing experiment here is recorded and the campaign continues rather than raising."""
         now = datetime.now(UTC).isoformat()
         try:
             status = self.status_store.load(campaign_id)
