@@ -1,3 +1,5 @@
+"""The `fedcrg` command-line interface."""
+
 from __future__ import annotations
 
 import platform
@@ -74,6 +76,8 @@ _DATASET_EXPERIMENTS: dict[DatasetId, ExperimentId] = {
 
 
 class DoctorPayload(BaseModel):
+    """Output of `fedcrg doctor`: environment and CUDA availability."""
+
     model_config = ConfigDict(frozen=True)
 
     python: Version
@@ -87,6 +91,8 @@ class DoctorPayload(BaseModel):
 
 
 class ValidationPayload(BaseModel):
+    """Output of `fedcrg validate`."""
+
     model_config = ConfigDict(frozen=True)
 
     valid: bool
@@ -96,6 +102,8 @@ class ValidationPayload(BaseModel):
 
 
 class PlanPayload(BaseModel):
+    """Output of `fedcrg plan`."""
+
     model_config = ConfigDict(frozen=True)
 
     experiment: ExperimentId
@@ -108,6 +116,8 @@ class PlanPayload(BaseModel):
 
 
 class PreprocessPayload(BaseModel):
+    """Output of `fedcrg preprocess`."""
+
     model_config = ConfigDict(frozen=True)
 
     dataset: DatasetId
@@ -117,6 +127,8 @@ class PreprocessPayload(BaseModel):
 
 
 class RunPayload(BaseModel):
+    """Output of `fedcrg run`."""
+
     model_config = ConfigDict(frozen=True)
 
     experiment: ExperimentId
@@ -126,6 +138,8 @@ class RunPayload(BaseModel):
 
 
 class CampaignPayload(BaseModel):
+    """Output of `fedcrg campaign`."""
+
     model_config = ConfigDict(frozen=True)
 
     campaign_id: CampaignId
@@ -138,6 +152,8 @@ class CampaignPayload(BaseModel):
 
 
 class RunStatusCounts(BaseModel):
+    """Run counts by status for one experiment, used to build `StatusPayload`."""
+
     model_config = ConfigDict()
 
     total: NonNegativeCount = 0
@@ -147,6 +163,8 @@ class RunStatusCounts(BaseModel):
 
 
 class ExperimentStatusRow(BaseModel):
+    """One experiment's row in `StatusPayload`."""
+
     model_config = ConfigDict(frozen=True)
 
     experiment: ExperimentId
@@ -157,6 +175,8 @@ class ExperimentStatusRow(BaseModel):
 
 
 class StatusPayload(BaseModel):
+    """Output of `fedcrg status`."""
+
     model_config = ConfigDict(frozen=True)
 
     campaign_id: CampaignId | None
@@ -165,6 +185,8 @@ class StatusPayload(BaseModel):
 
 
 class ReportPayload(BaseModel):
+    """Output of `fedcrg report`."""
+
     model_config = ConfigDict(frozen=True)
 
     campaign_id: CampaignId
@@ -173,12 +195,16 @@ class ReportPayload(BaseModel):
 
 
 class ResultsBuildPayload(BaseModel):
+    """Output of `fedcrg results build`."""
+
     model_config = ConfigDict(frozen=True)
 
     results_path: PathString
 
 
 class ResultsVerifyPayload(BaseModel):
+    """Output of `fedcrg results verify`."""
+
     model_config = ConfigDict(frozen=True)
 
     valid: bool
@@ -186,22 +212,26 @@ class ResultsVerifyPayload(BaseModel):
 
 
 def _study(ctx: click.Context) -> Study:
+    """Fetch the `Study` stashed on the Click context by the top-level group callback."""
     study = ctx.obj
     assert isinstance(study, Study)
     return study
 
 
 def _print(payload: BaseModel) -> None:
+    """Print a payload as indented JSON."""
     click.echo(payload.model_dump_json(indent=2))
 
 
 def _precompute_protocol_tables(study: Study, experiment_id: ExperimentId) -> None:
+    """Precompute and cache the readiness/mismatch lookup tables an experiment depends on."""
     spec = study.spec(experiment_id)
     config = study.resolve(experiment_id)
     ProtocolTablePrecomputer().precompute(config, spec)
 
 
 def _purge_experiment_evidence(experiment_id: ExperimentId, outputs_root: Path) -> None:
+    """Delete run directories belonging to an experiment, ahead of an `--overwrite` re-run."""
     runs_root = OutputsLayout(outputs_root).runs
     if not runs_root.is_dir():
         return
@@ -223,6 +253,7 @@ def _purge_experiment_evidence(experiment_id: ExperimentId, outputs_root: Path) 
 @click.version_option(package_name="fedcrg")
 @click.pass_context
 def cli(ctx: click.Context) -> None:
+    """Load the study configuration and configure logging before any subcommand runs."""
     study = Study.load()
     ctx.obj = study
     configure_logging(logs_root=OutputsLayout(study.paths.outputs_root).logs)
@@ -230,6 +261,7 @@ def cli(ctx: click.Context) -> None:
 
 @cli.command(name="doctor")
 def doctor() -> None:
+    """Report library versions and CUDA availability."""
     cuda_available = torch.cuda.is_available()
     _print(
         DoctorPayload(
@@ -249,6 +281,7 @@ def doctor() -> None:
 @click.argument("experiment_id", type=click.Choice([member.value for member in ExperimentId]))
 @click.pass_context
 def validate(ctx: click.Context, experiment_id: str) -> None:
+    """Resolve and validate an experiment's configuration without running it."""
     study = _study(ctx)
     experiment = ExperimentId(experiment_id)
     spec = study.spec(experiment)
@@ -271,6 +304,7 @@ def validate(ctx: click.Context, experiment_id: str) -> None:
 @click.argument("experiment_id", type=click.Choice([member.value for member in ExperimentId]))
 @click.pass_context
 def plan(ctx: click.Context, experiment_id: str) -> None:
+    """Show what an experiment would run: seeds, policies, and dependencies."""
     study = _study(ctx)
     experiment = ExperimentId(experiment_id)
     spec = study.spec(experiment)
@@ -297,6 +331,7 @@ def plan(ctx: click.Context, experiment_id: str) -> None:
 @click.option("--overwrite", is_flag=True, help="Rebuild the prepared cache explicitly.")
 @click.pass_context
 def preprocess(ctx: click.Context, dataset_id: str | None, overwrite: bool) -> None:
+    """Prepare (or reuse the cached preparation of) one or all raw datasets."""
     study = _study(ctx)
     if dataset_id is None:
         datasets = tuple(_DATASET_EXPERIMENTS)
@@ -333,6 +368,7 @@ def preprocess(ctx: click.Context, dataset_id: str | None, overwrite: bool) -> N
 @click.option("--overwrite", is_flag=True, help="Re-run and replace regenerable evidence.")
 @click.pass_context
 def run(ctx: click.Context, experiment_id: str, overwrite: bool) -> None:
+    """Run one experiment end to end, reusing cached artifacts unless `--overwrite` is set."""
     study = _study(ctx)
     experiment = ExperimentId(experiment_id)
     spec = study.spec(experiment)
@@ -375,6 +411,7 @@ def run(ctx: click.Context, experiment_id: str, overwrite: bool) -> None:
 @click.option("--overwrite", is_flag=True, help="Restart the campaign from scratch.")
 @click.pass_context
 def campaign(ctx: click.Context, overwrite: bool) -> None:
+    """Run every experiment in the catalogue in dependency order."""
     study = _study(ctx)
     campaign_id = study.campaign_id
     outputs_root = study.paths.outputs_root
@@ -411,6 +448,7 @@ def campaign(ctx: click.Context, overwrite: bool) -> None:
 
 
 def _collect_run_status_counts(runs_root: Path) -> dict[ExperimentId, RunStatusCounts]:
+    """Tally run status per experiment by reading each run directory's manifest."""
     counts: dict[ExperimentId, RunStatusCounts] = {}
     if not runs_root.is_dir():
         return counts
@@ -443,6 +481,7 @@ def _collect_run_status_counts(runs_root: Path) -> dict[ExperimentId, RunStatusC
 )
 @click.pass_context
 def status(ctx: click.Context, experiment_id: str | None) -> None:
+    """Show run counts by status, for one experiment or all of them."""
     study = _study(ctx)
     outputs_root = study.paths.outputs_root
     layout = OutputsLayout(outputs_root)
@@ -485,6 +524,7 @@ def status(ctx: click.Context, experiment_id: str | None) -> None:
 )
 @click.pass_context
 def monitor(ctx: click.Context, interval: float, samples: int | None) -> None:
+    """Stream resource telemetry to stdout and a log file until interrupted."""
     study = _study(ctx)
     telemetry_path = OutputsLayout(study.paths.outputs_root).telemetry_file
     monitor = ResourceMonitor()
@@ -503,6 +543,7 @@ def monitor(ctx: click.Context, interval: float, samples: int | None) -> None:
 @cli.command(name="report")
 @click.pass_context
 def report(ctx: click.Context) -> None:
+    """Build the repository hygiene report and publication manifest."""
     study = _study(ctx)
     config = study.resolve(ExperimentId.PRIMARY_NBAIOT)
     outputs_root = study.paths.outputs_root
@@ -519,12 +560,13 @@ def report(ctx: click.Context) -> None:
 
 @cli.group(name="results")
 def results_group() -> None:
-    pass
+    """Commands for building and verifying packaged results bundles."""
 
 
 @results_group.command(name="build")
 @click.pass_context
 def results_build(ctx: click.Context) -> None:
+    """Package the campaign's outputs into a checksummed results bundle."""
     study = _study(ctx)
     path = build_results_bundle(
         study.campaign_id,
@@ -537,6 +579,7 @@ def results_build(ctx: click.Context) -> None:
 @results_group.command(name="verify")
 @click.pass_context
 def results_verify(ctx: click.Context) -> None:
+    """Verify a packaged results bundle's checksums."""
     study = _study(ctx)
     verification = verify_results_bundle(
         study.campaign_id,

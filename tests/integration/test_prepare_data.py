@@ -1,3 +1,5 @@
+"""Integration tests for materializing and caching a prepared dataset."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -16,6 +18,8 @@ _FEATURE_COLUMNS = [f"f{i}" for i in range(1, 116)]
 
 
 class FakeAdapter(DatasetAdapter):
+    """In-memory dataset adapter used to exercise preparation without real source files."""
+
     @property
     def dataset_id(self) -> DatasetId:
         return DatasetId.NBAIOT

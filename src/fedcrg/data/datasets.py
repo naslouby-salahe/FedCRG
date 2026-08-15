@@ -1,3 +1,5 @@
+"""Dataset adapter interface, deterministic id/seed hashing, and client eligibility evaluation."""
+
 from __future__ import annotations
 
 import hashlib
@@ -36,8 +38,11 @@ Frozen = ConfigDict(frozen=True)
 
 
 class DatasetDiscovery:
+    """Filesystem helpers for locating dataset directories and CSV files."""
+
     @staticmethod
     def require_root(root: Path) -> Path:
+        """Resolve a dataset root path and confirm it exists as a directory."""
         resolved = root.expanduser().resolve()
         if not resolved.exists():
             raise FileNotFoundError(f"Dataset root does not exist: {resolved}")
@@ -47,11 +52,13 @@ class DatasetDiscovery:
 
     @staticmethod
     def directories(root: Path) -> tuple[Path, ...]:
+        """List a dataset root's immediate subdirectories, sorted by path."""
         resolved = DatasetDiscovery.require_root(root)
         return tuple(sorted(path for path in resolved.iterdir() if path.is_dir()))
 
     @staticmethod
     def csv_files(root: Path, recursive: bool = True) -> tuple[Path, ...]:
+        """List CSV files under a dataset root, sorted by path."""
         resolved = DatasetDiscovery.require_root(root)
         pattern = "**/*.csv" if recursive else "*.csv"
         files = tuple(sorted(path for path in resolved.glob(pattern) if path.is_file()))
@@ -61,6 +68,8 @@ class DatasetDiscovery:
 
 
 class ClientData(BaseModel):
+    """One client's benign and attack rows, plus how its row order was established."""
+
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     dataset: DatasetId
@@ -71,6 +80,8 @@ class ClientData(BaseModel):
 
 
 class DatasetAdapter(ABC):
+    """Loads one dataset's clients from disk into a common `ClientData` shape."""
+
     def __init__(self, root: Path) -> None:
         self.root = root.expanduser().resolve()
 
@@ -81,14 +92,17 @@ class DatasetAdapter(ABC):
 
     @abstractmethod
     def discover_clients(self) -> tuple[ClientId, ...]:
+        """List the client ids this adapter can load."""
         raise NotImplementedError
 
     @abstractmethod
     def load_client(self, client_id: ClientId) -> ClientData:
+        """Load one client's benign and attack rows."""
         raise NotImplementedError
 
     @abstractmethod
     def source_files(self) -> tuple[Path, ...]:
+        """List every source file this adapter reads from."""
         raise NotImplementedError
 
 
@@ -100,6 +114,7 @@ def hash_row_ids(values: Iterable[RowId | str]) -> Sha256:
 
 
 def hash_seed(text: str) -> RngSeed:
+    """Hash text to an unsigned 64-bit integer usable as a NumPy PCG64 seed."""
     digest = hashlib.sha256(text.encode("utf-8")).digest()
     return int.from_bytes(digest, byteorder="big", signed=False) & 0xFFFFFFFFFFFFFFFF
 
@@ -107,6 +122,7 @@ def hash_seed(text: str) -> RngSeed:
 def stable_row_id(
     dataset: DatasetId, client_id: ClientId, source: str, source_index: Position
 ) -> RowId:
+    """Derive a stable row identifier from dataset, client, source file, and row position."""
     payload = f"{dataset}{client_id}{source}{source_index}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
@@ -116,6 +132,11 @@ def calibration_rng(
     client_id: ClientId,
     seed: CalibrationSeed,
 ) -> np.random.Generator:
+    """Build a deterministic RNG for permuting one client's calibration reservoir.
+
+    The seed is derived from a hash of dataset/client/seed rather than passed directly to
+    PCG64, so the permutation cannot depend on loop order or Python's randomized `hash()`.
+    """
     text = f"fedcrg|{dataset}|calibration|{int(seed)}|{client_id}"
     return np.random.Generator(np.random.PCG64(hash_seed(text)))
 
@@ -126,12 +147,15 @@ def attack_rng(
     group: AttackGroupId,
     seed: ModelSeed,
 ) -> np.random.Generator:
+    """Build a deterministic RNG for sampling one attack group's development rows."""
     namespace = "diad" if dataset is DatasetId.DIAD else dataset
     text = f"fedcrg|{namespace}|attackdev|{int(seed)}|{client_id}|{group}"
     return np.random.Generator(np.random.PCG64(hash_seed(text)))
 
 
 class EligibilityRecord(BaseModel):
+    """One client's eligibility outcome, with counts and any exclusion codes."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -145,6 +169,8 @@ class EligibilityRecord(BaseModel):
 
 
 class EligibilityManifest(BaseModel):
+    """Eligibility outcomes for every client discovered in a dataset."""
+
     model_config = Frozen
 
     dataset_id: DatasetId
@@ -164,8 +190,15 @@ _DIAD_PRECEDENCE = (
 
 
 class ClientEligibilityEvaluator:
+    """Evaluates whether a client's data satisfies dataset-specific eligibility rules.
+
+    N-BaIoT clients are always eligible; DIAD clients must additionally pass feature,
+    finite-rate, benign/malicious count, and attack-development-capacity checks.
+    """
+
     @staticmethod
     def model_features(config: DatasetConfig) -> tuple[FeatureName, ...]:
+        """Return the frozen model feature names required by a dataset config, if any."""
         if config.id is not DatasetId.DIAD:
             return ()
         if config.feature_contract in {
@@ -178,6 +211,7 @@ class ClientEligibilityEvaluator:
         raise ValueError(f"Unsupported DIAD feature contract: {config.feature_contract}")
 
     def evaluate(self, data: ClientData, config: DatasetConfig) -> EligibilityRecord:
+        """Evaluate one client's eligibility for the given dataset configuration."""
         benign_count = len(data.benign)
         malicious_count = len(data.attack)
         if config.id is not DatasetId.DIAD:

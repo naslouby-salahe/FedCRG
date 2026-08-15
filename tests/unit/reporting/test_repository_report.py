@@ -1,3 +1,5 @@
+"""Tests for the repository reproducibility report."""
+
 from __future__ import annotations
 
 import json

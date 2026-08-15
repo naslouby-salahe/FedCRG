@@ -1,3 +1,5 @@
+"""Tests for the federated training loop and learning-rate schedule."""
+
 from __future__ import annotations
 
 import pytest

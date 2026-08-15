@@ -1,3 +1,5 @@
+"""Shared factories for building test configs, datasets, and manifests."""
+
 from __future__ import annotations
 
 import hashlib
@@ -61,6 +63,7 @@ _DIAD_PIPELINE_ROLE_ROWS = {
 
 
 def diad_pipeline_config(root: Path) -> ExperimentConfig:
+    """Build a small DIAD experiment config sized for fast pipeline tests."""
     return ExperimentConfig(
         id=ExperimentId.DIAD_FEATURE_SENSITIVITY,
         protocol=primary_protocol(),
@@ -117,6 +120,7 @@ def _diad_row_id(client: str, role: DataRole, index: int) -> str:
 
 
 def diad_role_frame(client: str, role: DataRole, rows: int, offset: float) -> pd.DataFrame:
+    """Generate a synthetic per-client, per-role DIAD data frame with deterministic row ids."""
     x = np.linspace(0.0 + offset, 1.0 + offset, rows)
     data: dict[str, object] = {
         name: x + index for index, name in enumerate(_DIAD_PIPELINE_FEATURES)
@@ -128,6 +132,7 @@ def diad_role_frame(client: str, role: DataRole, rows: int, offset: float) -> pd
 
 
 def write_prepared_diad(root: Path, config: ExperimentConfig) -> Path:
+    """Write a prepared DIAD dataset (per-client role CSVs plus manifest) under root."""
     root.mkdir(parents=True)
     client_manifests: list[ClientDatasetManifest] = []
     for client_index, client_name in enumerate(("diad_test0001", "diad_test0002")):
@@ -170,6 +175,7 @@ def write_prepared_diad(root: Path, config: ExperimentConfig) -> Path:
 
 
 def primary_protocol() -> ProtocolConfig:
+    """Return the default FedCRG protocol config used across tests."""
     return ProtocolConfig(
         id=ProtocolId.FEDCRG,
         version="2.0",
@@ -183,6 +189,7 @@ def primary_protocol() -> ProtocolConfig:
 
 
 def primary_training() -> TrainingConfig:
+    """Return the default training config used across tests."""
     return TrainingConfig(
         rounds=30,
         local_epochs=120,
@@ -204,6 +211,7 @@ def primary_training() -> TrainingConfig:
 
 
 def primary_randomness() -> RandomnessConfig:
+    """Return the default randomness/seed config used across tests."""
     return RandomnessConfig(
         model_seeds=(11, 22, 33, 44, 55),
         attack_split_seed=9001,
@@ -212,6 +220,7 @@ def primary_randomness() -> RandomnessConfig:
 
 
 def primary_statistics() -> StatisticsConfig:
+    """Return the default statistics config used across tests."""
     return StatisticsConfig(
         bootstrap_replicates=10000,
         bootstrap_seed=424242,
@@ -228,6 +237,7 @@ def primary_statistics() -> StatisticsConfig:
 
 
 def primary_synthetic() -> SyntheticConfig:
+    """Return the default synthetic-data config used across tests."""
     return SyntheticConfig(
         lognormal_mean=0.0,
         lognormal_sigma=1.0,
@@ -243,6 +253,7 @@ def primary_synthetic() -> SyntheticConfig:
 
 
 def primary_autoencoder(hidden_dims: tuple[int, ...] = (86, 57, 38, 29)) -> AutoencoderConfig:
+    """Return the default autoencoder detector config used across tests."""
     return AutoencoderConfig(
         id=DetectorId.AUTOENCODER,
         hidden_dims=hidden_dims,
@@ -268,6 +279,7 @@ def nbaiot_dataset_config(
     min_attack_test_per_group: int = 2,
     expected_benign: int = 40,
 ) -> DatasetConfig:
+    """Build an N-BaIoT dataset config, with split sizes overridable per test."""
     return DatasetConfig(
         id=DatasetId.NBAIOT,
         feature_contract=DatasetFeatureContractId.NBAIOT_LOCKED_115,
@@ -301,6 +313,7 @@ def nbaiot_dataset_config(
 def primary_experiment_config(
     root: Path, experiment_id: ExperimentId = ExperimentId.PRIMARY_NBAIOT
 ) -> ExperimentConfig:
+    """Build a small N-BaIoT experiment config sized for fast tests."""
     return ExperimentConfig(
         id=experiment_id,
         protocol=primary_protocol(),

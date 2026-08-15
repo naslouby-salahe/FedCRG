@@ -1,3 +1,5 @@
+"""Autoencoder and Deep-SVDD anomaly detector models."""
+
 from __future__ import annotations
 
 import copy
@@ -13,13 +15,18 @@ from fedcrg.types import ByteCount, Dimension, ParameterCount, PositiveCount, Sh
 
 
 class DetectorModel(torch.nn.Module, ABC):
+    """Base class for anomaly detector models with a common scoring, hashing, and cloning interface."""
+
     @abstractmethod
-    def anomaly_score(self, batch: torch.Tensor) -> torch.Tensor: ...
+    def anomaly_score(self, batch: torch.Tensor) -> torch.Tensor:
+        """Return one anomaly score per input row; larger means more anomalous."""
 
     def clone(self) -> DetectorModel:
+        """Return a deep copy, independent of this model's parameters and buffers."""
         return copy.deepcopy(self)
 
     def state_hash(self) -> Sha256:
+        """Hash the model's state dict for exact-weight identity checks."""
         digest = hashlib.sha256()
         for name, tensor in sorted(self.state_dict().items()):
             digest.update(name.encode("utf-8"))
@@ -27,13 +34,16 @@ class DetectorModel(torch.nn.Module, ABC):
         return digest.hexdigest()
 
     def trainable_parameter_count(self) -> PositiveCount:
+        """Count parameters that receive gradient updates."""
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
     def trainable_tensor_bytes(self) -> ByteCount:
+        """Total byte size of trainable parameters, used for communication accounting."""
         return sum(p.numel() * p.element_size() for p in self.parameters() if p.requires_grad)
 
 
 def activation_module(activation: ActivationId) -> type[torch.nn.Module]:
+    """Map an activation identifier to the corresponding torch module class."""
     if activation is ActivationId.TANH:
         return torch.nn.Tanh
     raise ValueError(f"Unsupported activation: {activation}")
@@ -45,6 +55,7 @@ def build_mlp(
     bias: bool = True,
     output_activation: bool = False,
 ) -> torch.nn.Sequential:
+    """Build a stack of linear layers over `dims`, inserting an activation between each pair."""
     layers: list[torch.nn.Module] = []
     for i, (left, right) in enumerate(zip(dims[:-1], dims[1:], strict=True)):
         layers.append(torch.nn.Linear(left, right, bias=bias))
@@ -56,24 +67,27 @@ def build_mlp(
 def initialize_weights(
     module: torch.nn.Module, gain: XavierGain, forbid_bias: bool = False
 ) -> None:
+    """Apply Xavier-uniform initialization to every linear layer, zeroing biases in place."""
     for m in module.modules():
         if isinstance(m, torch.nn.Linear):
             torch.nn.init.xavier_uniform_(m.weight, gain=gain)
             if m.bias is not None:
                 if forbid_bias:
-                    raise ValueError("The frozen autoencoder contract requires zero biases")
+                    raise ValueError("Biased linear layers are not allowed in this configuration")
                 torch.nn.init.zeros_(m.bias)
 
 
 def autoencoder_parameter_count(
     input_dim: Dimension, hidden_dims: tuple[Dimension, ...]
 ) -> ParameterCount:
+    """Compute the parameter count of a symmetric autoencoder without instantiating it."""
     encoder = (input_dim, *hidden_dims)
     chain = (*encoder, *tuple(reversed(encoder[:-1])))
     return sum(left * right + right for left, right in zip(chain[:-1], chain[1:], strict=True))
 
 
 def autoencoder_tensor_bytes(input_dim: Dimension, hidden_dims: tuple[Dimension, ...]) -> ByteCount:
+    """Byte size of a symmetric autoencoder's parameters, assuming float32 storage."""
     return autoencoder_parameter_count(input_dim, hidden_dims) * 4
 
 
@@ -95,9 +109,11 @@ class Autoencoder(DetectorModel):
         )
 
     def forward(self, batch: torch.Tensor) -> torch.Tensor:
+        """Reconstruct the input batch."""
         return cast(torch.Tensor, self.network(batch))
 
     def anomaly_score(self, batch: torch.Tensor) -> torch.Tensor:
+        """Mean feature-wise reconstruction MSE per row."""
         return F.mse_loss(self.forward(batch), batch, reduction="none").mean(dim=1)
 
 
@@ -118,10 +134,11 @@ class DeepSvdd(DetectorModel):
         initialize_weights(self.encoder, gain=gain)
 
     def forward(self, batch: torch.Tensor) -> torch.Tensor:
+        """Embed the input batch."""
         return cast(torch.Tensor, self.encoder(batch))
 
     def initialize_center(self, batches: list[torch.Tensor]) -> None:
-        """Sets the center once, before training, as the equal-client average of per-client mean embeddings; must not be called again afterward."""
+        """Set the center as the equal-client average of per-client mean embeddings; call once, before training."""
         if not batches:
             raise ValueError("At least one batch is required to initialize the center")
 
@@ -136,6 +153,7 @@ class DeepSvdd(DetectorModel):
 
 
 def create_detector(input_dim: Dimension, config: DetectorConfig) -> DetectorModel:
+    """Instantiate the detector model matching the given config type."""
     if isinstance(config, AutoencoderConfig):
         return Autoencoder(input_dim, config)
     return DeepSvdd(input_dim, config)

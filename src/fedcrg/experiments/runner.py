@@ -1,3 +1,5 @@
+"""Trains detectors, computes scores, evaluates threshold policies, and drives experiments and campaigns through their manifest lifecycle."""
+
 from __future__ import annotations
 
 import hashlib
@@ -154,6 +156,8 @@ _BASE_SCORE_ROLES = (
 
 
 class PreflightReport(BaseModel):
+    """Validity result of a pre-run check, with the specific problems found."""
+
     model_config = Frozen
 
     valid: bool
@@ -167,6 +171,8 @@ def _tensor_sha256(tensor: torch.Tensor) -> Sha256:
 
 
 class ExperimentPlan(BaseModel):
+    """Resolved experiment definition bound to one model seed and calibration seed."""
+
     model_config = Frozen
 
     definition: ExperimentSpec
@@ -193,11 +199,14 @@ _ALLOWED_TRANSITIONS: dict[ExperimentStatus, tuple[ExperimentStatus, ...]] = {
 
 
 def assert_transition(current: ExperimentStatus, target: ExperimentStatus) -> None:
+    """Raise if `target` is not a status this experiment lifecycle allows from `current`."""
     if target not in _ALLOWED_TRANSITIONS[current]:
         raise ValueError(f"Invalid experiment transition: {current} -> {target}")
 
 
 class DependencyResolver:
+    """Resolves which experiments block a given experiment and topologically orders a requested set with its dependencies."""
+
     def __init__(self, study: Study | None = None) -> None:
         self.study = study or Study.load()
 
@@ -206,6 +215,7 @@ class DependencyResolver:
         experiment_id: ExperimentId,
         statuses: Mapping[ExperimentId, ExperimentStatus],
     ) -> tuple[ExperimentId, ...]:
+        """Return the dependencies of `experiment_id` that are not yet COMPLETE."""
         return tuple(
             dependency
             for dependency in self.study.catalogue.spec(experiment_id).dependencies
@@ -232,6 +242,8 @@ class DependencyResolver:
 
 
 class ExperimentPlanner:
+    """Builds a validated ExperimentPlan for one (experiment, model seed, calibration seed) request."""
+
     def __init__(self, study: Study | None = None) -> None:
         self.study = study or Study.load()
 
@@ -242,6 +254,7 @@ class ExperimentPlanner:
         model_seed: ModelSeed,
         calibration_seed: CalibrationSeed,
     ) -> ExperimentPlan:
+        """Validate the requested seeds and policies against the study catalogue and build an ExperimentPlan."""
         if config.id is not experiment_id:
             raise ValueError(
                 f"Experiment identity mismatch: plan={experiment_id}, config={config.id}"
@@ -268,6 +281,8 @@ class ExperimentPlanner:
 
 
 class RunExperiment:
+    """Drives one experiment cell through its manifest lifecycle from PENDING to COMPLETE or FAILED."""
+
     def __init__(
         self,
         planner: ExperimentPlanner | None = None,
@@ -392,6 +407,7 @@ def _oracle_candidate_missing(client_id: ClientId) -> Threshold:
 
 
 def feature_columns(frame: pd.DataFrame, expected_count: PositiveCount) -> tuple[FeatureName, ...]:
+    """Return the dataframe's numeric feature columns, excluding metadata, and check the count matches `expected_count`."""
     columns = tuple(
         col
         for col in frame.columns
@@ -407,6 +423,8 @@ def feature_columns(frame: pd.DataFrame, expected_count: PositiveCount) -> tuple
 
 
 class TrainDetector:
+    """Trains a detector model from cached prepared data, or returns the cached frozen model if one already exists for this seed."""
+
     def __init__(
         self,
         trainer: FederatedTrainer | None = None,
@@ -418,6 +436,7 @@ class TrainDetector:
         self.dataset_manifests = dataset_manifests or PreparedDatasetManifestStore()
 
     def create_model(self, config: ExperimentConfig) -> DetectorModel:
+        """Instantiate a fresh, untrained detector model for `config`."""
         if config.detector is None:
             raise ValueError("Training requires a detector profile")
         return create_detector(config.dataset.feature_count, config.detector)
@@ -609,6 +628,7 @@ class TrainDetector:
                 raise ValueError(msg)
 
     def load_model(self, config: ExperimentConfig, model_path: Path) -> DetectorModel:
+        """Load a frozen model's weights from `model_path` and check its architecture against `config`."""
         model = self.create_model(config)
         state = torch.load(model_path, map_location="cpu", weights_only=True)
         model.load_state_dict(state, strict=True)
@@ -617,6 +637,8 @@ class TrainDetector:
 
 
 class ComputeScores:
+    """Computes and caches detector scores for a frozen model, or returns the cached score set if one already exists."""
+
     def __init__(
         self,
         computer: ScoreComputer | None = None,
@@ -796,6 +818,8 @@ class ComputeScores:
 
 
 class EvaluatePolicies:
+    """Evaluates every configured threshold policy for all clients under one calibration-seed repartitioning of cached scores."""
+
     def __init__(
         self,
         selector: PolicyThresholdSelector | None = None,
@@ -1065,6 +1089,7 @@ class EvaluatePolicies:
         policy: PolicyId,
         bundle: EvaluationBundle,
     ) -> tuple[Path, Path]:
+        """Write one policy's per-client threshold and metric records and federation metrics to the run layout."""
         protocol_by_client = {item.client_id: item for item in bundle.protocol_results}
 
         threshold_records = [
@@ -1132,6 +1157,8 @@ class EvaluatePolicies:
 
 
 class EvaluationSummary(BaseModel):
+    """Snapshot of one policy-evaluation run: calibration seed, score-cache hash, and the resulting evaluation bundle."""
+
     model_config = Frozen
 
     calibration_seed: CalibrationSeed
@@ -1142,6 +1169,8 @@ class EvaluationSummary(BaseModel):
 
 @dataclass(frozen=True, slots=True)
 class FrozenCacheInputs:
+    """Paths to the frozen prepared-data, model, training-manifest, and score-cache artifacts one federation cell reads from."""
+
     prepared_root: Path
     model_path: Path
     training_manifest: Path
@@ -1149,6 +1178,8 @@ class FrozenCacheInputs:
 
 
 class PolicyCellMaterializer:
+    """Evaluates a federation cell from frozen caches and writes its per-policy artifacts to disk."""
+
     def __init__(
         self,
         evaluator: EvaluatePolicies | None = None,
@@ -1170,6 +1201,7 @@ class PolicyCellMaterializer:
         calibration_seed: CalibrationSeed,
         assignment_mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
     ) -> EvaluationBundle:
+        """Evaluate every configured policy for all clients from frozen cached inputs at one calibration seed."""
         self.validate_upstream(config, caches)
         descriptor = self.score_cache.load_descriptor(caches.score_root)
         if descriptor.identity.data_spec_hash != config.data_spec_hash:
@@ -1191,6 +1223,7 @@ class PolicyCellMaterializer:
         bundle: EvaluationBundle,
         assignment_mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
     ) -> FederationMetrics | None:
+        """Persist one policy's evaluation artifacts and manifests into its run directory."""
         self._copy_manifests(layout, caches)
         self._write_cache_references(config, layout, caches)
         descriptor = self.score_cache.load_descriptor(caches.score_root)
@@ -1323,11 +1356,15 @@ class PolicyCellMaterializer:
 
 @dataclass(frozen=True, slots=True)
 class PolicyRunDirectory:
+    """A policy and the run directory its artifacts were written to."""
+
     policy: PolicyId
     path: Path
 
 
 class FederationCellResult(BaseModel):
+    """Run directories produced for one (model seed, calibration seed) federation cell, indexed by policy."""
+
     model_config = ConfigDict(
         frozen=True, arbitrary_types_allowed=True, revalidate_instances="never"
     )
@@ -1338,6 +1375,7 @@ class FederationCellResult(BaseModel):
     run_directories: tuple[PolicyRunDirectory, ...]
 
     def directory_for(self, policy: PolicyId) -> Path:
+        """Return the run directory recorded for `policy`."""
         for entry in self.run_directories:
             if entry.policy is policy:
                 return entry.path
@@ -1345,6 +1383,8 @@ class FederationCellResult(BaseModel):
 
 
 class FederationCellMaterializer:
+    """Evaluates a federation cell once and persists the result separately per policy through its own run lifecycle."""
+
     def __init__(
         self,
         policy_cells: PolicyCellMaterializer | None = None,
@@ -1404,6 +1444,8 @@ class FederationCellMaterializer:
 
 
 class FrozenModelEvidence(BaseModel):
+    """Frozen model artifacts and cached scores for one model seed."""
+
     model_config = Frozen
 
     model_seed: ModelSeed
@@ -1413,6 +1455,8 @@ class FrozenModelEvidence(BaseModel):
 
 
 class WorkloadExecution(BaseModel):
+    """Frozen model evidence and run directories produced by executing one experiment's full workload."""
+
     model_config = Frozen
 
     experiment_id: ExperimentId
@@ -1421,6 +1465,8 @@ class WorkloadExecution(BaseModel):
 
 
 class ResearchExecution(BaseModel):
+    """Preflight check result paired with the workload execution it gated."""
+
     model_config = Frozen
 
     preflight: PreflightReport
@@ -1428,6 +1474,8 @@ class ResearchExecution(BaseModel):
 
 
 class RunAllExperiments:
+    """Trains and scores once per configured model seed, then materializes a federation cell for every (model seed, calibration seed) pair."""
+
     def __init__(
         self,
         trainer: TrainDetector | None = None,
@@ -1503,6 +1551,8 @@ class RunAllExperiments:
 
 
 class CampaignOutcomeRow(BaseModel):
+    """Terminal status of one experiment within a campaign."""
+
     model_config = Frozen
 
     experiment_id: ExperimentId
@@ -1512,10 +1562,13 @@ class CampaignOutcomeRow(BaseModel):
 
     @property
     def failed(self) -> bool:
+        """Whether this row recorded a FAILED experiment."""
         return self.status is ExperimentStatus.FAILED
 
 
 class CampaignWorkItem(BaseModel):
+    """One experiment queued for a campaign run, with its config and prepared-data paths."""
+
     model_config = Frozen
 
     experiment_id: ExperimentId
@@ -1524,6 +1577,8 @@ class CampaignWorkItem(BaseModel):
 
 
 class CampaignStatus(BaseModel):
+    """Resumable progress record for a campaign: per-experiment outcomes and the overall stage."""
+
     model_config = ConfigDict(frozen=True)
 
     campaign_id: CampaignId
@@ -1537,6 +1592,7 @@ class CampaignStatus(BaseModel):
 
     @property
     def completed_experiments(self) -> tuple[ExperimentId, ...]:
+        """Experiment ids that reached COMPLETE."""
         return tuple(
             item.experiment_id
             for item in self.experiments
@@ -1545,6 +1601,7 @@ class CampaignStatus(BaseModel):
 
     @property
     def pending_experiments(self) -> tuple[ExperimentId, ...]:
+        """Experiment ids still PENDING."""
         return tuple(
             item.experiment_id
             for item in self.experiments
@@ -1553,6 +1610,7 @@ class CampaignStatus(BaseModel):
 
     @property
     def failed_experiments(self) -> tuple[ExperimentId, ...]:
+        """Experiment ids that reached FAILED."""
         return tuple(
             item.experiment_id
             for item in self.experiments
@@ -1561,21 +1619,26 @@ class CampaignStatus(BaseModel):
 
 
 class CampaignStatusStore:
+    """Reads and writes CampaignStatus records to disk."""
+
     def __init__(
         self, campaigns_root: Path | None = None, outputs_root: Path = Path("outputs")
     ) -> None:
         self.campaigns_root = campaigns_root or OutputsLayout(outputs_root).campaigns
 
     def path_for(self, campaign_id: CampaignId) -> Path:
+        """Path where `campaign_id`'s status file is stored."""
         return campaign_status_path(self.campaigns_root, campaign_id)
 
     def save(self, status: CampaignStatus) -> Path:
+        """Persist `status` to its campaign status file."""
         path = self.path_for(status.campaign_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write_json(path, status.model_dump(mode="json"))
         return path
 
     def load(self, campaign_id: CampaignId) -> CampaignStatus:
+        """Load the status file for `campaign_id`."""
         path = self.path_for(campaign_id)
         if not path.is_file():
             raise FileNotFoundError(f"Campaign has no recorded status: {campaign_id}")
@@ -1583,6 +1646,8 @@ class CampaignStatusStore:
 
 
 class CampaignExecutor:
+    """Runs a campaign's queued experiments in order, recording each outcome and resuming from any previously saved status."""
+
     def __init__(
         self,
         study: Study | None = None,

@@ -1,3 +1,5 @@
+"""CIC IoT-DIAD dataset adapter: maps device MAC addresses to client ids and loads the fixed feature set."""
+
 from __future__ import annotations
 
 import hashlib
@@ -34,14 +36,20 @@ Frozen = ConfigDict(frozen=True)
 
 
 class DiadSourceColumn(StrEnum):
+    """Source columns used only for client partitioning, never as model input."""
+
     DEVICE_MAC = "device_mac"
 
 
 class DiadTopLevelCategory(StrEnum):
+    """Top-level source directory name that marks benign traffic."""
+
     BENIGN_TRAFFIC = "benigntraffic"
 
 
 class DiadAdapter(DatasetAdapter):
+    """Loads per-device DIAD client data from the packet-based CSV layout."""
+
     def __init__(self, root: Path, dataset: DatasetConfig) -> None:
         super().__init__(root)
         if dataset.id is not DatasetId.DIAD:
@@ -95,12 +103,15 @@ class DiadAdapter(DatasetAdapter):
         return self._devices
 
     def discover_clients(self) -> tuple[ClientId, ...]:
+        """List the client ids derived from device MAC addresses found in the source CSVs."""
         return tuple(self._map_devices())
 
     def source_files(self) -> tuple[Path, ...]:
+        """List all CSV files under the DIAD root."""
         return DatasetDiscovery.csv_files(self.root, recursive=True)
 
     def load_client(self, client_id: ClientId) -> ClientData:
+        """Load and concatenate one client's benign and attack rows across all source CSVs."""
         macs = self._map_devices().get(client_id)
         if macs is None:
             raise DataIntegrityError(f"Unknown DIAD client id: {client_id}")
@@ -120,8 +131,8 @@ class DiadAdapter(DatasetAdapter):
             selected = frame.loc[normalized.isin(macs)].copy()
             if selected.empty:
                 continue
-            # DIAD tolerates missing values (coerced to NaN); NBaiotAdapter raises instead because
-            # N-BaIoT permits no imputation.
+            # Coerce rather than raise: DIAD's packet parser can leave sparse fields, and the
+            # preprocessing stage imputes them from each client's training-row medians.
             numeric = selected[list(self.dataset.feature_names)].apply(
                 pd.to_numeric, errors="coerce"
             )
@@ -177,6 +188,8 @@ class DiadAdapter(DatasetAdapter):
 
 
 class ClientTrainingRowHash(BaseModel):
+    """A client's training-row set hash, used to verify a feature derivation is reproducible."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -184,6 +197,8 @@ class ClientTrainingRowHash(BaseModel):
 
 
 class ClientTrainingFrame(BaseModel):
+    """One client's training rows paired with its id."""
+
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     client_id: ClientId
@@ -191,6 +206,8 @@ class ClientTrainingFrame(BaseModel):
 
 
 class NumericSafeFeatureContract(BaseModel):
+    """A numeric-only feature set derived from eligible clients' training data, with its autoencoder architecture and per-client training-row hashes."""
+
     model_config = Frozen
 
     features: tuple[FeatureName, ...]
@@ -200,6 +217,7 @@ class NumericSafeFeatureContract(BaseModel):
 
     @property
     def encoder_hidden_dims(self) -> tuple[Dimension, ...]:
+        """Hidden-layer widths between the input and the bottleneck."""
         return self.architecture[1:5]
 
 

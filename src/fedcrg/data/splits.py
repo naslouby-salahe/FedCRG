@@ -1,3 +1,5 @@
+"""Splits each client's data into training/calibration/test roles and allocates attack development/test rows."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -43,6 +45,8 @@ _CALIBRATION_ROLES = frozenset(
 
 
 class RoleFrame(BaseModel):
+    """One data role's rows for a client."""
+
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     role: DataRole
@@ -50,22 +54,28 @@ class RoleFrame(BaseModel):
 
 
 class ClientSplits(BaseModel):
+    """A client's data roles, keyed by role."""
+
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     client_id: ClientId
     roles: tuple[RoleFrame, ...]
 
     def get(self, role: DataRole) -> pd.DataFrame:
+        """Return a role's frame, raising `KeyError` if the role is absent."""
         frame = self.try_get(role)
         if frame is None:
             raise KeyError(role)
         return frame
 
     def try_get(self, role: DataRole) -> pd.DataFrame | None:
+        """Return a role's frame, or None if the role is absent."""
         return next((item.frame for item in self.roles if item.role is role), None)
 
 
 class RolePositions(BaseModel):
+    """A calibration role's reservoir positions and row-id hash."""
+
     model_config = Frozen
 
     role: DataRole
@@ -74,6 +84,8 @@ class RolePositions(BaseModel):
 
 
 class CalibrationRoleAssignment(BaseModel):
+    """One client's calibration-reservoir role assignment for a given seed and mode."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -82,6 +94,7 @@ class CalibrationRoleAssignment(BaseModel):
     roles: tuple[RolePositions, ...]
 
     def positions_for(self, role: DataRole) -> tuple[Position, ...]:
+        """Return a calibration role's reservoir positions."""
         if role not in _CALIBRATION_ROLES:
             raise ValueError(f"{role} is not a calibration-reservoir role")
         match = next((item.positions for item in self.roles if item.role is role), None)
@@ -90,6 +103,7 @@ class CalibrationRoleAssignment(BaseModel):
         return match
 
     def row_id_hash_for(self, role: DataRole) -> Sha256:
+        """Return a calibration role's row-id hash."""
         match = next((item.row_id_hash for item in self.roles if item.role is role), None)
         if match is None:
             raise KeyError(role)
@@ -117,6 +131,8 @@ def validate_split_disjointness(
 
 
 class CalibrationAssignmentBuilder:
+    """Splits a client's calibration reservoir into reference/mismatch/calibration/guard roles."""
+
     def build(
         self,
         frame: pd.DataFrame,
@@ -182,6 +198,8 @@ class CalibrationAssignmentBuilder:
 
 
 class AttackGroupCount(BaseModel):
+    """An attack group's row count."""
+
     model_config = Frozen
 
     group: AttackGroupId
@@ -189,15 +207,20 @@ class AttackGroupCount(BaseModel):
 
 
 class AttackGroupAllocation(BaseModel):
+    """Per-attack-group row counts, keyed by group id."""
+
     model_config = Frozen
 
     groups: tuple[AttackGroupCount, ...]
 
     def for_group(self, group: AttackGroupId) -> NonNegativeCount:
+        """Return one group's row count, or 0 if the group is absent."""
         return next((item.count for item in self.groups if item.group == group), 0)
 
 
 class BaseSplitBuilder:
+    """Splits a client's benign and attack rows into training, calibration-reservoir, benign-test, and attack development/test roles."""
+
     def build(
         self,
         data: ClientData,

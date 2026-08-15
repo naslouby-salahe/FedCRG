@@ -1,3 +1,5 @@
+"""Fixed directory and filename layout for config, cache, and output artifacts."""
+
 from __future__ import annotations
 
 from enum import StrEnum
@@ -82,6 +84,8 @@ class ConfigArtifact(StrEnum):
 
 
 class StudyPaths(BaseModel):
+    """Root directories for raw data, prepared-data cache, outputs, and published results."""
+
     model_config = FrozenModel
 
     data_root: Path
@@ -91,6 +95,8 @@ class StudyPaths(BaseModel):
 
 
 class ConfigLayout:
+    """Locates the study, dataset, and experiment YAML files under a config root."""
+
     def __init__(self, config_root: Path = Path(LayoutDirectory.CONFIG)) -> None:
         self.config_root = config_root
 
@@ -108,6 +114,8 @@ class ConfigLayout:
 
 
 class PreparedDatasetLayout:
+    """Paths inside a single prepared-dataset cache directory, keyed by content hash."""
+
     def __init__(self, root: Path) -> None:
         self.root = root
 
@@ -162,6 +170,8 @@ def prepared_dataset_root(
 
 
 class ModelCacheLayout:
+    """Paths inside a single trained-model cache directory, keyed by training-spec hash."""
+
     def __init__(self, root: Path) -> None:
         self.root = root
 
@@ -175,6 +185,8 @@ class ModelCacheLayout:
 
 
 class ScoreCacheLayout:
+    """Paths inside a single score cache directory, keyed by training-spec hash."""
+
     def __init__(self, root: Path) -> None:
         self.root = root
 
@@ -188,6 +200,8 @@ class ScoreCacheLayout:
 
 
 class RunLayout:
+    """Paths inside a single experiment run directory."""
+
     def __init__(self, root: Path) -> None:
         self.root = root
 
@@ -322,6 +336,8 @@ class RunLayout:
 
 
 class PublicationLayout:
+    """Paths for publication-ready tables and figures."""
+
     def __init__(self, root: Path) -> None:
         self.root = root
 
@@ -339,6 +355,8 @@ class PublicationLayout:
 
 
 class ResultsBundleLayout:
+    """Paths inside a packaged, checksummed results bundle for one campaign."""
+
     def __init__(self, root: Path) -> None:
         self.root = root
 
@@ -424,6 +442,8 @@ def campaign_status_path(campaigns_root: Path, campaign_id: CampaignId) -> Path:
 
 
 class OutputsLayout:
+    """Top-level output directory layout: runs, caches, campaigns, logs, and reports."""
+
     def __init__(self, outputs_root: Path = Path(LayoutDirectory.OUTPUTS)) -> None:
         self.outputs_root = outputs_root
 

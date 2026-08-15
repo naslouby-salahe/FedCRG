@@ -1,3 +1,5 @@
+"""Tests for the per-run Markdown summary report."""
+
 from __future__ import annotations
 
 from pathlib import Path

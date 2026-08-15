@@ -1,3 +1,5 @@
+"""Tests for building and verifying immutable results bundles."""
+
 from __future__ import annotations
 
 import json

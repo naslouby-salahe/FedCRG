@@ -1,3 +1,5 @@
+"""Integration test covering the train, score, and policy-evaluation cache pipeline."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -24,6 +26,7 @@ def _write_prepared(root: Path, config: ExperimentConfig) -> Path:
 
 
 def test_train_score_evaluate_cache_pipeline(tmp_path: Path) -> None:
+    """Training, scoring, and policy evaluation run end-to-end and produce finite metrics."""
     config = _config(tmp_path / "outputs")
     prepared = _write_prepared(tmp_path / "prepared", config)
 

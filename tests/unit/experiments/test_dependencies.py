@@ -1,3 +1,5 @@
+"""Tests for experiment dependency ordering and blocker detection."""
+
 from __future__ import annotations
 
 from fedcrg.experiments.runner import DependencyResolver

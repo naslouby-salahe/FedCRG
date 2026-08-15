@@ -1,3 +1,5 @@
+"""Integration tests for resolving and validating experiment configs."""
+
 from __future__ import annotations
 
 from fedcrg.config import Study, validate_experiment_config
@@ -5,6 +7,7 @@ from fedcrg.types import DatasetId, DetectorId, ExperimentId, PolicyId
 
 
 def test_primary_config_resolves_without_filename_inference() -> None:
+    """Resolving an experiment id yields a valid, fully specified config."""
     config = Study.load().resolve(ExperimentId.PRIMARY_NBAIOT)
     validate_experiment_config(config)
     assert config.dataset.id is DatasetId.NBAIOT

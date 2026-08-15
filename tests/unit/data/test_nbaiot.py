@@ -1,3 +1,5 @@
+"""Tests for the N-BaIoT dataset adapter."""
+
 from __future__ import annotations
 
 from pathlib import Path

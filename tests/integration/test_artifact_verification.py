@@ -1,3 +1,5 @@
+"""Integration tests for hashing and verifying run artifacts."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -15,6 +17,7 @@ from fedcrg.types import ExperimentId, ExperimentStatus, PolicyId
 
 
 def test_artifact_verifier_hashes_run_files(tmp_path: Path) -> None:
+    """The verifier hashes each expected run file and records the results as valid."""
     layout = OutputsLayout(tmp_path).run("r1")
     layout.create()
     RunManifestStore().save(

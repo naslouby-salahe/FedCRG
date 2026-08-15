@@ -1,3 +1,5 @@
+"""N-BaIoT dataset adapter: maps the fixed nine-device directory layout to client ids and parses per-attack CSVs."""
+
 from __future__ import annotations
 
 import re
@@ -22,11 +24,15 @@ from fedcrg.types import (
 
 
 class NbaiotAttackFamily(StrEnum):
+    """Attack families used to derive each attack file's subtype label."""
+
     MIRAI = "mirai"
     GAFGYT = "gafgyt"
 
 
 class NbaiotFileMarker(StrEnum):
+    """Filename markers used to tell benign and Gafgyt/BASHLITE files apart."""
+
     BENIGN = "benign"
     BASHLITE = "bashlite"
 
@@ -42,6 +48,8 @@ def _normalized_name(path: Path) -> Identifier:
 
 
 class NBaiotAdapter(DatasetAdapter):
+    """Loads per-device N-BaIoT client data from the fixed nine-device directory layout."""
+
     def __init__(self, root: Path, dataset: DatasetConfig) -> None:
         super().__init__(root)
         if dataset.id is not DatasetId.NBAIOT:
@@ -91,6 +99,7 @@ class NBaiotAdapter(DatasetAdapter):
         return mapping
 
     def discover_clients(self) -> tuple[ClientId, ...]:
+        """List the nine fixed N-BaIoT client ids."""
         return tuple(self._map_directories())
 
     def load_client(self, client_id: ClientId) -> ClientData:
@@ -121,6 +130,7 @@ class NBaiotAdapter(DatasetAdapter):
         )
 
     def source_files(self) -> tuple[Path, ...]:
+        """List all CSV files under the N-BaIoT root."""
         return DatasetDiscovery.csv_files(self.root)
 
     def _load_files(

@@ -1,3 +1,5 @@
+"""Shared immutable value types, enums, and error classes used across the package."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -229,6 +231,8 @@ SourceFileId = Annotated[str, StringConstraints(min_length=1, strip_whitespace=T
 
 
 class OperatingBand(BaseModel):
+    """A closed [lower, upper] false-positive-rate interval."""
+
     model_config = ConfigDict(frozen=True)
 
     lower: Fpr
@@ -245,6 +249,8 @@ class OperatingBand(BaseModel):
 
 
 class ConfidenceInterval(BaseModel):
+    """A closed [lower, upper] confidence interval over a false-positive rate."""
+
     model_config = ConfigDict(frozen=True)
 
     lower: Fpr
@@ -259,6 +265,8 @@ class ConfidenceInterval(BaseModel):
 
 @dataclass(frozen=True, slots=True)
 class BinomialCounts:
+    """An exceedance count x out of n trials, with 0 <= x <= n enforced."""
+
     x: ExceedanceCount
     n: PositiveCount
 
@@ -273,6 +281,8 @@ class BinomialCounts:
 
 @dataclass(frozen=True, slots=True)
 class ClassMoments:
+    """Mean and standard deviation of a score distribution."""
+
     mean: Score
     std: Spacing
 
@@ -546,16 +556,16 @@ class SupervisedClassLabel(IntEnum):
 
 
 class FedCRGError(Exception):
-    pass
+    """Base class for errors raised by this package."""
 
 
 class ConfigurationError(FedCRGError):
-    pass
+    """Raised for invalid or unresolvable configuration."""
 
 
 class DataIntegrityError(FedCRGError):
-    pass
+    """Raised when prepared data fails an integrity check."""
 
 
 class ImmutableRunError(FedCRGError):
-    pass
+    """Raised when code attempts to modify an artifact that must stay immutable once written."""

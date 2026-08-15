@@ -1,3 +1,5 @@
+"""Integration tests for running an experiment through the application service."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -24,6 +26,7 @@ def _config(root: Path) -> ExperimentConfig:
 
 
 def test_run_application_creates_immutable_complete_run(tmp_path: Path) -> None:
+    """A successful run writes a complete manifest and refuses further mutation."""
     config = _config(tmp_path)
     result, layout = RunExperiment().execute(
         ExperimentId.READINESS_SAMPLE_SIZE,
@@ -46,6 +49,7 @@ def test_run_application_creates_immutable_complete_run(tmp_path: Path) -> None:
 
 
 def test_run_application_records_failed_status(tmp_path: Path) -> None:
+    """A run whose work callback raises still records a FAILED manifest before re-raising."""
     config = _config(tmp_path)
     service = RunExperiment()
 

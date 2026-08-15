@@ -1,3 +1,5 @@
+"""Classification and ranking metrics for threshold policies, plus aggregation across clients and policies."""
+
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
@@ -45,6 +47,8 @@ Frozen = ConfigDict(frozen=True)
 
 
 class ConfusionMatrix(BaseModel):
+    """Counts of true/false positives and negatives for one threshold."""
+
     model_config = Frozen
 
     tp: ExceedanceCount
@@ -56,6 +60,7 @@ class ConfusionMatrix(BaseModel):
 def confusion_matrix(
     scores: np.ndarray, labels: np.ndarray, threshold: Threshold
 ) -> ConfusionMatrix:
+    """Classify each score as positive iff it strictly exceeds `threshold` and tally against the labels."""
     values = np.asarray(scores, dtype=np.float64)
     targets = np.asarray(labels, dtype=np.int64)
 
@@ -84,22 +89,27 @@ def _ratio(numerator: NonNegativeCount, denominator: NonNegativeCount) -> Fracti
 
 
 def fpr(cm: ConfusionMatrix) -> Fpr | None:
+    """False-positive rate among actual negatives, or None if there are none."""
     return _ratio(cm.fp, cm.fp + cm.tn)
 
 
 def tpr(cm: ConfusionMatrix) -> Tpr | None:
+    """True-positive rate (recall) among actual positives, or None if there are none."""
     return _ratio(cm.tp, cm.tp + cm.fn)
 
 
 def precision(cm: ConfusionMatrix) -> Fpr | None:
+    """Fraction of predicted positives that are true positives, or None if there are no predicted positives."""
     return _ratio(cm.tp, cm.tp + cm.fp)
 
 
 def recall(cm: ConfusionMatrix) -> Tpr | None:
+    """Alias for `tpr`."""
     return tpr(cm)
 
 
 def f1(cm: ConfusionMatrix) -> Metric | None:
+    """Harmonic mean of precision and recall, or None if either is undefined."""
     p = precision(cm)
     r = recall(cm)
     if p is None or r is None or not p + r:
@@ -108,6 +118,7 @@ def f1(cm: ConfusionMatrix) -> Metric | None:
 
 
 def balanced_accuracy(cm: ConfusionMatrix) -> Fpr | None:
+    """Mean of sensitivity and specificity, or None if either is undefined."""
     sensitivity = tpr(cm)
     specificity = _ratio(cm.tn, cm.tn + cm.fp)
     if sensitivity is None or specificity is None:
@@ -116,6 +127,7 @@ def balanced_accuracy(cm: ConfusionMatrix) -> Fpr | None:
 
 
 def band_error(fpr_value: Fpr, band: OperatingBand) -> Fraction:
+    """Signed distance from `fpr_value` to the nearer edge of `band`, 0 if already inside."""
     if fpr_value < band.lower:
         return band.lower - fpr_value
     if fpr_value > band.upper:
@@ -124,14 +136,17 @@ def band_error(fpr_value: Fpr, band: OperatingBand) -> Fraction:
 
 
 def high_excess(fpr_value: Fpr, band: OperatingBand) -> Fraction:
+    """Amount by which `fpr_value` exceeds the band's upper edge, 0 if not above it."""
     return max(0.0, fpr_value - band.upper)
 
 
 def band_violation(fpr_value: Fpr, band: OperatingBand) -> Fraction:
+    """1.0 if `fpr_value` falls outside `band`, else 0.0."""
     return float(not band.contains(fpr_value))
 
 
 def absolute_fpr_error(fpr_value: Fpr, alpha: Alpha) -> Fraction:
+    """Absolute distance between the observed FPR and the target rate `alpha`."""
     return abs(fpr_value - alpha)
 
 
@@ -160,14 +175,18 @@ def attack_balanced_tpr(
 
 
 def auroc(scores: np.ndarray, labels: np.ndarray) -> Fpr:
+    """Area under the ROC curve; depends only on score ranking, not any chosen threshold."""
     return float(roc_auc_score(labels, scores))
 
 
 def auprc(scores: np.ndarray, labels: np.ndarray) -> Fpr:
+    """Area under the precision-recall curve; depends only on score ranking, not any chosen threshold."""
     return float(average_precision_score(labels, scores))
 
 
 class ClientMetrics(BaseModel):
+    """Full metric set for one client under one threshold policy."""
+
     model_config = Frozen
 
     benign_n: PositiveCount
@@ -193,6 +212,8 @@ class ClientMetrics(BaseModel):
 
 
 class PolicyEvaluation(BaseModel):
+    """One client's threshold and resulting metrics under one policy, or the reason evaluation could not proceed."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -203,7 +224,7 @@ class PolicyEvaluation(BaseModel):
 
 
 class FederationMetrics(BaseModel):
-    """mebe = mean band error; mafe = mean absolute FPR error from target alpha; high_excess is the worst-client high-side excess."""
+    """Metrics for one policy aggregated across clients. mebe = mean band error; mafe = mean absolute FPR error from target alpha; high_excess is the worst-client high-side excess."""
 
     model_config = Frozen
 
@@ -223,6 +244,8 @@ class FederationMetrics(BaseModel):
 
 
 class EvaluationBundle(BaseModel):
+    """Full evaluation output: per-client and per-federation metrics for every policy, plus the underlying readiness/mismatch decisions."""
+
     model_config = Frozen
 
     clients: tuple[PolicyEvaluation, ...]
@@ -232,6 +255,8 @@ class EvaluationBundle(BaseModel):
 
 
 class AdmissionSummary(BaseModel):
+    """Fleet-wide rates of each readiness/mismatch/decision outcome across clients."""
+
     model_config = Frozen
 
     client_count: PositiveCount
@@ -245,6 +270,7 @@ class AdmissionSummary(BaseModel):
 
 
 def summarize_admission(results: tuple[ClientEvaluationResult, ...]) -> AdmissionSummary:
+    """Compute fleet-wide readiness/mismatch/decision rates from per-client evaluation results."""
     if not results:
         raise ValueError("Admission summary requires clients")
 
@@ -298,6 +324,7 @@ def aggregate_policy(
     evaluations: tuple[PolicyEvaluation, ...],
     iqr_percentiles: tuple[Percentage, Percentage],
 ) -> FederationMetrics:
+    """Aggregate per-client metrics for one policy into fleet-wide summary statistics."""
     rows = [
         row.metrics
         for row in evaluations
@@ -353,6 +380,8 @@ def assert_ranking_metric_invariance(
 
 
 class ClientEvaluation:
+    """Runs the reference-threshold, readiness, mismatch, and decision steps for one client."""
+
     def __init__(
         self,
         readiness_evaluator: CalibrationReadinessEvaluator | None = None,
@@ -370,6 +399,7 @@ class ClientEvaluation:
         reference_scores: Mapping[ClientId, np.ndarray],
         config: ProtocolConfig,
     ) -> ReferenceThreshold:
+        """Build the pooled reference threshold from each client's reference scores."""
         return build_reference_threshold(reference_scores, config.alpha)
 
     def precompute_readiness(
@@ -377,6 +407,7 @@ class ClientEvaluation:
         sample_count: SampleCount,
         config: ProtocolConfig,
     ) -> ReadinessPlan:
+        """Compute and cache the readiness plan for a given calibration sample size."""
         return self.readiness_cache.precompute(
             sample_count=sample_count,
             band=config.band,
@@ -388,6 +419,7 @@ class ClientEvaluation:
         sample_count: SampleCount,
         config: ProtocolConfig,
     ) -> ReadinessPlan:
+        """Look up the precomputed readiness plan for a given calibration sample size, failing if it was never precomputed."""
         return self.readiness_cache.require(
             sample_count,
             config.band,
@@ -403,6 +435,7 @@ class ClientEvaluation:
         config: ProtocolConfig,
         readiness_plan: ReadinessPlan | None = None,
     ) -> ClientEvaluationResult:
+        """Run readiness, mismatch, and decision evaluation for one client and bundle the results."""
         plan = readiness_plan or self.require_readiness(
             len(calibration_scores),
             config,

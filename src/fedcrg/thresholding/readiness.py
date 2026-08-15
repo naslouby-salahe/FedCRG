@@ -1,3 +1,5 @@
+"""Reference-threshold construction, local calibration readiness, reference-mismatch testing, and the resulting per-client deployment decision."""
+
 from __future__ import annotations
 
 import json
@@ -41,6 +43,8 @@ Frozen = ConfigDict(frozen=True)
 
 
 class ReferenceThreshold(BaseModel):
+    """Pooled quantile threshold shared across the federation, and the sample it was computed from."""
+
     model_config = Frozen
 
     value: Threshold
@@ -51,6 +55,8 @@ class ReferenceThreshold(BaseModel):
 
 
 class ReadinessPlan(BaseModel):
+    """The rank and coverage probability selected for a given calibration sample size, band, and assurance level, fixed before any scores are observed."""
+
     model_config = Frozen
 
     sample_count: SampleCount
@@ -62,6 +68,8 @@ class ReadinessPlan(BaseModel):
 
 
 class ContinuityDiagnostics(BaseModel):
+    """Duplicate-value statistics on a calibration sample, used to check the continuous-score assumption behind the rank formula."""
+
     model_config = Frozen
 
     unique_score_fraction: Fraction
@@ -71,6 +79,8 @@ class ContinuityDiagnostics(BaseModel):
 
 
 class CalibrationReadiness(BaseModel):
+    """Result of applying a readiness plan's rank to one client's observed calibration scores."""
+
     model_config = Frozen
 
     plan: ReadinessPlan
@@ -79,10 +89,13 @@ class CalibrationReadiness(BaseModel):
 
     @property
     def tie_count(self) -> ExceedanceCount:
+        """Number of calibration scores tied with the selected order statistic."""
         return self.diagnostics.selected_threshold_multiplicity
 
 
 class MismatchEvidence(BaseModel):
+    """Exceedance count, Clopper-Pearson interval, and resulting LOW/HIGH/NO_MATERIAL_DIFFERENCE classification for one client's reference threshold."""
+
     model_config = Frozen
 
     sample_count: SampleCount
@@ -97,6 +110,8 @@ class MismatchEvidence(BaseModel):
 
 
 class ThresholdDecision(BaseModel):
+    """Final threshold and state chosen for a client, and the reason it was chosen."""
+
     model_config = Frozen
 
     state: DecisionState
@@ -107,6 +122,8 @@ class ThresholdDecision(BaseModel):
 
 
 class ClientEvaluationResult(BaseModel):
+    """Bundle of the reference threshold, readiness result, mismatch evidence, and final decision for one client."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -127,6 +144,7 @@ def build_reference_threshold(
     scores_by_client: Mapping[ClientId, np.ndarray],
     alpha: Alpha,
 ) -> ReferenceThreshold:
+    """Pool equal-sized per-client score samples and take the (1-alpha) order statistic as the shared reference threshold."""
     if not scores_by_client:
         raise ValueError("At least one client must contribute reference scores")
 
@@ -167,6 +185,8 @@ def coverage_probability(
 
 
 class ReadinessPlanBuilder:
+    """Computes readiness plans from (sample size, band, assurance) alone, with no dependence on observed data."""
+
     def build(
         self, sample_count: SampleCount, band: OperatingBand, assurance: Assurance
     ) -> ReadinessPlan:
@@ -206,6 +226,8 @@ class ReadinessPlanBuilder:
 
 
 class ReadinessPlanCache:
+    """Stores readiness plans keyed by (sample count, band, assurance) so ranks are computed once, before any real scores are seen, and reused at evaluation time."""
+
     def __init__(
         self,
         path: Path | None = None,
@@ -222,6 +244,7 @@ class ReadinessPlanCache:
 
     @staticmethod
     def key(sample_count: SampleCount, band: OperatingBand, assurance: Assurance) -> PlanKey:
+        """Cache key for a given (sample count, band, assurance) combination."""
         return (
             f"n={sample_count}|a={band.lower:.17g}|b={band.upper:.17g}|assurance={assurance:.17g}"
         )
@@ -229,6 +252,7 @@ class ReadinessPlanCache:
     def precompute(
         self, sample_count: SampleCount, band: OperatingBand, assurance: Assurance
     ) -> ReadinessPlan:
+        """Build (or reuse) a readiness plan and store it in the cache, raising if a differently-computed plan already exists under the same key."""
         key = self.key(sample_count, band, assurance)
         candidate = self.builder.build(sample_count, band, assurance)
         existing = self._plans.get(key)
@@ -240,6 +264,7 @@ class ReadinessPlanCache:
     def require(
         self, sample_count: SampleCount, band: OperatingBand, assurance: Assurance
     ) -> ReadinessPlan:
+        """Look up an already-computed plan; raises rather than computing on demand, since the rank must be fixed before real scores are evaluated."""
         key = self.key(sample_count, band, assurance)
         try:
             return self._plans[key]
@@ -250,9 +275,11 @@ class ReadinessPlanCache:
             ) from exc
 
     def plans(self) -> tuple[ReadinessPlan, ...]:
+        """All cached plans, sorted by key."""
         return tuple(plan for _, plan in sorted(self._plans.items()))
 
     def load_plans(self, plans: tuple[ReadinessPlan, ...]) -> None:
+        """Load plans into the cache after verifying each one still matches what the formula would produce."""
         for plan in plans:
             expected_key = self.key(plan.sample_count, plan.band, plan.assurance)
             regenerated = self.builder.build(plan.sample_count, plan.band, plan.assurance)
@@ -266,6 +293,7 @@ class ReadinessPlanCache:
             self._plans[expected_key] = plan
 
     def save(self, path: Path | None = None) -> None:
+        """Write all cached plans to disk as JSON."""
         from fedcrg.evidence.store import atomic_write_json
 
         target = path or self.path
@@ -277,6 +305,7 @@ class ReadinessPlanCache:
         )
 
     def load(self, path: Path) -> None:
+        """Load plans from a JSON file previously written by `save`."""
         raw: object = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(raw, list):
             raise ValueError("Readiness-plan table must be a JSON array")
@@ -284,6 +313,8 @@ class ReadinessPlanCache:
 
 
 class CalibrationReadinessEvaluator:
+    """Applies a precomputed readiness plan to a client's observed calibration scores."""
+
     def evaluate(self, scores: np.ndarray, plan: ReadinessPlan) -> CalibrationReadiness:
         """Apply a rank chosen from `plan` (fixed before these scores were seen) to pick the local threshold."""
         values = np.asarray(scores, dtype=np.float64)
@@ -422,6 +453,8 @@ class ReferenceMismatchEvaluator:
 
 
 class FleetMismatchDecision(BaseModel):
+    """One client's mismatch outcome and directional p-values under a fleet-wide multiplicity-corrected test."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -431,6 +464,8 @@ class FleetMismatchDecision(BaseModel):
 
 
 class DirectionalHypothesis(BaseModel):
+    """A single LOW- or HIGH-direction test for one client, used as input to the Holm step-down procedure."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -554,6 +589,8 @@ def holm_directional_fleet_sensitivity(
 
 
 class DeploymentDecision:
+    """Combines readiness and mismatch evidence into the final per-client threshold decision."""
+
     def decide(
         self,
         reference: ReferenceThreshold,
@@ -561,7 +598,7 @@ class DeploymentDecision:
         mismatch: MismatchEvidence,
         reject_calibration_ties: bool,
     ) -> ThresholdDecision:
-        """Five-state machine: personalization is admitted only when mismatch is proven, Gate A is ready, and the selected rank has no tie."""
+        """Admit local personalization only when mismatch is proven, the local calibration sample is ready, and the selected rank has no tie."""
         tie_count = readiness.tie_count
 
         if mismatch.outcome is MismatchOutcome.INSUFFICIENT_EVIDENCE:

@@ -1,3 +1,5 @@
+"""Tests for assembling the full publication package of tables and figures."""
+
 from __future__ import annotations
 
 import json

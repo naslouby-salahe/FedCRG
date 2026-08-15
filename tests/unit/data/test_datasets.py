@@ -1,3 +1,5 @@
+"""Tests for client eligibility evaluation."""
+
 from __future__ import annotations
 
 import numpy as np

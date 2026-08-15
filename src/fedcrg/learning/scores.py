@@ -1,3 +1,5 @@
+"""Anomaly score computation, calibration-role views, and the immutable score cache."""
+
 from __future__ import annotations
 
 import hashlib
@@ -44,6 +46,8 @@ Frozen = ConfigDict(frozen=True)
 
 
 class ScoreCacheColumn(StrEnum):
+    """Column names of the persisted score-cache parquet table."""
+
     DATASET_ID = "dataset_id"
     CLIENT_ID = "client_id"
     PHASE = "phase"
@@ -79,6 +83,8 @@ _FORBIDDEN_DERIVED_ROLES = _CALIBRATION_ROLES
 
 
 class RoleScoreInput(BaseModel):
+    """Feature values to be scored for one client/role pair, before scoring runs."""
+
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     role: DataRole
@@ -99,12 +105,15 @@ class RoleScoreInput(BaseModel):
 
 
 class ClientScoreInput(BaseModel):
+    """Unscored feature inputs for one client, grouped by role."""
+
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     client_id: ClientId
     roles: tuple[RoleScoreInput, ...]
 
     def get(self, role: DataRole) -> RoleScoreInput:
+        """Return this client's input for the given role."""
         for item in self.roles:
             if item.role is role:
                 return item
@@ -112,6 +121,8 @@ class ClientScoreInput(BaseModel):
 
 
 class RoleScores(BaseModel):
+    """Computed anomaly scores for one client/role pair, with row provenance."""
+
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     role: DataRole
@@ -135,6 +146,7 @@ class RoleScores(BaseModel):
 
     @property
     def sha256(self) -> Sha256:
+        """Hash of role, client id, row ids, values, and attack groups, used to detect tampering."""
         digest = hashlib.sha256()
         digest.update(self.role.encode("utf-8"))
         digest.update(self.client_id.encode("utf-8"))
@@ -148,6 +160,8 @@ class RoleScores(BaseModel):
 
 
 class RoleHash(BaseModel):
+    """Score hash for a single role, without the underlying values."""
+
     model_config = Frozen
 
     role: DataRole
@@ -155,6 +169,8 @@ class RoleHash(BaseModel):
 
 
 class ClientRoleHashes(BaseModel):
+    """Score hashes for every role belonging to one client."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -162,12 +178,15 @@ class ClientRoleHashes(BaseModel):
 
 
 class ClientScoreSet(BaseModel):
+    """Computed scores for one client, grouped by role."""
+
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     client_id: ClientId
     scores: tuple[RoleScores, ...]
 
     def get(self, role: DataRole) -> RoleScores:
+        """Return this client's scores for the given role."""
         for item in self.scores:
             if item.role is role:
                 return item
@@ -175,6 +194,8 @@ class ClientScoreSet(BaseModel):
 
 
 class ScoreManifest(BaseModel):
+    """Every client's scores for a trained model, tied to the hashes that identify the model and data."""
+
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     dataset: DatasetId
@@ -188,12 +209,14 @@ class ScoreManifest(BaseModel):
     cache_sha256: Sha256 | None = None
 
     def client(self, client_id: ClientId) -> ClientScoreSet:
+        """Return the score set for the given client."""
         for item in self.clients:
             if item.client_id == client_id:
                 return item
         raise KeyError(client_id)
 
     def role_hashes(self) -> tuple[ClientRoleHashes, ...]:
+        """Return per-client, per-role score hashes without the underlying values."""
         return tuple(
             ClientRoleHashes(
                 client_id=client.client_id,
@@ -207,6 +230,8 @@ class ScoreManifest(BaseModel):
 
 
 class ClientCalibrationScores(BaseModel):
+    """One client's reservoir scores split into calibration roles for a given calibration seed."""
+
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     client_id: ClientId
@@ -215,6 +240,7 @@ class ClientCalibrationScores(BaseModel):
     roles: tuple[RoleScores, ...]
 
     def get(self, role: DataRole) -> RoleScores:
+        """Return this client's scores for the given calibration role."""
         for item in self.roles:
             if item.role is role:
                 return item
@@ -222,6 +248,8 @@ class ClientCalibrationScores(BaseModel):
 
 
 class CalibrationScoreViews(BaseModel):
+    """Calibration-role score views for every client under a given calibration seed."""
+
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     calibration_seed: CalibrationSeed
@@ -230,19 +258,23 @@ class CalibrationScoreViews(BaseModel):
 
     @property
     def client_ids(self) -> tuple[ClientId, ...]:
+        """Sorted ids of clients covered by this view."""
         return tuple(sorted(item.client_id for item in self.clients))
 
     def client(self, client_id: ClientId) -> ClientCalibrationScores:
+        """Return the calibration scores for the given client."""
         for item in self.clients:
             if item.client_id == client_id:
                 return item
         raise KeyError(client_id)
 
     def get(self, client_id: ClientId, role: DataRole) -> RoleScores:
+        """Return one client's scores for the given calibration role."""
         return self.client(client_id).get(role)
 
 
 def truncate_view(role_scores: RoleScores, sample_count: SampleCount) -> RoleScores:
+    """Return the first `sample_count` rows of a role's scores, dropping attack-group metadata."""
     if sample_count <= 0 or sample_count > len(role_scores.values):
         raise ValueError(
             f"Cannot take {sample_count} values from {len(role_scores.values)} {role_scores.role} scores"
@@ -305,9 +337,11 @@ class CalibrationAssignment:
         self._row_ids = reservoir_row_ids
 
     def positions_for(self, role: DataRole) -> tuple[Position, ...]:
+        """Reservoir row positions assigned to the given calibration role."""
         return self._positions[role]
 
     def row_id_hash_for(self, role: DataRole) -> Sha256:
+        """Hash of the row ids assigned to the given calibration role, in assignment order."""
         digest = hashlib.sha256()
         for index in self._positions[role]:
             digest.update(self._row_ids[index].encode("ascii"))
@@ -323,6 +357,8 @@ def _assignment_seed(
 
 
 class CalibrationScoreViewBuilder:
+    """Builds per-client calibration-role score views from a score manifest's reservoir scores."""
+
     def build(
         self,
         scores: ScoreManifest,
@@ -330,6 +366,7 @@ class CalibrationScoreViewBuilder:
         calibration_seed: CalibrationSeed,
         mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
     ) -> CalibrationScoreViews:
+        """Split each client's reservoir scores into calibration roles for the given seed."""
         if scores.dataset is not dataset.id:
             raise ValueError("Score cache dataset does not match calibration configuration")
         reservoirs = {
@@ -370,6 +407,8 @@ class CalibrationScoreViewBuilder:
 
 
 class ScoreCacheMetadataRecord(BaseModel):
+    """Hash and row count for one client/role score block, for tamper detection without reading the full cache."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -379,6 +418,8 @@ class ScoreCacheMetadataRecord(BaseModel):
 
 
 class ScoreCacheMetadata(BaseModel):
+    """On-disk sidecar describing a score cache's identity, file, and hash."""
+
     model_config = Frozen
 
     dataset: DatasetId
@@ -396,6 +437,8 @@ class ScoreCacheMetadata(BaseModel):
 
 @dataclass(frozen=True, slots=True)
 class ScoreCacheIdentity:
+    """Hashes that pin a score cache to the exact model and data it was computed from."""
+
     dataset: DatasetId
     model_seed: ModelSeed
     model_hash: Sha256
@@ -407,6 +450,8 @@ class ScoreCacheIdentity:
 
 @dataclass(frozen=True, slots=True)
 class ScoreRoleCacheRecord:
+    """In-memory counterpart of `ScoreCacheMetadataRecord`."""
+
     client_id: ClientId
     role: DataRole
     score_array_sha256: Sha256
@@ -415,6 +460,8 @@ class ScoreRoleCacheRecord:
 
 @dataclass(frozen=True, slots=True)
 class ScoreCacheDescriptor:
+    """Identity and record hashes for a written or loaded score cache, without the score values themselves."""
+
     identity: ScoreCacheIdentity
     cache_sha256: Sha256
     client_ids: tuple[ClientId, ...]
@@ -422,9 +469,10 @@ class ScoreCacheDescriptor:
 
 
 class ScoreCache:
-    """A cache directory, once written, is immutable — every threshold policy must consume the same cached scores rather than trigger a re-run."""
+    """Reads and writes score caches on disk; once written, a cache directory is never modified in place."""
 
     def save(self, manifest: ScoreManifest, root: Path) -> ScoreManifest:
+        """Validate and persist a score manifest as an immutable cache directory."""
         validate_score_manifest(manifest)
         descriptor = self.save_stream(
             ScoreCacheIdentity(
@@ -453,6 +501,7 @@ class ScoreCache:
         role_scores: Iterable[RoleScores],
         root: Path,
     ) -> ScoreCacheDescriptor:
+        """Write role scores to a staging directory and atomically publish it as the cache root."""
         if root.exists():
             raise ImmutableRunError(f"Score cache already exists and is immutable: {root}")
         root.parent.mkdir(parents=True, exist_ok=True)
@@ -601,6 +650,7 @@ class ScoreCache:
         )
 
     def load_descriptor(self, root: Path) -> ScoreCacheDescriptor:
+        """Read cache identity and record hashes without loading the score values."""
         metadata = self._read_verified_metadata(root)
         identity = ScoreCacheIdentity(
             dataset=metadata.dataset,
@@ -633,6 +683,7 @@ class ScoreCache:
         )
 
     def load(self, root: Path) -> ScoreManifest:
+        """Load and hash-verify the full score manifest from a cache directory."""
         metadata = self._read_verified_metadata(root)
         records = self._records_from_metadata(metadata)
         parquet_path = root / metadata.score_cache_file
@@ -665,6 +716,7 @@ class ScoreCache:
         return manifest
 
     def read_role(self, root: Path, client_id: ClientId, role: DataRole) -> RoleScores:
+        """Load and hash-verify one client/role score block without reading the rest of the cache."""
         metadata = self._read_verified_metadata(root)
         parquet_path = root / metadata.score_cache_file
         frame = pd.read_parquet(
@@ -759,6 +811,7 @@ def _validate_client_role_scores(client: ClientScoreSet) -> None:
 
 
 def validate_score_manifest(manifest: ScoreManifest) -> None:
+    """Check that every client has the required roles, finite float64 scores, and non-overlapping row ids."""
     if not manifest.clients:
         raise ValueError("Score manifest has no clients")
     for client in manifest.clients:
@@ -776,6 +829,7 @@ class ScoreComputer:
         device: ComputeDeviceId,
         batch_size: BatchSize,
     ) -> np.ndarray:
+        """Score every row of `values` in batches, returning float64 anomaly scores."""
         if batch_size <= 0:
             raise ValueError("Scoring batch_size must be positive")
         torch_device = resolve_compute_device(device)
@@ -813,6 +867,7 @@ class ScoreComputer:
         device: ComputeDeviceId,
         batch_size: BatchSize,
     ) -> ScoreManifest:
+        """Score every role of every client and assemble the resulting manifest."""
         scored_clients: list[ClientScoreSet] = []
         for client in clients:
             role_scores = tuple(

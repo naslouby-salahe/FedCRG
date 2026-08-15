@@ -1,3 +1,5 @@
+"""Builds publication tables/figures, run and repository reports, and immutable results bundles from run artifacts."""
+
 from __future__ import annotations
 
 import json
@@ -86,6 +88,8 @@ _FPR_ADAPTER = TypeAdapter(Fpr)
 
 
 class PublicationTableFilename(StrEnum):
+    """Filenames of the publication-ready result tables."""
+
     PROTOCOL_CONSTANTS = "table_1_protocol_constants.csv"
     DATASET_INVENTORY = "table_2_dataset_inventory.csv"
     PRIMARY_POLICY_RESULTS = "table_3_primary_policy_results.csv"
@@ -95,6 +99,8 @@ class PublicationTableFilename(StrEnum):
 
 
 class RepositoryReportFilename(StrEnum):
+    """Filenames written into the repository reproducibility report."""
+
     POLICY_FEDERATION_RESULTS = "policy_federation_results.csv"
     PRIMARY_CONTRASTS = "primary_contrasts.json"
     SPLIT_SENSITIVITY = "split_sensitivity.csv"
@@ -134,6 +140,7 @@ def _jsonl_count(path: Path) -> NonNegativeCount:
 
 
 def build_run_report(run_dir: Path) -> Path:
+    """Write a human-readable Markdown summary of one run's manifest, verification status, and federation metrics."""
     layout = RunLayout(run_dir)
     manifest = RunManifest.model_validate_json(layout.manifest.read_text(encoding="utf-8"))
     verification = ArtifactVerifier().record(layout, _definition_for(manifest))
@@ -186,6 +193,8 @@ def _definition_for(manifest: RunManifest):
 
 
 class AdmissionStateRow(BaseModel):
+    """One client's admission decision and threshold values for the publication admission-states table."""
+
     model_config = Frozen
 
     run_id: RunId
@@ -210,6 +219,8 @@ class AdmissionStateRow(BaseModel):
 
 
 class ContrastTableRow(BaseModel):
+    """One metric's method-vs-comparator contrast for the publication ablations table."""
+
     model_config = Frozen
 
     comparator: PolicyId
@@ -223,6 +234,8 @@ class ContrastTableRow(BaseModel):
 
 
 class ProtocolConstantRow(BaseModel):
+    """One named constant value for the publication protocol-constants table."""
+
     model_config = Frozen
 
     constant: Identifier
@@ -230,6 +243,8 @@ class ProtocolConstantRow(BaseModel):
 
 
 class DatasetInventoryRow(BaseModel):
+    """One client's feature count and per-role row counts for the publication dataset-inventory table."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -238,6 +253,8 @@ class DatasetInventoryRow(BaseModel):
 
 
 class RoleCountRow(BaseModel):
+    """Row count and row-id hash for one data role of one client."""
+
     model_config = Frozen
 
     role: DataRole
@@ -246,6 +263,8 @@ class RoleCountRow(BaseModel):
 
 
 class FederationResultsRow(BaseModel):
+    """One run's federation-level metrics for the repository results table."""
+
     model_config = Frozen
 
     run_id: RunId
@@ -256,12 +275,16 @@ class FederationResultsRow(BaseModel):
 
 
 class PublicationTableBuilder:
+    """Builds the individual publication CSV tables from run artifacts."""
+
     def primary_policy_results(self, run_dirs: tuple[Path, ...], output: Path) -> Path:
+        """Write the primary policy results table from completed run directories."""
         records = load_federation_results(run_dirs)
         rows = [record.model_dump(mode="json") for record in records]
         return self._write(pd.DataFrame.from_records(rows), output)
 
     def admission_states_from_runs(self, run_dirs: tuple[Path, ...], output: Path) -> Path:
+        """Write the admission-states table from completed runs' threshold records."""
         records: list[ThresholdRecord] = []
         for run_dir in run_dirs:
             path = RunLayout(run_dir).threshold_records
@@ -276,6 +299,7 @@ class PublicationTableBuilder:
         )
 
     def ablations(self, run_dirs: tuple[Path, ...], output: Path, config: ExperimentConfig) -> Path:
+        """Write the ablations table of confirmatory contrasts for the primary experiment's runs."""
         records = load_federation_results(run_dirs)
         primary = tuple(row for row in records if row.experiment_id is ExperimentId.PRIMARY_NBAIOT)
         contrasts = confirmatory_contrasts(
@@ -306,6 +330,7 @@ class PublicationTableBuilder:
         )
 
     def protocol_constants(self, config: ExperimentConfig, output: Path) -> Path:
+        """Write the protocol-constants table from `config`."""
         protocol = config.protocol
         rows: list[ProtocolConstantRow] = [
             ProtocolConstantRow(constant="alpha", value=protocol.alpha),
@@ -339,6 +364,7 @@ class PublicationTableBuilder:
         )
 
     def dataset_inventory(self, prepared_manifest: Path, output: Path) -> Path:
+        """Write the dataset-inventory table from a prepared dataset manifest."""
         manifest = PreparedDatasetManifest.model_validate_json(
             prepared_manifest.read_text(encoding="utf-8")
         )
@@ -364,6 +390,7 @@ class PublicationTableBuilder:
         )
 
     def federation_results(self, run_dirs: tuple[Path, ...], output: Path) -> Path:
+        """Write the repository federation-results table from completed run directories."""
         rows: list[FederationResultsRow] = []
         for run_dir in run_dirs:
             metrics = RunLayout(run_dir).federation_metrics
@@ -394,17 +421,22 @@ class PublicationTableBuilder:
 
 @dataclass(frozen=True, slots=True)
 class PublicationPackage:
+    """The publication tables and figures produced for a campaign, with a manifest path."""
+
     tables: tuple[PublicationArtifact, ...]
     figures: tuple[PublicationArtifact, ...]
     manifest: Path
 
     @property
     def complete(self) -> bool:
+        """Whether every table and figure in the package was built successfully."""
         return all(item.available for item in (*self.tables, *self.figures))
 
 
 @dataclass(frozen=True, slots=True)
 class PublicationArtifact:
+    """One publication table or figure: whether it was built, and why not if it wasn't."""
+
     name: Description
     path: Path | None
     available: bool
@@ -412,6 +444,8 @@ class PublicationArtifact:
 
 
 class PublicationPackageBuilder:
+    """Builds the full publication package (tables and figures) and its manifest."""
+
     def __init__(self, tables: PublicationTableBuilder | None = None) -> None:
         self.tables = tables or PublicationTableBuilder()
 
@@ -423,6 +457,7 @@ class PublicationPackageBuilder:
         prepared_manifest: Path | None = None,
         destination: Path | None = None,
     ) -> PublicationPackage:
+        """Build every publication table and figure, recording which succeeded, and write the package manifest."""
         destination = destination or OutputsLayout(outputs_root).publication.root
         publication = PublicationLayout(destination)
         table_root = publication.tables
@@ -593,6 +628,7 @@ class PublicationPackageBuilder:
 
 
 def build_decision_architecture_figure(output: Path) -> Path:
+    """Render the FedCRG decision-flow diagram."""
     figure, axis = plt.subplots(figsize=(12, 7))
     axis.set_xlim(0, 12)
     axis.set_ylim(0, 8)
@@ -667,6 +703,7 @@ def build_readiness_frontier_figure(
     band: OperatingBand,
     assurance: Assurance,
 ) -> Path:
+    """Plot in-band coverage probability against calibration sample count."""
     from fedcrg.thresholding.readiness import ReadinessPlanBuilder
 
     probabilities = [
@@ -709,6 +746,7 @@ def build_mismatch_power_map_figure(
     band: OperatingBand,
     confidence: ConfidenceLevel,
 ) -> Path:
+    """Plot mismatch-declaration probability against sample count and true reference FPR."""
     from scipy.stats import binom
 
     from fedcrg.thresholding.readiness import clopper_pearson_interval
@@ -759,6 +797,7 @@ def build_phase_transition_figure(
     assurance: Assurance,
     confidence: ConfidenceLevel,
 ) -> Path:
+    """Plot the readiness and mismatch-evidence curves side by side."""
     from fedcrg.thresholding.readiness import (
         ReadinessPlanBuilder,
         minimum_bidirectional_sample_count,
@@ -802,6 +841,7 @@ def _band_guide_lines() -> tuple[Fpr, Fpr, Fpr]:
 
 
 def build_per_client_operating_points_figure(output: Path, results_root: Path) -> Path:
+    """Plot each client's final-test FPR by policy, against the operating band."""
     frame = _require_bundle_table(results_root, PublicationTableFilename.PRIMARY_POLICY_RESULTS)
     if "client_id" not in frame.columns or "fpr" not in frame.columns:
         raise ValueError("primary policy results table lacks client_id/fpr columns")
@@ -822,6 +862,7 @@ def build_per_client_operating_points_figure(output: Path, results_root: Path) -
 
 
 def build_reliability_utility_frontier_figure(output: Path, results_root: Path) -> Path:
+    """Plot mean excess band error against attack-balanced macro TPR for each policy."""
     frame = _require_bundle_table(results_root, PublicationTableFilename.PRIMARY_POLICY_RESULTS)
     required = {"policy_id", "mebe", "attack_balanced_macro_tpr"}
     if not required.issubset(frame.columns):
@@ -844,6 +885,7 @@ def build_reliability_utility_frontier_figure(output: Path, results_root: Path) 
 
 
 def build_assumption_stress_figure(output: Path, results_root: Path) -> Path:
+    """Plot realized in-band coverage for each synthetic stress cell."""
     statistics_root = ResultsBundleLayout(results_root).statistics
     if not statistics_root.is_dir():
         raise FileNotFoundError(
@@ -873,6 +915,7 @@ def build_assumption_stress_figure(output: Path, results_root: Path) -> Path:
 
 
 def build_external_replication_figure(output: Path, results_root: Path) -> Path:
+    """Plot each eligible external-replication client's final-test FPR against the operating band."""
     frame = _require_bundle_table(results_root, PublicationTableFilename.EXTERNAL_REPLICATION)
     if "client_id" not in frame.columns or "fpr" not in frame.columns:
         raise ValueError("external replication table lacks client_id/fpr columns")
@@ -897,6 +940,7 @@ def _catalogue_axis_values(
 
 
 def build_readiness_frontier_from_catalogue(output: Path) -> Path:
+    """Build the readiness-frontier figure using sample counts declared in the experiment catalogue."""
     counts = tuple(
         int(value)
         for value in _catalogue_axis_values(
@@ -910,6 +954,7 @@ def build_readiness_frontier_from_catalogue(output: Path) -> Path:
 
 
 def build_mismatch_power_map_from_catalogue(output: Path) -> Path:
+    """Build the mismatch-power-map figure using sample counts and true FPRs declared in the experiment catalogue."""
     sample_counts = tuple(
         int(value)
         for value in _catalogue_axis_values(
@@ -927,6 +972,7 @@ def build_mismatch_power_map_from_catalogue(output: Path) -> Path:
 
 
 def build_phase_transition_from_catalogue(output: Path) -> Path:
+    """Build the phase-transition figure using sample counts declared in the experiment catalogue."""
     calibration_counts = tuple(
         int(value)
         for value in _catalogue_axis_values(
@@ -951,6 +997,7 @@ def build_phase_transition_from_catalogue(output: Path) -> Path:
 
 
 def build_repository_report(outputs_root: Path, config: ExperimentConfig) -> Path:
+    """Build the repository reproducibility report (federation results, confirmatory contrasts, split sensitivity) from run artifacts."""
     reports_root = OutputsLayout(outputs_root).reports / LayoutDirectory.LATEST
     reports_root.mkdir(parents=True, exist_ok=True)
     run_dirs = _completed_runs(outputs_root)
@@ -1018,6 +1065,7 @@ def build_publication(
     prepared_manifest: Path | None = None,
     destination: Path | None = None,
 ) -> Path:
+    """Build the full publication package and return its manifest path."""
     package = PublicationPackageBuilder().build(
         config=config,
         outputs_root=outputs_root,
@@ -1028,6 +1076,8 @@ def build_publication(
 
 
 class ResultsManifest(BaseModel):
+    """Top-level manifest describing a results bundle's provenance and completeness."""
+
     model_config = Frozen
 
     campaign_id: CampaignId
@@ -1044,11 +1094,15 @@ class ResultsManifest(BaseModel):
 
 @dataclass(frozen=True, slots=True)
 class ResultsVerification:
+    """Result of checking a results bundle's structure and checksums."""
+
     valid: bool
     problems: tuple[Identifier, ...]
 
 
 class ResultsBuilder:
+    """Assembles an immutable results bundle for a campaign from its run artifacts."""
+
     def build(
         self,
         *,
@@ -1253,12 +1307,15 @@ class ResultsBuilder:
 
 
 class ResultsVerifier:
+    """Verifies a previously built results bundle's structure and checksums."""
+
     def verify(
         self,
         campaign_id: CampaignId,
         *,
         results_root: Path,
     ) -> ResultsVerification:
+        """Check a results bundle's required directories, manifest, checksums, and files for consistency."""
         destination = campaign_results_root(results_root, campaign_id)
         layout = ResultsBundleLayout(destination)
         problems: list[Identifier] = []
@@ -1306,6 +1363,7 @@ def build_results_bundle(
     outputs_root: Path,
     results_root: Path,
 ) -> Path:
+    """Build a results bundle for `campaign_id`."""
     return ResultsBuilder().build(
         campaign_id=campaign_id,
         outputs_root=outputs_root,
@@ -1317,6 +1375,7 @@ def verify_results_bundle(
     campaign_id: CampaignId,
     results_root: Path,
 ) -> ResultsVerification:
+    """Verify a previously built results bundle for `campaign_id`."""
     return ResultsVerifier().verify(
         campaign_id,
         results_root=results_root,

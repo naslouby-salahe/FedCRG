@@ -1,3 +1,5 @@
+"""Logging setup, GPU/CUDA introspection, and resource-monitoring telemetry."""
+
 from __future__ import annotations
 
 import json
@@ -48,6 +50,7 @@ class CacheOutcome(StrEnum):
 
 
 def configure_logging(logs_root: Path | None = None, level: LogLevel | None = None) -> None:
+    """Configure root logging to stderr, and additionally to a log file if `logs_root` is given."""
     resolved_level = (level or os.environ.get("FEDCRG_LOG_LEVEL", "INFO")).upper()
     handlers: list[logging.Handler] = [logging.StreamHandler(sys.stderr)]
     if logs_root is not None:
@@ -67,11 +70,13 @@ def configure_logging(logs_root: Path | None = None, level: LogLevel | None = No
 
 
 def get_logger(name: Identifier) -> logging.Logger:
+    """Return the named logger configured by `configure_logging`."""
     return logging.getLogger(name)
 
 
 @contextmanager
 def log_stage(logger: logging.Logger, message: Identifier, **fields: object) -> Generator[None]:
+    """Log start/done/failed messages with elapsed time around the wrapped block."""
     suffix = " ".join(f"{key}={value}" for key, value in fields.items())
     logger.info("start %s %s", message, suffix)
     started = time.monotonic()
@@ -86,12 +91,15 @@ def log_stage(logger: logging.Logger, message: Identifier, **fields: object) -> 
 
 @dataclass(frozen=True, slots=True)
 class CudaDeviceInfo:
+    """Availability and capacity of the current CUDA device, if any."""
+
     available: bool
     device_name: Identifier | None = None
     vram_capacity_bytes: ByteCount | None = None
 
 
 def cuda_device_info() -> CudaDeviceInfo:
+    """Inspect the current CUDA device, or report unavailability."""
     if not torch.cuda.is_available():
         return CudaDeviceInfo(available=False)
     index = torch.cuda.current_device()
@@ -114,6 +122,7 @@ def resolve_compute_device(device: ComputeDeviceId) -> torch.device:
 
 
 def log_device_capabilities(logger: logging.Logger) -> None:
+    """Log CUDA availability and VRAM capacity, or CPU fallback."""
     info = cuda_device_info()
     if not info.available:
         logger.info("cuda unavailable device=cpu")
@@ -126,6 +135,7 @@ def log_device_capabilities(logger: logging.Logger) -> None:
 
 
 def log_peak_vram(logger: logging.Logger) -> None:
+    """Log peak allocated CUDA VRAM for the current process; no-op without CUDA."""
     if not torch.cuda.is_available():
         return
     index = torch.cuda.current_device()
@@ -137,6 +147,8 @@ def log_peak_vram(logger: logging.Logger) -> None:
 
 @dataclass(frozen=True, slots=True)
 class CudaTelemetry:
+    """A snapshot of CUDA device and memory usage."""
+
     available: bool
     device_count: NonNegativeCount = 0
     device_name: Identifier | None = None
@@ -148,6 +160,8 @@ class CudaTelemetry:
 
 @dataclass(frozen=True, slots=True)
 class ResourceSample:
+    """A snapshot of process and system CPU/RAM/CUDA usage at a point in time."""
+
     timestamp: Timestamp
     process_ram_bytes: ByteCount
     available_system_ram_bytes: ByteCount
@@ -157,10 +171,13 @@ class ResourceSample:
 
 
 class ResourceMonitor:
+    """Samples process and system resource usage on demand or as a stream."""
+
     def __init__(self, process: psutil.Process | None = None) -> None:
         self._process = process or psutil.Process()
 
     def sample(self, timestamp: Timestamp | None = None) -> ResourceSample:
+        """Take a single resource usage snapshot."""
         memory = psutil.virtual_memory()
         cuda = self._sample_cuda()
         return ResourceSample(
@@ -195,6 +212,7 @@ class ResourceMonitor:
         interval_seconds: Duration,
         max_samples: SampleCount | None = None,
     ) -> Iterator[ResourceSample]:
+        """Yield samples at a fixed interval, indefinitely unless `max_samples` is set."""
         if interval_seconds <= 0:
             raise ValueError("interval_seconds must be positive")
         collected = 0
@@ -205,6 +223,7 @@ class ResourceMonitor:
 
 
 def write_telemetry(sample: ResourceSample, output: Path) -> None:
+    """Append a sample as one JSON line."""
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(asdict(sample)) + "\n")
@@ -228,6 +247,7 @@ def _telemetry_text(sample: ResourceSample) -> Identifier:
 
 
 def render_telemetry(sample: ResourceSample) -> Identifier:
+    """Render a sample as a single human-readable line."""
     return _telemetry_text(sample)
 
 
@@ -239,6 +259,7 @@ def render_campaign_status(
     current_experiment: Identifier | None,
     elapsed_seconds: Duration,
 ) -> None:
+    """Print a one-row status table for a campaign."""
     console = Console()
     table = Table(title=f"campaign {campaign_id}")
     table.add_column(CampaignStatusColumn.STATUS)
@@ -262,6 +283,7 @@ def render_cache_status(
     target: Identifier,
     detail: Identifier | None = None,
 ) -> None:
+    """Print a single cache hit/miss line."""
     console = Console()
     outcome = CacheOutcome.HIT if hit else CacheOutcome.MISS
     suffix = f" ({detail})" if detail else ""

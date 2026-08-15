@@ -1,3 +1,5 @@
+"""Shared fixture for writing a minimal fake outputs tree used by results-bundle tests."""
+
 from __future__ import annotations
 
 from pathlib import Path

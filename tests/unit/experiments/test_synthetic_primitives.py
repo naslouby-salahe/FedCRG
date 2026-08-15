@@ -1,3 +1,5 @@
+"""Tests for the distribution sampling, CDF, and coverage-stress primitives used by the synthetic experiments."""
+
 from __future__ import annotations
 
 import numpy as np

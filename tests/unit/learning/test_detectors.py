@@ -1,3 +1,5 @@
+"""Tests for the autoencoder and Deep-SVDD detector models."""
+
 from __future__ import annotations
 
 import torch

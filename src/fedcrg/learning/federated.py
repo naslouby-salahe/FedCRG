@@ -1,3 +1,5 @@
+"""Federated averaging training loop, client/server roles, and communication accounting."""
+
 from __future__ import annotations
 
 import hashlib
@@ -41,6 +43,8 @@ _FLOAT64_BYTES = 8
 
 
 class ModelCommunicationLedger(BaseModel):
+    """Byte accounting for model-tensor exchange over a full training run."""
+
     model_config = Frozen
 
     client_count: PositiveCount
@@ -55,6 +59,7 @@ def model_communication(
     rounds: RoundCount,
     trainable_parameters: ParameterCount,
 ) -> ModelCommunicationLedger:
+    """Compute model-tensor transfer bytes for one broadcast/upload pair per client per round."""
     if client_count <= 0 or rounds <= 0 or trainable_parameters <= 0:
         raise ValueError("Communication accounting requires positive inputs")
     payload = trainable_parameters * _FLOAT32_BYTES
@@ -68,6 +73,8 @@ def model_communication(
 
 
 class PreprocessingCommunicationLedger(BaseModel):
+    """Byte accounting for exchanging per-feature min/max extrema across clients."""
+
     model_config = Frozen
 
     client_count: PositiveCount
@@ -80,6 +87,7 @@ def preprocessing_communication(
     client_count: PositiveCount,
     feature_count: FeatureCount,
 ) -> PreprocessingCommunicationLedger:
+    """Compute upload bytes for each client sending per-feature min/max extrema."""
     if client_count <= 0 or feature_count <= 0:
         raise ValueError("Communication accounting requires positive inputs")
     bytes_per_client = 2 * feature_count * _FLOAT64_BYTES
@@ -160,6 +168,8 @@ def _merged_client_tensor(key: Identifier, tensors: list[torch.Tensor]) -> torch
 
 
 class ClientRoundResult(BaseModel):
+    """One client's local training outcome for a single round."""
+
     model_config = Frozen
 
     client_id: ClientId
@@ -170,6 +180,8 @@ class ClientRoundResult(BaseModel):
 
 
 class RoundResult(BaseModel):
+    """Aggregate outcome of one federated round: per-client results plus the resulting global model."""
+
     model_config = Frozen
 
     round_index: RoundIndex
@@ -186,6 +198,8 @@ class RoundResult(BaseModel):
 
 
 class TrainingResult(BaseModel):
+    """Full history of a federated training run, ending in the final global model."""
+
     model_config = Frozen
 
     model_seed: ModelSeed
@@ -198,6 +212,8 @@ class TrainingResult(BaseModel):
 
 
 class FederatedClient:
+    """A single federation participant that trains a local copy of the global model."""
+
     def __init__(self, client_id: ClientId, dataset: TensorDataset, device: torch.device) -> None:
         self.client_id = client_id
         self.dataset = dataset
@@ -211,6 +227,7 @@ class FederatedClient:
         model_seed: ModelSeed,
         round_index: RoundIndex,
     ) -> tuple[DetectorModel, ClientRoundResult]:
+        """Run local training for one round starting from the broadcast global weights."""
         model = global_model.clone().to(self.device)
         # Rebuilt every round: Adam moments must not leak across global rounds.
         optimizer = torch.optim.Adam(
@@ -277,6 +294,8 @@ class FederatedClient:
 
 
 class ClientSampler:
+    """Selects the participating clients for each round."""
+
     def __init__(
         self, client_ids: tuple[ClientId, ...], fraction: ClientFraction, seed: ModelSeed
     ) -> None:
@@ -289,6 +308,7 @@ class ClientSampler:
         self.rng = np.random.default_rng(int(seed))
 
     def select(self) -> tuple[ClientId, ...]:
+        """Return the client ids participating in the next round."""
         if self.count == len(self.client_ids):
             return self.client_ids
         indices = self.rng.choice(len(self.client_ids), size=self.count, replace=False)
@@ -296,19 +316,28 @@ class ClientSampler:
 
 
 class FederatedServer:
+    """Holds the global model and aggregates client updates each round."""
+
     def __init__(self, initial_model: DetectorModel) -> None:
         self.model = initial_model.clone()
 
     def broadcast(self) -> DetectorModel:
+        """Return a copy of the current global model for a client to train from."""
         return self.model.clone()
 
     def aggregate(self, client_models: Sequence[DetectorModel]) -> Sha256:
+        """Replace the global model with the equal-client-mean of the given client models."""
         self.model.load_state_dict(equal_client_mean(client_models), strict=True)
         return self.model.state_hash()
 
 
 class FederatedTrainer:
-    """The confirmatory model is always the state after the last configured round; any earlier checkpoint captured here is diagnostic only and never feeds back into training."""
+    """Runs the federated averaging loop end to end.
+
+    The returned model is always the state after the last configured round; any
+    earlier checkpoint captured along the way is diagnostic only and is never fed
+    back into training or used to pick a different round.
+    """
 
     diagnostic_round_index = 19
 
@@ -319,6 +348,7 @@ class FederatedTrainer:
         config: TrainingConfig,
         model_seed: ModelSeed,
     ) -> tuple[DetectorModel, TrainingResult]:
+        """Train the global model for the configured number of rounds and return it with its history."""
         if not datasets:
             raise ValueError("At least one federated client is required")
 

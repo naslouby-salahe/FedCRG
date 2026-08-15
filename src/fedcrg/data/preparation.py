@@ -1,3 +1,5 @@
+"""Builds and caches a dataset's prepared per-client splits, preprocessing, and calibration-role assignments."""
+
 from __future__ import annotations
 
 import hashlib
@@ -82,6 +84,8 @@ _CALIBRATION_ROLES = (
 
 
 class PrepareData:
+    """Materializes a dataset's prepared client data, reusing a verified cache when one exists."""
+
     def __init__(
         self,
         splitter: CalibrationAssignmentBuilder | None = None,
@@ -102,6 +106,7 @@ class PrepareData:
 
     @staticmethod
     def adapter(dataset: DatasetConfig, root: Path) -> DatasetAdapter:
+        """Return the filesystem adapter for a dataset config."""
         if dataset.id is DatasetId.NBAIOT:
             return NBaiotAdapter(root, dataset)
         if dataset.id is DatasetId.DIAD:
@@ -116,6 +121,7 @@ class PrepareData:
         return hashlib.sha256(payload).hexdigest()
 
     def prepared_root(self, config: ExperimentConfig, source_identity_hash: Sha256) -> Path:
+        """Return the cache directory keyed by this dataset's spec and source-file identity."""
         return prepared_dataset_root(
             config.preprocessed_root,
             config.dataset.id,
@@ -124,6 +130,7 @@ class PrepareData:
         )
 
     def cache_root(self, config: ExperimentConfig, manifest: PreparedDatasetManifest) -> Path:
+        """Return the cache directory for an already-materialized manifest."""
         return self.prepared_root(config, self._source_identity_hash(manifest.source_files))
 
     def ensure_prepared(
@@ -133,6 +140,7 @@ class PrepareData:
         adapter_override: DatasetAdapter | None = None,
         include_source_order_assignment: bool = True,
     ) -> PreparedDatasetManifest:
+        """Return the prepared dataset for this config, rebuilding it if no valid cache exists."""
         adapter = adapter_override or self.adapter(
             config.dataset,
             data_root / config.dataset.source_directory,
