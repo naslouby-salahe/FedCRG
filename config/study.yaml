@@ -9,8 +9,6 @@ paths:
   outputs_root: outputs
   results_root: results
 
-campaign_id: default
-
 protocol:
   id: fedcrg
   version: "2.0"

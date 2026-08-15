@@ -21,7 +21,6 @@ from fedcrg.types import CalibrationSeed, CampaignStage, ExperimentId, Experimen
 
 def _status() -> CampaignStatus:
     return CampaignStatus(
-        campaign_id="c1",
         created_at="2026-08-13T00:00:00+0000",
         updated_at="2026-08-13T00:00:01+0000",
         current_experiment=ExperimentId.PRIMARY_NBAIOT,
@@ -33,7 +32,7 @@ def _status() -> CampaignStatus:
                 finished_at="2026-08-13T00:00:01+0000",
             ),
         ),
-        results_path="results/c1",
+        results_path="results",
         elapsed_seconds=1.5,
     )
 
@@ -42,24 +41,17 @@ def test_status_store_round_trips(tmp_path: Path) -> None:
     store = CampaignStatusStore(campaigns_root=tmp_path)
     status = _status()
     path = store.save(status)
-    assert path == tmp_path / "c1.json"
-    loaded = store.load("c1")
-    assert loaded.campaign_id == "c1"
+    assert path == tmp_path / "status.json"
+    loaded = store.load()
     assert loaded.completed_experiments == (ExperimentId.PRIMARY_NBAIOT,)
-    assert loaded.results_path == "results/c1"
+    assert loaded.results_path == "results"
     assert loaded.elapsed_seconds == 1.5
 
 
-def test_status_store_rejects_unsafe_campaign_ids(tmp_path: Path) -> None:
-    store = CampaignStatusStore(campaigns_root=tmp_path)
-    with pytest.raises(ValueError):
-        store.path_for("../../etc/passwd")
-
-
-def test_status_store_missing_campaign_raises(tmp_path: Path) -> None:
+def test_status_store_missing_status_raises(tmp_path: Path) -> None:
     store = CampaignStatusStore(campaigns_root=tmp_path)
     with pytest.raises(FileNotFoundError):
-        store.load("missing")
+        store.load()
 
 
 class _FailingRunner(RunAllExperiments):
@@ -91,7 +83,7 @@ def test_campaign_runner_records_failures_and_continues(tmp_path: Path) -> None:
         ),
     )
     status = CampaignExecutor(study=Study.load(), status_store=store, runner=_FailingRunner()).run(
-        "c1", items, outputs_root=tmp_path / "outputs"
+        items, outputs_root=tmp_path / "outputs"
     )
     assert status.failed_experiments == (ExperimentId.PRIMARY_NBAIOT,)
     assert status.completed_experiments == (ExperimentId.READINESS_SAMPLE_SIZE,)

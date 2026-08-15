@@ -30,12 +30,14 @@ from fedcrg.evidence.store import (
 )
 from fedcrg.hashing import sha256_file
 from fedcrg.paths import (
+    ExperimentResultsBundleLayout,
+    LayoutArtifact,
     LayoutDirectory,
     OutputsLayout,
     PublicationLayout,
     ResultsBundleLayout,
     RunLayout,
-    campaign_results_root,
+    experiment_results_root,
 )
 from fedcrg.experiments.analyses import (
     confirmatory_contrasts,
@@ -46,7 +48,6 @@ from fedcrg.thresholding.metrics import FederationMetrics
 from fedcrg.types import (
     Assurance,
     CalibrationSeed,
-    CampaignId,
     ClientId,
     ConfidenceLevel,
     DataIntegrityError,
@@ -1080,7 +1081,7 @@ class ResultsManifest(BaseModel):
 
     model_config = Frozen
 
-    campaign_id: CampaignId
+    experiment_id: ExperimentId | None = None
     complete: bool
     config_hash: Sha256
     dataset_id: DatasetId
@@ -1097,7 +1098,7 @@ class ResultsVerification:
     """Result of checking a results bundle's structure and checksums."""
 
     valid: bool
-    problems: tuple[Identifier, ...]
+    problems: tuple[Description, ...]
 
 
 class ResultsBuilder:
@@ -1106,15 +1107,23 @@ class ResultsBuilder:
     def build(
         self,
         *,
-        campaign_id: CampaignId,
         outputs_root: Path,
         results_root: Path,
+        experiment_id: ExperimentId | None = None,
     ) -> Path:
-        """Assembles a new results bundle for a campaign; refuses to touch an existing one, since bundles are immutable once built."""
-        destination = campaign_results_root(results_root, campaign_id)
+        """Assemble an immutable results bundle: the campaign bundle at the results root, or one experiment's bundle under results/experiments/."""
+        if experiment_id is None:
+            return self._build_campaign(outputs_root, results_root)
+        return self._build_experiment(experiment_id, outputs_root, results_root)
+
+    def _build_campaign(self, outputs_root: Path, results_root: Path) -> Path:
+        """Assemble the single campaign bundle at the results root; refuses to touch an existing one."""
+        destination = results_root
         layout = ResultsBundleLayout(destination)
-        if destination.exists():
-            raise FileExistsError(f"Results bundle already exists and is immutable: {destination}")
+        if layout.manifest.is_file():
+            raise FileExistsError(
+                f"Campaign results bundle already exists and is immutable: {destination}"
+            )
         for directory in layout.required_directories:
             directory.mkdir(parents=True, exist_ok=True)
 
@@ -1128,19 +1137,66 @@ class ResultsBuilder:
         self._copy_tables_and_figures(outputs_root, layout)
 
         complete = self._evidence_complete(study, outputs_root)
-        checksums = self._checksums(layout)
-        manifest = self._manifest(
-            campaign_id,
-            outputs_root,
+        self._write_manifest_and_checksums(
+            layout, config, outputs_root, experiment_id=None, complete=complete
+        )
+        return destination
+
+    def _build_experiment(
+        self, experiment_id: ExperimentId, outputs_root: Path, results_root: Path
+    ) -> Path:
+        """Assemble one experiment's bundle under results/experiments/; refuses to touch an existing one."""
+        destination = experiment_results_root(results_root, experiment_id)
+        layout = ExperimentResultsBundleLayout(destination)
+        if layout.manifest.is_file():
+            raise FileExistsError(
+                f"Experiment results bundle already exists and is immutable: {destination}"
+            )
+        for directory in layout.required_directories:
+            directory.mkdir(parents=True, exist_ok=True)
+
+        study = Study.load()
+        config = study.resolve(experiment_id)
+        atomic_write_json(
+            layout.resolved_configs / f"{experiment_id}.json",
+            {
+                "config_hash": config.config_hash,
+                "data_spec_hash": config.data_spec_hash,
+                "payload": config.model_dump(mode="json"),
+            },
+        )
+        self._copy_metrics(outputs_root, layout, experiment_id=experiment_id)
+        self._copy_run_artifacts(outputs_root, layout, experiment_id=experiment_id)
+        self._copy_analysis(experiment_id, outputs_root, layout)
+        complete = self._experiment_complete(study, experiment_id, outputs_root)
+        self._write_manifest_and_checksums(
+            layout, config, outputs_root, experiment_id=experiment_id, complete=complete
+        )
+        return destination
+
+    @staticmethod
+    def _write_manifest_and_checksums(
+        layout: ResultsBundleLayout | ExperimentResultsBundleLayout,
+        config: ExperimentConfig,
+        outputs_root: Path,
+        *,
+        experiment_id: ExperimentId | None,
+        complete: bool,
+    ) -> None:
+        """Write the bundle manifest first, then checksums that also cover it."""
+        exclude_experiments = experiment_id is None
+        checksums = ResultsBuilder._checksums(layout, exclude_experiments=exclude_experiments)
+        manifest = ResultsBuilder._manifest(
             config,
+            outputs_root,
             checksums,
             complete,
+            experiment_id=experiment_id,
             file_count=len(checksums) + 1,
         )
         atomic_write_json(layout.manifest, manifest)
-        checksums = self._checksums(layout)
+        checksums = ResultsBuilder._checksums(layout, exclude_experiments=exclude_experiments)
         atomic_write_json(layout.checksums, checksums)
-        return destination
 
     @staticmethod
     def _evidence_complete(study: Study, outputs_root: Path) -> bool:
@@ -1182,7 +1238,12 @@ class ResultsBuilder:
         )
 
     @staticmethod
-    def _copy_metrics(outputs_root: Path, layout: ResultsBundleLayout) -> None:
+    def _copy_metrics(
+        outputs_root: Path,
+        layout: ResultsBundleLayout | ExperimentResultsBundleLayout,
+        *,
+        experiment_id: ExperimentId | None = None,
+    ) -> None:
         runs_root = OutputsLayout(outputs_root).runs
         if not runs_root.exists():
             return
@@ -1190,6 +1251,8 @@ class ResultsBuilder:
         for run_root in sorted(path for path in runs_root.iterdir() if path.is_dir()):
             manifest = _run_manifest(run_root)
             if manifest is None or manifest.status is not ExperimentStatus.COMPLETE:
+                continue
+            if experiment_id is not None and manifest.experiment_id is not experiment_id:
                 continue
             run_layout = RunLayout(run_root)
             metric_path = run_layout.metric_records
@@ -1204,6 +1267,70 @@ class ResultsBuilder:
             layout.metric_records,
             {"records": [record.model_dump(mode="json") for record in records]},
         )
+
+    @staticmethod
+    def _copy_run_artifacts(
+        outputs_root: Path, layout: ExperimentResultsBundleLayout, experiment_id: ExperimentId
+    ) -> None:
+        """Copy each completed run's manifest, verification hashes, and summary report into the bundle."""
+        runs_root = OutputsLayout(outputs_root).runs
+        if not runs_root.exists():
+            return
+        for run_root in sorted(path for path in runs_root.iterdir() if path.is_dir()):
+            manifest = _run_manifest(run_root)
+            if manifest is None or manifest.status is not ExperimentStatus.COMPLETE:
+                continue
+            if manifest.experiment_id is not experiment_id:
+                continue
+            source = RunLayout(run_root)
+            target = layout.runs / run_root.name
+            for artifact in (
+                source.manifest,
+                source.verification / LayoutArtifact.HASHES,
+                source.reports / _RUN_SUMMARY_FILENAME,
+            ):
+                if not artifact.is_file():
+                    continue
+                destination = target / artifact.relative_to(run_root)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(artifact.read_bytes())
+
+    @staticmethod
+    def _copy_analysis(
+        experiment_id: ExperimentId, outputs_root: Path, layout: ExperimentResultsBundleLayout
+    ) -> None:
+        """Copy the experiment's synthetic/benchmark analysis result into the bundle when one exists."""
+        source = OutputsLayout(outputs_root).analysis_result(experiment_id)
+        if not source.is_file():
+            return
+        destination = layout.analysis / f"{experiment_id}.json"
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(source.read_bytes())
+
+    @staticmethod
+    def _experiment_complete(study: Study, experiment_id: ExperimentId, outputs_root: Path) -> bool:
+        """Whether the experiment's evidence is complete: analysis present for synthetic/benchmark, full run grid otherwise."""
+        spec = study.catalogue.spec(experiment_id)
+        if (
+            spec.category is ExperimentType.SYNTHETIC
+            or experiment_id is ExperimentId.COMPUTATIONAL_BENCHMARK
+        ):
+            return OutputsLayout(outputs_root).analysis_result(experiment_id).is_file()
+        config = study.resolve(experiment_id)
+        expected = (
+            len(config.randomness.model_seeds)
+            * len(config.dataset.calibration_seeds)
+            * len(config.policies)
+        )
+        if expected == 0:
+            return True
+        observed = sum(
+            1
+            for path in _completed_runs(outputs_root)
+            if (manifest := _run_manifest(path)) is not None
+            and manifest.experiment_id is experiment_id
+        )
+        return observed == expected
 
     @staticmethod
     def _copy_statistics(outputs_root: Path, layout: ResultsBundleLayout) -> None:
@@ -1269,31 +1396,35 @@ class ResultsBuilder:
                     (target_dir / path.name).write_bytes(path.read_bytes())
 
     @staticmethod
-    def _checksums(layout: ResultsBundleLayout) -> tuple[ChecksumRecord, ...]:
+    def _checksums(
+        layout: ResultsBundleLayout | ExperimentResultsBundleLayout,
+        *,
+        exclude_experiments: bool,
+    ) -> tuple[ChecksumRecord, ...]:
         root = layout.root
         records: list[ChecksumRecord] = []
         for path in sorted(root.rglob("*")):
-            if path.is_file() and path.name != layout.checksums.name:
-                records.append(
-                    ChecksumRecord(
-                        relative_path=path.relative_to(root).as_posix(),
-                        sha256=sha256_file(path),
-                    )
-                )
+            if not path.is_file() or path.name == layout.checksums.name:
+                continue
+            relative = path.relative_to(root).as_posix()
+            if exclude_experiments and relative.startswith(f"{LayoutDirectory.EXPERIMENTS}/"):
+                continue
+            records.append(ChecksumRecord(relative_path=relative, sha256=sha256_file(path)))
         return tuple(records)
 
     @staticmethod
     def _manifest(
-        campaign_id: CampaignId,
-        outputs_root: Path,
         config: ExperimentConfig,
+        outputs_root: Path,
         checksums: tuple[ChecksumRecord, ...],
         complete: bool,
+        *,
+        experiment_id: ExperimentId | None,
         file_count: PositiveCount | None = None,
     ) -> ResultsManifest:
         detector = config.detector
         return ResultsManifest(
-            campaign_id=campaign_id,
+            experiment_id=experiment_id,
             complete=complete,
             config_hash=config.config_hash,
             dataset_id=config.dataset.id,
@@ -1311,32 +1442,70 @@ class ResultsVerifier:
 
     def verify(
         self,
-        campaign_id: CampaignId,
-        *,
         results_root: Path,
+        experiment_id: ExperimentId | None = None,
     ) -> ResultsVerification:
-        """Check a results bundle's required directories, manifest, checksums, and files for consistency."""
-        destination = campaign_results_root(results_root, campaign_id)
-        layout = ResultsBundleLayout(destination)
+        """Check the campaign bundle and every experiment bundle, or one experiment bundle."""
         problems: list[Identifier] = []
-        if not destination.exists():
-            return ResultsVerification(False, (f"results bundle does not exist: {destination}",))
-        for directory in layout.required_directories:
-            if not directory.is_dir():
-                problems.append(f"missing required bundle directory: {directory.name}")
-        manifest_path = layout.manifest
-        if not manifest_path.is_file():
-            problems.append("missing bundle manifest.json")
-        checksums_path = layout.checksums
-        if not checksums_path.is_file():
-            problems.append("missing bundle checksums.json")
+        if experiment_id is None:
+            if not results_root.exists():
+                return ResultsVerification(
+                    False, (f"results bundle does not exist: {results_root}",)
+                )
+            problems.extend(
+                self._verify_bundle(ResultsBundleLayout(results_root), exclude_experiments=True)
+            )
+            experiments_root = results_root / LayoutDirectory.EXPERIMENTS
+            if experiments_root.is_dir():
+                for bundle_root in sorted(
+                    path for path in experiments_root.iterdir() if path.is_dir()
+                ):
+                    problems.extend(
+                        self._verify_bundle(
+                            ExperimentResultsBundleLayout(bundle_root),
+                            exclude_experiments=False,
+                        )
+                    )
         else:
-            problems.extend(self._checksum_mismatches(destination, layout, checksums_path))
+            destination = experiment_results_root(results_root, experiment_id)
+            if not destination.exists():
+                return ResultsVerification(
+                    False, (f"experiment results bundle does not exist: {destination}",)
+                )
+            problems.extend(
+                self._verify_bundle(
+                    ExperimentResultsBundleLayout(destination), exclude_experiments=False
+                )
+            )
         return ResultsVerification(not problems, tuple(problems))
 
     @staticmethod
+    def _verify_bundle(
+        layout: ResultsBundleLayout | ExperimentResultsBundleLayout,
+        *,
+        exclude_experiments: bool,
+    ) -> list[Identifier]:
+        """Check one bundle's required directories, manifest, checksums, and files."""
+        destination = layout.root
+        problems: list[Identifier] = []
+        for directory in layout.required_directories:
+            if not directory.is_dir():
+                problems.append(f"missing required bundle directory: {directory.name}")
+        if not layout.manifest.is_file():
+            problems.append("missing bundle manifest.json")
+        if not layout.checksums.is_file():
+            problems.append("missing bundle checksums.json")
+        else:
+            problems.extend(
+                ResultsVerifier._checksum_mismatches(
+                    destination, layout.checksums, exclude_experiments=exclude_experiments
+                )
+            )
+        return problems
+
+    @staticmethod
     def _checksum_mismatches(
-        destination: Path, layout: ResultsBundleLayout, checksums_path: Path
+        destination: Path, checksums_path: Path, *, exclude_experiments: bool
     ) -> list[Identifier]:
         problems: list[Identifier] = []
         checksums = tuple(
@@ -1344,9 +1513,11 @@ class ResultsVerifier:
             for entry in json.loads(checksums_path.read_text(encoding="utf-8"))
         )
         for path in sorted(destination.rglob("*")):
-            if not path.is_file() or path.name == layout.checksums.name:
+            if not path.is_file() or path.name == checksums_path.name:
                 continue
             relative = path.relative_to(destination).as_posix()
+            if exclude_experiments and relative.startswith(f"{LayoutDirectory.EXPERIMENTS}/"):
+                continue
             expected = next(
                 (record.sha256 for record in checksums if record.relative_path == relative),
                 None,
@@ -1358,25 +1529,33 @@ class ResultsVerifier:
         return problems
 
 
-def build_results_bundle(
-    campaign_id: CampaignId,
-    outputs_root: Path,
-    results_root: Path,
+def build_results_bundle(outputs_root: Path, results_root: Path) -> Path:
+    """Build the single campaign results bundle at `results_root`."""
+    return ResultsBuilder().build(outputs_root=outputs_root, results_root=results_root)
+
+
+def build_experiment_results_bundle(
+    experiment_id: ExperimentId, outputs_root: Path, results_root: Path
 ) -> Path:
-    """Build a results bundle for `campaign_id`."""
+    """Build the immutable results bundle for one experiment under results/experiments/."""
     return ResultsBuilder().build(
-        campaign_id=campaign_id,
-        outputs_root=outputs_root,
-        results_root=results_root,
+        outputs_root=outputs_root, results_root=results_root, experiment_id=experiment_id
     )
+
+
+def ensure_experiment_results_bundle(
+    experiment_id: ExperimentId, outputs_root: Path, results_root: Path
+) -> Path:
+    """Return the experiment's bundle, building it first if it does not already exist."""
+    destination = experiment_results_root(results_root, experiment_id)
+    if not destination.joinpath(LayoutArtifact.MANIFEST).is_file():
+        build_experiment_results_bundle(experiment_id, outputs_root, results_root)
+    return destination
 
 
 def verify_results_bundle(
-    campaign_id: CampaignId,
     results_root: Path,
+    experiment_id: ExperimentId | None = None,
 ) -> ResultsVerification:
-    """Verify a previously built results bundle for `campaign_id`."""
-    return ResultsVerifier().verify(
-        campaign_id,
-        results_root=results_root,
-    )
+    """Verify the campaign bundle and every experiment bundle, or one experiment bundle."""
+    return ResultsVerifier().verify(results_root, experiment_id=experiment_id)

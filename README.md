@@ -88,6 +88,8 @@ fedcrg results verify
 
 Every completed experiment run writes its own Markdown summary into the run directory (`outputs/runs/<run>/reports/summary.md`), and `fedcrg run` additionally refreshes the aggregate repository report. `fedcrg report` regenerates the same deliverables on demand — use it standalone whenever report code changes.
 
+`results/` holds one campaign artifact and one bundle per experiment: the campaign bundle lives at the results root (tables, figures, statistics, repository report, provenance, merged metrics) and each experiment's bundle under `results/experiments/<experiment>/` (resolved config, its runs' metrics, manifests, verification hashes, and per-run reports). `fedcrg run` and `fedcrg campaign` build the experiment bundles automatically; `fedcrg results build [experiment]` and `fedcrg results verify [experiment]` build or verify the campaign bundle (no argument) or one experiment's bundle.
+
 The high-level research application path performs a prepared-data audit and freezes statistical lookup tables before model training. Lower-level services remain available for reproducible component work, but confirmatory execution should use the audited path.
 
 ## Scientific invariants

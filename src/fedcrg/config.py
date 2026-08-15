@@ -33,7 +33,6 @@ from fedcrg.types import (
     BootstrapSeed,
     CalibrationAssignmentMode,
     CalibrationSeed,
-    CampaignId,
     CandidateCount,
     ClientFraction,
     ClientId,
@@ -263,7 +262,6 @@ class StudyConfig(BaseModel):
     training_profiles: dict[ProfileId, TrainingConfig]
     policies: tuple[PolicyId, ...]
     paths: StudyPaths
-    campaign_id: CampaignId
 
     @model_validator(mode="after")
     def _validate(self) -> Self:
@@ -881,10 +879,6 @@ class Study:
     @property
     def paths(self) -> StudyPaths:
         return self.study_config.paths
-
-    @property
-    def campaign_id(self) -> CampaignId:
-        return self.study_config.campaign_id
 
     def resolve(
         self,

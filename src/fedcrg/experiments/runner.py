@@ -43,11 +43,11 @@ from fedcrg.evidence.store import (
 )
 from fedcrg.hashing import sha256_file
 from fedcrg.paths import (
+    LayoutArtifact,
     OutputsLayout,
     PreparedDatasetLayout,
     RunLayout,
     ScoreCacheLayout,
-    campaign_results_root,
     campaign_status_path,
 )
 from fedcrg.learning.detectors import (
@@ -113,7 +113,6 @@ from fedcrg.thresholding.policies import (
 from fedcrg.types import (
     CalibrationAssignmentMode,
     CalibrationSeed,
-    CampaignId,
     CampaignStage,
     ClientId,
     DataRole,
@@ -139,7 +138,11 @@ from fedcrg.experiments.analyses import (
     RunBenchmark,
     RunSyntheticExperiments,
 )
-from fedcrg.reporting import build_results_bundle, build_run_report
+from fedcrg.reporting import (
+    build_results_bundle,
+    build_run_report,
+    ensure_experiment_results_bundle,
+)
 
 Frozen = ConfigDict(frozen=True)
 _LOGGER = get_logger(__name__)
@@ -1594,7 +1597,6 @@ class CampaignStatus(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    campaign_id: CampaignId
     created_at: Timestamp
     updated_at: Timestamp
     current_experiment: ExperimentId | None = None
@@ -1639,22 +1641,22 @@ class CampaignStatusStore:
     ) -> None:
         self.campaigns_root = campaigns_root or OutputsLayout(outputs_root).campaigns
 
-    def path_for(self, campaign_id: CampaignId) -> Path:
-        """Path where `campaign_id`'s status file is stored."""
-        return campaign_status_path(self.campaigns_root, campaign_id)
+    def path_for(self) -> Path:
+        """Path where the single campaign's status file is stored."""
+        return campaign_status_path(self.campaigns_root)
 
     def save(self, status: CampaignStatus) -> Path:
-        """Persist `status` to its campaign status file."""
-        path = self.path_for(status.campaign_id)
+        """Persist `status` to the campaign status file."""
+        path = self.path_for()
         path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write_json(path, status.model_dump(mode="json"))
         return path
 
-    def load(self, campaign_id: CampaignId) -> CampaignStatus:
-        """Load the status file for `campaign_id`."""
-        path = self.path_for(campaign_id)
+    def load(self) -> CampaignStatus:
+        """Load the campaign status file."""
+        path = self.path_for()
         if not path.is_file():
-            raise FileNotFoundError(f"Campaign has no recorded status: {campaign_id}")
+            raise FileNotFoundError(f"Campaign has no recorded status: {path}")
         return CampaignStatus.model_validate_json(path.read_text(encoding="utf-8"))
 
 
@@ -1673,7 +1675,6 @@ class CampaignExecutor:
 
     def run(
         self,
-        campaign_id: CampaignId,
         work_items: tuple[CampaignWorkItem, ...],
         *,
         outputs_root: Path,
@@ -1682,9 +1683,9 @@ class CampaignExecutor:
         """Resume from any previously recorded status, skipping completed experiments; unlike a single run, a failing experiment here is recorded and the campaign continues rather than raising."""
         now = datetime.now(UTC).isoformat()
         try:
-            status = self.status_store.load(campaign_id)
+            status = self.status_store.load()
         except FileNotFoundError:
-            status = CampaignStatus(campaign_id=campaign_id, created_at=now, updated_at=now)
+            status = CampaignStatus(created_at=now, updated_at=now)
 
         completed: set[ExperimentId] = set(status.completed_experiments)
         rows: list[CampaignOutcomeRow] = list(status.experiments)
@@ -1697,7 +1698,6 @@ class CampaignExecutor:
             config = self.study.resolve(item.experiment_id)
 
             status = CampaignStatus(
-                campaign_id=campaign_id,
                 created_at=now,
                 updated_at=datetime.now(UTC).isoformat(),
                 current_experiment=item.experiment_id,
@@ -1717,18 +1717,17 @@ class CampaignExecutor:
                         RunSyntheticExperiments().run(item.experiment_id, spec, config, output)
                 else:
                     self.runner.execute(item.experiment_id, config, item.prepared_root)
+                if results_root is not None:
+                    ensure_experiment_results_bundle(item.experiment_id, outputs_root, results_root)
                 rows.append(_completed_row(item.experiment_id, now))
             except Exception as exc:
                 rows.append(_failed_row(item.experiment_id, str(exc), now))
 
         results_path = (
-            self._build_results(campaign_id, outputs_root, results_root)
-            if results_root is not None
-            else None
+            self._build_results(outputs_root, results_root) if results_root is not None else None
         )
 
         final_status = CampaignStatus(
-            campaign_id=campaign_id,
             created_at=now,
             updated_at=datetime.now(UTC).isoformat(),
             current_experiment=None,
@@ -1743,13 +1742,11 @@ class CampaignExecutor:
         return final_status
 
     @staticmethod
-    def _build_results(
-        campaign_id: CampaignId, outputs_root: Path, results_root: Path
-    ) -> Identifier:
-        destination = campaign_results_root(results_root, campaign_id)
-        if destination.exists():
+    def _build_results(outputs_root: Path, results_root: Path) -> Identifier:
+        destination = results_root
+        if destination.joinpath(LayoutArtifact.MANIFEST).is_file():
             return destination.as_posix()
-        return build_results_bundle(campaign_id, outputs_root, results_root).as_posix()
+        return build_results_bundle(outputs_root, results_root).as_posix()
 
 
 def _completed_row(experiment_id: ExperimentId, finished_at: Timestamp) -> CampaignOutcomeRow:

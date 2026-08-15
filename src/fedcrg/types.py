@@ -151,15 +151,6 @@ FeatureName = Annotated[
         pattern=r"^[a-z0-9][a-z0-9_]*$",
     ),
 ]
-CampaignId = Annotated[
-    str,
-    StringConstraints(
-        min_length=1,
-        max_length=128,
-        strip_whitespace=True,
-        pattern=r"^[a-z0-9][a-z0-9._-]*$",
-    ),
-]
 
 
 class CampaignStage(StrEnum):

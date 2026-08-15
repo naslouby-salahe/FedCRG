@@ -36,9 +36,11 @@ from fedcrg.paths import (
     prepared_dataset_family_root,
 )
 from fedcrg.reporting import (
+    build_experiment_results_bundle,
     build_publication,
     build_repository_report,
     build_results_bundle,
+    ensure_experiment_results_bundle,
     verify_results_bundle,
 )
 from fedcrg.runtime import (
@@ -49,9 +51,9 @@ from fedcrg.runtime import (
 )
 from fedcrg.types import (
     CalibrationSeed,
-    CampaignId,
     CampaignStage,
     DatasetId,
+    Description,
     Duration,
     ExperimentId,
     ExperimentStatus,
@@ -142,7 +144,6 @@ class CampaignPayload(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    campaign_id: CampaignId
     status: Identifier
     completed: NonNegativeCount
     total: PositiveCount
@@ -179,7 +180,6 @@ class StatusPayload(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    campaign_id: CampaignId | None
     campaign_stage: Identifier | None
     experiments: tuple[ExperimentStatusRow, ...]
 
@@ -189,7 +189,6 @@ class ReportPayload(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    campaign_id: CampaignId
     repository_report: PathString
     publication_manifest: PathString
 
@@ -208,7 +207,7 @@ class ResultsVerifyPayload(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     valid: bool
-    problems: tuple[Identifier, ...]
+    problems: tuple[Description, ...]
 
 
 def _study(ctx: click.Context) -> Study:
@@ -386,6 +385,7 @@ def run(ctx: click.Context, experiment_id: str, overwrite: bool) -> None:
             RunBenchmark(spec, config).run(output)
         else:
             RunSyntheticExperiments().run(experiment, spec, config, output)
+        ensure_experiment_results_bundle(experiment, outputs_root, study.paths.results_root)
         _print(
             RunPayload(
                 experiment=experiment,
@@ -398,6 +398,7 @@ def run(ctx: click.Context, experiment_id: str, overwrite: bool) -> None:
     _precompute_protocol_tables(study, experiment)
     workload = RunAllExperiments().execute(experiment, config, config.preprocessed_root)
     build_repository_report(outputs_root, config)
+    ensure_experiment_results_bundle(experiment, outputs_root, study.paths.results_root)
     _print(
         RunPayload(
             experiment=experiment,
@@ -414,11 +415,10 @@ def run(ctx: click.Context, experiment_id: str, overwrite: bool) -> None:
 def campaign(ctx: click.Context, overwrite: bool) -> None:
     """Run every experiment in the catalogue in dependency order."""
     study = _study(ctx)
-    campaign_id = study.campaign_id
     outputs_root = study.paths.outputs_root
     store = CampaignStatusStore(outputs_root=outputs_root)
     if overwrite:
-        status_path = store.path_for(campaign_id)
+        status_path = store.path_for()
         if status_path.is_file():
             status_path.unlink()
     work_items = tuple(
@@ -430,14 +430,12 @@ def campaign(ctx: click.Context, overwrite: bool) -> None:
         for spec in study.catalogue.all()
     )
     status = CampaignExecutor(study=study).run(
-        campaign_id,
         work_items,
         outputs_root=outputs_root,
         results_root=study.paths.results_root,
     )
     _print(
         CampaignPayload(
-            campaign_id=campaign_id,
             status=status.current_stage if status.current_stage else CampaignStage.PENDING,
             completed=len(status.completed_experiments),
             total=max(1, len(work_items)),
@@ -499,16 +497,13 @@ def status(ctx: click.Context, experiment_id: str | None) -> None:
         if experiment_id is None or experiment == experiment_id
     )
     campaign_stage: Identifier | None = None
-    campaign_record: CampaignId | None = None
     try:
-        campaign_status = CampaignStatusStore(outputs_root=outputs_root).load(study.campaign_id)
-        campaign_record = campaign_status.campaign_id
+        campaign_status = CampaignStatusStore(outputs_root=outputs_root).load()
         campaign_stage = campaign_status.current_stage if campaign_status.current_stage else None
     except FileNotFoundError:
         pass
     _print(
         StatusPayload(
-            campaign_id=campaign_record,
             campaign_stage=campaign_stage,
             experiments=rows,
         )
@@ -552,7 +547,6 @@ def report(ctx: click.Context) -> None:
     publication_manifest = build_publication(config, outputs_root)
     _print(
         ReportPayload(
-            campaign_id=study.campaign_id,
             repository_report=repository_report.as_posix(),
             publication_manifest=publication_manifest.as_posix(),
         )
@@ -565,26 +559,42 @@ def results_group() -> None:
 
 
 @results_group.command(name="build")
+@click.argument(
+    "experiment_id",
+    required=False,
+    type=click.Choice([member.value for member in ExperimentId]),
+)
 @click.pass_context
-def results_build(ctx: click.Context) -> None:
-    """Package the campaign's outputs into a checksummed results bundle."""
+def results_build(ctx: click.Context, experiment_id: str | None) -> None:
+    """Build the campaign results bundle, or one experiment's bundle when an experiment id is given."""
     study = _study(ctx)
-    path = build_results_bundle(
-        study.campaign_id,
-        outputs_root=study.paths.outputs_root,
-        results_root=study.paths.results_root,
-    )
+    if experiment_id is None:
+        path = build_results_bundle(
+            outputs_root=study.paths.outputs_root,
+            results_root=study.paths.results_root,
+        )
+    else:
+        path = build_experiment_results_bundle(
+            ExperimentId(experiment_id),
+            outputs_root=study.paths.outputs_root,
+            results_root=study.paths.results_root,
+        )
     _print(ResultsBuildPayload(results_path=path.as_posix()))
 
 
 @results_group.command(name="verify")
+@click.argument(
+    "experiment_id",
+    required=False,
+    type=click.Choice([member.value for member in ExperimentId]),
+)
 @click.pass_context
-def results_verify(ctx: click.Context) -> None:
-    """Verify a packaged results bundle's checksums."""
+def results_verify(ctx: click.Context, experiment_id: str | None) -> None:
+    """Verify the campaign bundle and every experiment bundle, or one experiment bundle."""
     study = _study(ctx)
     verification = verify_results_bundle(
-        study.campaign_id,
-        results_root=study.paths.results_root,
+        study.paths.results_root,
+        experiment_id=ExperimentId(experiment_id) if experiment_id is not None else None,
     )
     _print(ResultsVerifyPayload(valid=verification.valid, problems=tuple(verification.problems)))
     if not verification.valid:

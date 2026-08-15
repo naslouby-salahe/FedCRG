@@ -20,7 +20,6 @@ from rich.table import Table
 
 from fedcrg.types import (
     ByteCount,
-    CampaignId,
     ComputeDeviceId,
     Duration,
     Identifier,
@@ -252,7 +251,6 @@ def render_telemetry(sample: ResourceSample) -> Identifier:
 
 
 def render_campaign_status(
-    campaign_id: CampaignId,
     status: Identifier,
     completed: NonNegativeCount,
     total: PositiveCount,
@@ -261,7 +259,7 @@ def render_campaign_status(
 ) -> None:
     """Print a one-row status table for a campaign."""
     console = Console()
-    table = Table(title=f"campaign {campaign_id}")
+    table = Table(title="campaign status")
     table.add_column(CampaignStatusColumn.STATUS)
     table.add_column(CampaignStatusColumn.COMPLETED)
     table.add_column(CampaignStatusColumn.TOTAL)

@@ -12,12 +12,12 @@ from fedcrg.paths import (
     PublicationLayout,
     ResultsBundleLayout,
     ScoreCacheLayout,
-    campaign_results_root,
     campaign_status_path,
+    experiment_results_root,
     prepared_dataset_family_root,
     prepared_dataset_root,
 )
-from fedcrg.types import DatasetId
+from fedcrg.types import DatasetId, ExperimentId
 
 
 def test_config_layout_resolves_the_three_frozen_documents(tmp_path: Path) -> None:
@@ -91,7 +91,7 @@ def test_outputs_layout_run_analysis_and_campaign_status(tmp_path: Path) -> None
     assert layout.analysis_result(ExperimentId.PRIMARY_NBAIOT) == (
         layout.cache_analysis / "primary_nbaiot.json"
     )
-    assert layout.campaign_status("study-1") == layout.campaigns / "study-1.json"
+    assert layout.campaign_status() == layout.campaigns / "status.json"
 
 
 def test_outputs_layout_publication_is_a_publication_layout(tmp_path: Path) -> None:
@@ -120,7 +120,10 @@ def test_results_bundle_layout_required_directories_are_paths(tmp_path: Path) ->
     assert all(isinstance(path, Path) for path in layout.required_directories)
 
 
-def test_campaign_results_root_and_status_path(tmp_path: Path) -> None:
-    """Campaign results root and status file paths are derived from the campaign id."""
-    assert campaign_results_root(tmp_path, "study-1") == tmp_path / "study-1"
-    assert campaign_status_path(tmp_path, "study-1") == tmp_path / "study-1.json"
+def test_experiment_results_root_and_status_path(tmp_path: Path) -> None:
+    """Experiment results bundles live under results/experiments/; the campaign status file is fixed."""
+    assert (
+        experiment_results_root(tmp_path, ExperimentId.PRIMARY_NBAIOT)
+        == tmp_path / "experiments" / "primary_nbaiot"
+    )
+    assert campaign_status_path(tmp_path) == tmp_path / "status.json"

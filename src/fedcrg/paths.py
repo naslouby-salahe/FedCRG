@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
 
-from fedcrg.types import CampaignId, DatasetId, ExperimentId, ModelSeed, RunId, Sha256
+from fedcrg.types import DatasetId, ExperimentId, ModelSeed, RunId, Sha256
 
 if TYPE_CHECKING:
     from fedcrg.config import ExperimentConfig
@@ -43,6 +43,7 @@ class LayoutDirectory(StrEnum):
     SEEDED = "seeded"
     CONFIG = "config"
     RAW_STAGING = "_raw"
+    EXPERIMENTS = "experiments"
 
 
 class LayoutArtifact(StrEnum):
@@ -429,16 +430,62 @@ class ResultsBundleLayout:
         )
 
 
-def campaign_results_root(results_root: Path, campaign_id: CampaignId) -> Path:
-    return results_root / str(campaign_id)
+class ExperimentResultsBundleLayout:
+    """Paths inside a packaged, checksummed results bundle for one experiment."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+
+    @property
+    def manifest(self) -> Path:
+        return self.root / LayoutArtifact.MANIFEST
+
+    @property
+    def checksums(self) -> Path:
+        return self.root / LayoutArtifact.CHECKSUMS
+
+    @property
+    def resolved_configs(self) -> Path:
+        return self.root / LayoutDirectory.RESOLVED_CONFIGS
+
+    @property
+    def metrics(self) -> Path:
+        return self.root / LayoutDirectory.METRICS
+
+    @property
+    def metric_records(self) -> Path:
+        return self.metrics / LayoutArtifact.METRIC_RECORDS_BUNDLE
+
+    @property
+    def runs(self) -> Path:
+        return self.root / LayoutDirectory.RUNS
+
+    @property
+    def reports(self) -> Path:
+        return self.root / LayoutDirectory.REPORTS
+
+    @property
+    def analysis(self) -> Path:
+        return self.root / LayoutDirectory.ANALYSIS
+
+    @property
+    def required_directories(self) -> tuple[Path, ...]:
+        return (
+            self.resolved_configs,
+            self.metrics,
+            self.runs,
+            self.reports,
+            self.analysis,
+        )
 
 
-def campaign_status_path(campaigns_root: Path, campaign_id: CampaignId) -> Path:
-    """Rejects path separators and traversal sequences since campaign_id becomes a filename component."""
-    value = str(campaign_id)
-    if not value or "/" in value or ".." in value:
-        raise ValueError(f"Invalid campaign id: {value!r}")
-    return campaigns_root / f"{value}.json"
+def experiment_results_root(results_root: Path, experiment_id: ExperimentId) -> Path:
+    return results_root / LayoutDirectory.EXPERIMENTS / str(experiment_id)
+
+
+def campaign_status_path(campaigns_root: Path) -> Path:
+    """Path where the single campaign's status file is stored."""
+    return campaigns_root / "status.json"
 
 
 class OutputsLayout:
@@ -513,8 +560,8 @@ class OutputsLayout:
     def analysis_result(self, experiment_id: ExperimentId) -> Path:
         return self.cache_analysis / f"{experiment_id}.json"
 
-    def campaign_status(self, campaign_id: CampaignId) -> Path:
-        return campaign_status_path(self.campaigns, campaign_id)
+    def campaign_status(self) -> Path:
+        return campaign_status_path(self.campaigns)
 
     def model_cache(self, config: ExperimentConfig, model_seed: ModelSeed) -> ModelCacheLayout:
         if config.detector is None:
