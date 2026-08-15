@@ -72,5 +72,6 @@ def test_stream_bounds_sample_count() -> None:
 def test_stream_rejects_nonpositive_interval() -> None:
     """A non-positive sampling interval is rejected rather than causing a busy loop."""
     monitor = ResourceMonitor()
+    stream = monitor.stream(interval_seconds=0.0)
     with pytest.raises(ValueError):
-        next(monitor.stream(interval_seconds=0.0))
+        next(stream)

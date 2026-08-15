@@ -1696,32 +1696,8 @@ class CampaignExecutor:
                 continue
             spec = self.study.spec(item.experiment_id)
             config = self.study.resolve(item.experiment_id)
-
-            status = CampaignStatus(
-                created_at=now,
-                updated_at=datetime.now(UTC).isoformat(),
-                current_experiment=item.experiment_id,
-                current_stage=CampaignStage.RUNNING,
-                experiments=tuple(rows),
-                elapsed_seconds=time.monotonic() - started,
-            )
-            self.status_store.save(status)
-
-            try:
-                ProtocolTablePrecomputer().precompute(config, spec)
-                if spec.category in _ANALYSIS_CATEGORIES:
-                    output = OutputsLayout(outputs_root).analysis_result(item.experiment_id)
-                    if item.experiment_id is ExperimentId.COMPUTATIONAL_BENCHMARK:
-                        RunBenchmark(spec, config).run(output)
-                    else:
-                        RunSyntheticExperiments().run(item.experiment_id, spec, config, output)
-                else:
-                    self.runner.execute(item.experiment_id, config, item.prepared_root)
-                if results_root is not None:
-                    ensure_experiment_results_bundle(item.experiment_id, outputs_root, results_root)
-                rows.append(_completed_row(item.experiment_id, now))
-            except Exception as exc:
-                rows.append(_failed_row(item.experiment_id, str(exc), now))
+            self._record_progress(item.experiment_id, rows, now, started)
+            rows.append(self._run_one(item, spec, config, outputs_root, results_root, now))
 
         results_path = (
             self._build_results(outputs_root, results_root) if results_root is not None else None
@@ -1740,6 +1716,50 @@ class CampaignExecutor:
         )
         self.status_store.save(final_status)
         return final_status
+
+    def _record_progress(
+        self,
+        experiment_id: ExperimentId,
+        rows: list[CampaignOutcomeRow],
+        created_at: Timestamp,
+        started: Duration,
+    ) -> None:
+        """Persist the campaign as RUNNING with `experiment_id` as the current experiment."""
+        status = CampaignStatus(
+            created_at=created_at,
+            updated_at=datetime.now(UTC).isoformat(),
+            current_experiment=experiment_id,
+            current_stage=CampaignStage.RUNNING,
+            experiments=tuple(rows),
+            elapsed_seconds=time.monotonic() - started,
+        )
+        self.status_store.save(status)
+
+    def _run_one(
+        self,
+        item: CampaignWorkItem,
+        spec: ExperimentSpec,
+        config: ExperimentConfig,
+        outputs_root: Path,
+        results_root: Path | None,
+        now: Timestamp,
+    ) -> CampaignOutcomeRow:
+        """Execute one experiment, recording COMPLETE or FAILED without aborting the campaign."""
+        try:
+            ProtocolTablePrecomputer().precompute(config, spec)
+            if spec.category in _ANALYSIS_CATEGORIES:
+                output = OutputsLayout(outputs_root).analysis_result(item.experiment_id)
+                if item.experiment_id is ExperimentId.COMPUTATIONAL_BENCHMARK:
+                    RunBenchmark(spec, config).run(output)
+                else:
+                    RunSyntheticExperiments().run(item.experiment_id, spec, config, output)
+            else:
+                self.runner.execute(item.experiment_id, config, item.prepared_root)
+            if results_root is not None:
+                ensure_experiment_results_bundle(item.experiment_id, outputs_root, results_root)
+            return _completed_row(item.experiment_id, now)
+        except Exception as exc:
+            return _failed_row(item.experiment_id, str(exc), now)
 
     @staticmethod
     def _build_results(outputs_root: Path, results_root: Path) -> Identifier:
