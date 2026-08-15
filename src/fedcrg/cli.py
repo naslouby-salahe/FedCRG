@@ -368,7 +368,7 @@ def preprocess(ctx: click.Context, dataset_id: str | None, overwrite: bool) -> N
 @click.option("--overwrite", is_flag=True, help="Re-run and replace regenerable evidence.")
 @click.pass_context
 def run(ctx: click.Context, experiment_id: str, overwrite: bool) -> None:
-    """Run one experiment end to end, reusing cached artifacts unless `--overwrite` is set."""
+    """Run one experiment end to end, writing run summaries and refreshing the repository report, reusing cached artifacts unless `--overwrite` is set."""
     study = _study(ctx)
     experiment = ExperimentId(experiment_id)
     spec = study.spec(experiment)
@@ -397,6 +397,7 @@ def run(ctx: click.Context, experiment_id: str, overwrite: bool) -> None:
         return
     _precompute_protocol_tables(study, experiment)
     workload = RunAllExperiments().execute(experiment, config, config.preprocessed_root)
+    build_repository_report(outputs_root, config)
     _print(
         RunPayload(
             experiment=experiment,

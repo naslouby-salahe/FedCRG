@@ -86,6 +86,8 @@ fedcrg results verify
 
 `fedcrg preprocess` without a dataset argument prepares every raw dataset. The CLI takes no path or configuration options: repository layout and the campaign identity are owned by `config/study.yaml`. `fedcrg campaign` executes every registered experiment under the configured campaign identity; pass `--overwrite` to restart it from scratch.
 
+Every completed experiment run writes its own Markdown summary into the run directory (`outputs/runs/<run>/reports/summary.md`), and `fedcrg run` additionally refreshes the aggregate repository report. `fedcrg report` regenerates the same deliverables on demand — use it standalone whenever report code changes.
+
 The high-level research application path performs a prepared-data audit and freezes statistical lookup tables before model training. Lower-level services remain available for reproducible component work, but confirmatory execution should use the audited path.
 
 ## Scientific invariants

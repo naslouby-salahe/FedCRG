@@ -139,7 +139,7 @@ from fedcrg.experiments.analyses import (
     RunBenchmark,
     RunSyntheticExperiments,
 )
-from fedcrg.reporting import build_results_bundle
+from fedcrg.reporting import build_results_bundle, build_run_report
 
 Frozen = ConfigDict(frozen=True)
 _LOGGER = get_logger(__name__)
@@ -399,7 +399,20 @@ class RunExperiment:
             self._transition(layout, plan, policy, ExperimentStatus.FAILED)
             raise
         self._transition(layout, plan, policy, ExperimentStatus.COMPLETE)
+        self._write_run_report(layout)
         return result, layout
+
+    @staticmethod
+    def _write_run_report(layout: RunLayout) -> None:
+        """Write the run's Markdown summary; a report failure never invalidates a completed run."""
+        try:
+            build_run_report(layout.root)
+        except Exception as exc:
+            _LOGGER.warning(
+                "Run %s completed but its summary report could not be written: %s",
+                layout.root.name,
+                exc,
+            )
 
 
 def _oracle_candidate_missing(client_id: ClientId) -> Threshold:
