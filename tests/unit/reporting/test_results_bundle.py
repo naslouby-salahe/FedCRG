@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
+
+import pytest
 
 from fedcrg.evidence.models import GitEnvironment
 from fedcrg.evidence.store import atomic_write_json
-from fedcrg.paths import OutputsLayout, ResultsBundleLayout
+from fedcrg.paths import OutputsLayout, ResultsBundleLayout, RunLayout
 from fedcrg.reporting import (
     ResultsBuilder,
     ResultsVerifier,
@@ -14,11 +17,46 @@ from fedcrg.reporting import (
 )
 from fedcrg.types import DataIntegrityError, ExperimentId, PolicyId
 
-import pytest
-
 from tests._fixtures import primary_experiment_config
 from tests.unit.reporting._results_fixtures import write_fake_evidence
 from tests.unit.reporting._run_fixtures import write_completed_run
+
+
+def test_results_builder_creates_bundle_and_marks_partial_evidence_incomplete(
+    tmp_path: Path,
+) -> None:
+    outputs_root = tmp_path / "outputs"
+    write_fake_evidence(outputs_root)
+    destination = ResultsBuilder().build(
+        campaign_id="c1",
+        outputs_root=outputs_root,
+        results_root=tmp_path / "results",
+    )
+    assert destination == tmp_path / "results" / "c1"
+    assert (destination / "manifest.json").is_file()
+    assert (destination / "checksums.json").is_file()
+    assert (destination / "metrics" / "metric_records.json").is_file()
+    assert (destination / "statistics" / "readiness_plans.json").is_file()
+    assert (destination / "tables" / "table_1.csv").is_file()
+    assert (destination / "figures" / "figure_1.png").is_file()
+    assert (destination / "provenance" / "provenance.json").is_file()
+
+    manifest = json.loads((destination / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["campaign_id"] == "c1"
+    assert manifest["complete"] is False
+    checksums = json.loads((destination / "checksums.json").read_text(encoding="utf-8"))
+    assert manifest["file_count"] == len(checksums)
+
+
+def test_results_builder_refuses_to_overwrite(tmp_path: Path) -> None:
+    outputs_root = tmp_path / "outputs"
+    write_fake_evidence(outputs_root)
+    builder = ResultsBuilder()
+    builder.build(campaign_id="c1", outputs_root=outputs_root, results_root=tmp_path / "results")
+    with pytest.raises(FileExistsError):
+        builder.build(
+            campaign_id="c1", outputs_root=outputs_root, results_root=tmp_path / "results"
+        )
 
 
 def test_results_builder_with_empty_outputs_root(tmp_path: Path) -> None:
@@ -106,12 +144,30 @@ def test_results_verifier_detects_missing_required_directory(tmp_path: Path) -> 
         results_root=tmp_path / "results",
     )
     layout = ResultsBundleLayout(destination)
-    import shutil
-
     shutil.rmtree(layout.tables)
     result = ResultsVerifier().verify("c7", results_root=tmp_path / "results")
     assert not result.valid
     assert any("missing required bundle directory" in problem for problem in result.problems)
+
+
+def test_results_verifier_detects_missing_manifest_and_checksums(tmp_path: Path) -> None:
+    destination = tmp_path / "results" / "c12"
+    layout = ResultsBundleLayout(destination)
+    for directory in layout.required_directories:
+        directory.mkdir(parents=True, exist_ok=True)
+    result = ResultsVerifier().verify("c12", results_root=tmp_path / "results")
+    assert not result.valid
+    assert "missing bundle manifest.json" in result.problems
+    assert "missing bundle checksums.json" in result.problems
+
+
+def test_results_verifier_detects_missing_bundle(tmp_path: Path) -> None:
+    result = ResultsVerifier().verify(
+        "missing",
+        results_root=tmp_path / "results",
+    )
+    assert not result.valid
+    assert any("does not exist" in problem for problem in result.problems)
 
 
 def test_copy_statistics_raises_when_target_escapes_statistics_directory(
@@ -170,8 +226,6 @@ def test_results_builder_skips_malformed_metric_record_lines(tmp_path: Path) -> 
         calibration_seed=1000,
         include_run_config=False,
     )
-    from fedcrg.paths import RunLayout
-
     valid_line = json.dumps(
         {
             "run_id": "run-1",
@@ -226,14 +280,3 @@ def test_copy_tables_and_figures_handles_missing_figures_directory(tmp_path: Pat
     )
     assert (destination / "tables" / "table_1.csv").is_file()
     assert list((destination / "figures").iterdir()) == []
-
-
-def test_results_verifier_detects_missing_manifest_and_checksums(tmp_path: Path) -> None:
-    destination = tmp_path / "results" / "c12"
-    layout = ResultsBundleLayout(destination)
-    for directory in layout.required_directories:
-        directory.mkdir(parents=True, exist_ok=True)
-    result = ResultsVerifier().verify("c12", results_root=tmp_path / "results")
-    assert not result.valid
-    assert "missing bundle manifest.json" in result.problems
-    assert "missing bundle checksums.json" in result.problems

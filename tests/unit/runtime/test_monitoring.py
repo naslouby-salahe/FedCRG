@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from fedcrg.runtime import (
     CudaTelemetry,
     ResourceMonitor,
@@ -63,8 +65,5 @@ def test_stream_bounds_sample_count() -> None:
 
 def test_stream_rejects_nonpositive_interval() -> None:
     monitor = ResourceMonitor()
-    try:
+    with pytest.raises(ValueError):
         next(monitor.stream(interval_seconds=0.0))
-    except ValueError:
-        return
-    raise AssertionError("expected ValueError for nonpositive interval")

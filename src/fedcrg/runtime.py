@@ -260,4 +260,4 @@ def render_cache_status(
     console = Console()
     outcome = CacheOutcome.HIT if hit else CacheOutcome.MISS
     suffix = f" ({detail})" if detail else ""
-    console.print(f"[{outcome}] {cache_kind} {target}{suffix}")
+    console.print(f"[{outcome}] {cache_kind} {target}{suffix}", markup=False)

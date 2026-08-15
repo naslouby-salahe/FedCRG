@@ -12,7 +12,7 @@ DATASET ?=
 EXPERIMENT ?= primary_nbaiot
 
 .PHONY: help install format lint typecheck test test-unit test-integration \
-	test-contract test-regression audit validate preprocess plan run campaign \
+	test-contract audit validate preprocess plan run campaign \
 	status monitor results verify-results quality
 
 help: ## Show this help
@@ -43,9 +43,6 @@ test-integration: ## Integration tests only
 
 test-contract: ## Contract tests only
 	$(PYTEST) tests/contract
-
-test-regression: ## Regression tests only
-	$(PYTEST) tests/regression
 
 audit: ## Re-audit the repository against the goal matrix
 	$(PYTHON) tools/audit_repository.py

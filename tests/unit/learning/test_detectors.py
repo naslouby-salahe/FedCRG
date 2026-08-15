@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import torch
 
-from fedcrg.config import AutoencoderConfig
-from fedcrg.learning.detectors import Autoencoder
+from fedcrg.config import AutoencoderConfig, DeepSvddConfig
+from fedcrg.learning.detectors import Autoencoder, DeepSvdd, create_detector
 
 
 def test_locked_autoencoder_parameter_counts_and_zero_biases() -> None:
@@ -25,3 +25,20 @@ def test_autoencoder_anomaly_scores_have_reconstruction_shape() -> None:
     model = Autoencoder(4, AutoencoderConfig(hidden_dims=(2, 1), xavier_tanh_gain=5.0 / 3.0))
     scores = model.anomaly_score(torch.randn(6, 4))
     assert scores.shape == (6,)
+
+
+def test_deep_svdd_center_and_score() -> None:
+    model = DeepSvdd(2, DeepSvddConfig(hidden_dims=(3,), embedding_dim=2))
+    batch = torch.randn(4, 2)
+    model.initialize_center([batch])
+    assert model.anomaly_score(batch).shape == (4,)
+
+
+def test_create_detector_builds_both_detectors() -> None:
+    assert isinstance(
+        create_detector(2, AutoencoderConfig(hidden_dims=(1,), xavier_tanh_gain=5.0 / 3.0)),
+        Autoencoder,
+    )
+    assert isinstance(
+        create_detector(2, DeepSvddConfig(hidden_dims=(2,), embedding_dim=1)), DeepSvdd
+    )

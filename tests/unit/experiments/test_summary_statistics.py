@@ -120,6 +120,22 @@ def test_summarize_state_stability_all_same_state_has_no_transitions() -> None:
     assert set(frequencies) == set(DecisionState)
 
 
+def test_stability_summaries_report_explicit_values() -> None:
+    threshold = summarize_threshold_stability((1.0, 2.0, 3.0), (25, 75))
+    assert threshold.count == 3
+    assert threshold.iqr == 1.0
+    states = summarize_state_stability(
+        (
+            DecisionState.REFERENCE_RETAINED,
+            DecisionState.REFERENCE_RETAINED,
+            DecisionState.PERSONALIZED,
+            DecisionState.PERSONALIZED,
+        )
+    )
+    assert states.transition_count == 1
+    assert states.transition_frequency == 1 / 3
+
+
 def _record(
     *,
     model_seed: int,

@@ -105,9 +105,3 @@ def test_diad_eligibility_rejects_insufficient_attack_development_capacity() -> 
     assert record.status is EligibilityStatus.EXCLUDED
     assert record.primary_code is FailureCode.ATTACK_DEV_CAPACITY_LT_500
     assert record.attack_development_capacity == 0
-
-
-def test_non_diad_clients_are_always_eligible() -> None:
-    client = _diad_client()
-    record = ClientEligibilityEvaluator().evaluate(client, _diad_config())
-    assert record.status is EligibilityStatus.ELIGIBLE

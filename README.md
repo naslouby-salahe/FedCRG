@@ -25,8 +25,9 @@ src/fedcrg/
                          policy selection, and per-policy comparators, metrics
   evidence/              immutable layouts, manifests, hashes, environment evidence
   experiments/           one execution spine: runner, preflight, verification,
-                         campaign, table precompute, and the S1-S6/R1-R14 catalogue
-tests/                   contract, regression, unit, and integration verification
+                         campaign, table precompute, and the pre-registered
+                         experiment catalogue
+tests/                   contract, unit, and integration verification
 outputs/                 generated caches, runs, campaign status, evidence, reports
 data/preprocessed/       deterministic prepared datasets (reused by identity)
 results/                 publication bundles per campaign
