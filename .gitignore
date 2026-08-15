@@ -33,3 +33,6 @@ outputs/*
 !outputs/reports/
 !outputs/reports/**/
 !outputs/reports/**/.gitkeep
+
+# Contract tests: kept local-only (not part of the shared repository)
+/tests/contract/
