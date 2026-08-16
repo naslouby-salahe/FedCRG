@@ -44,6 +44,8 @@ class LayoutDirectory(StrEnum):
     CONFIG = "config"
     RAW_STAGING = "_raw"
     EXPERIMENTS = "experiments"
+    JSON = "json"
+    CSV = "csv"
 
 
 class LayoutArtifact(StrEnum):
@@ -76,6 +78,19 @@ class LayoutArtifact(StrEnum):
     TELEMETRY = "telemetry.jsonl"
     BENCHMARK = "benchmark.json"
     SCORE_CACHE = "score_cache.parquet"
+    CAMPAIGN_STATUS = "status.json"
+    RUN_SUMMARY = "summary.md"
+    EXPERIMENT_RESULT_JSON = "results.json"
+    EXPERIMENT_CELLS_CSV = "cells.csv"
+    EXPERIMENT_POLICY_CSV = "policy_metrics.csv"
+    EXPERIMENT_BENCHMARK_CSV = "benchmark.csv"
+    EXPERIMENT_REPORT = "report.md"
+    EXPERIMENT_COVERAGE_FIGURE = "coverage.png"
+    EXPERIMENT_POWER_FIGURE = "power.png"
+    EXPERIMENT_OPERATING_POINTS_FIGURE = "operating_points.png"
+    EXPERIMENT_RELIABILITY_FIGURE = "reliability_utility.png"
+    EXPERIMENT_REPLICATION_FIGURE = "external_replication.png"
+    EMPIRICAL_RESULTS = "empirical_results.json"
 
 
 class ConfigArtifact(StrEnum):
@@ -418,8 +433,13 @@ class ResultsBundleLayout:
         return self.provenance / LayoutArtifact.PROVENANCE
 
     @property
+    def json_dir(self) -> Path:
+        return self.root / LayoutDirectory.JSON
+
+    @property
     def required_directories(self) -> tuple[Path, ...]:
         return (
+            self.json_dir,
             self.metrics,
             self.statistics,
             self.tables,
@@ -445,37 +465,61 @@ class ExperimentResultsBundleLayout:
         return self.root / LayoutArtifact.CHECKSUMS
 
     @property
-    def resolved_configs(self) -> Path:
-        return self.root / LayoutDirectory.RESOLVED_CONFIGS
+    def json_dir(self) -> Path:
+        return self.root / LayoutDirectory.JSON
 
     @property
-    def metrics(self) -> Path:
-        return self.root / LayoutDirectory.METRICS
+    def csv_dir(self) -> Path:
+        return self.root / LayoutDirectory.CSV
 
     @property
-    def metric_records(self) -> Path:
-        return self.metrics / LayoutArtifact.METRIC_RECORDS_BUNDLE
-
-    @property
-    def runs(self) -> Path:
-        return self.root / LayoutDirectory.RUNS
+    def figures(self) -> Path:
+        return self.root / LayoutDirectory.FIGURES
 
     @property
     def reports(self) -> Path:
         return self.root / LayoutDirectory.REPORTS
 
     @property
+    def provenance(self) -> Path:
+        return self.root / LayoutDirectory.PROVENANCE
+
+    @property
+    def resolved_configs(self) -> Path:
+        return self.provenance / LayoutDirectory.RESOLVED_CONFIGS
+
+    @property
+    def metrics(self) -> Path:
+        return self.json_dir
+
+    @property
+    def metric_records(self) -> Path:
+        return self.json_dir / LayoutArtifact.METRIC_RECORDS_BUNDLE
+
+    @property
     def analysis(self) -> Path:
-        return self.root / LayoutDirectory.ANALYSIS
+        return self.json_dir
+
+    @property
+    def result_json(self) -> Path:
+        return self.json_dir / LayoutArtifact.EXPERIMENT_RESULT_JSON
+
+    @property
+    def provenance_json(self) -> Path:
+        return self.provenance / LayoutArtifact.PROVENANCE
+
+    @property
+    def runs(self) -> Path:
+        return self.root / LayoutDirectory.RUNS
 
     @property
     def required_directories(self) -> tuple[Path, ...]:
         return (
-            self.resolved_configs,
-            self.metrics,
-            self.runs,
+            self.json_dir,
+            self.csv_dir,
+            self.figures,
             self.reports,
-            self.analysis,
+            self.provenance,
         )
 
 
@@ -485,7 +529,7 @@ def experiment_results_root(results_root: Path, experiment_id: ExperimentId) -> 
 
 def campaign_status_path(campaigns_root: Path) -> Path:
     """Path where the single campaign's status file is stored."""
-    return campaigns_root / "status.json"
+    return campaigns_root / LayoutArtifact.CAMPAIGN_STATUS
 
 
 class OutputsLayout:
@@ -529,6 +573,23 @@ class OutputsLayout:
     @property
     def reports(self) -> Path:
         return self.outputs_root / LayoutDirectory.REPORTS
+
+    @property
+    def figures(self) -> Path:
+        return self.outputs_root / LayoutDirectory.FIGURES
+
+    @property
+    def tables(self) -> Path:
+        return self.outputs_root / LayoutDirectory.TABLES
+
+    def experiment_reports(self, experiment_id: ExperimentId) -> Path:
+        return self.reports / str(experiment_id)
+
+    def experiment_figures(self, experiment_id: ExperimentId) -> Path:
+        return self.figures / str(experiment_id)
+
+    def experiment_tables(self, experiment_id: ExperimentId) -> Path:
+        return self.tables / str(experiment_id)
 
     @property
     def publication(self) -> PublicationLayout:

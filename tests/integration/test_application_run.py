@@ -25,16 +25,34 @@ def _config(root: Path) -> ExperimentConfig:
     return primary_experiment_config(root, ExperimentId.READINESS_SAMPLE_SIZE)
 
 
+def _write_required_run_files(layout: RunLayout) -> None:
+    for path in (
+        layout.dataset_manifest,
+        layout.preprocessing_evidence,
+        layout.training_manifest,
+        layout.model_reference,
+        layout.score_manifest,
+        layout.threshold_records,
+        layout.metric_records,
+    ):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{}\n", encoding="utf-8")
+
+
 def test_run_application_creates_immutable_complete_run(tmp_path: Path) -> None:
     """A successful run writes a complete manifest and refuses further mutation."""
     config = _config(tmp_path)
+
+    def write_files(plan: ExperimentPlan, run_layout: RunLayout) -> None:
+        _write_required_run_files(run_layout)
+
     result, layout = RunExperiment().execute(
         ExperimentId.READINESS_SAMPLE_SIZE,
         config,
         11,
         1000,
         PolicyId.FEDCRG,
-        lambda plan, run_layout: None,
+        write_files,
         ROOT,
     )
     assert result is None
@@ -74,10 +92,10 @@ def test_run_application_records_failed_status(tmp_path: Path) -> None:
     assert not (runs[0] / "reports" / "summary.md").exists()
 
 
-def test_run_report_failure_keeps_run_complete(
+def test_run_report_failure_marks_run_failed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A summary-report failure never flips a completed run back to FAILED."""
+    """A required run-report failure cannot leave the run COMPLETE."""
     config = _config(tmp_path)
     service = RunExperiment()
 
@@ -85,14 +103,16 @@ def test_run_report_failure_keeps_run_complete(
         raise RuntimeError("report boom")
 
     monkeypatch.setattr("fedcrg.experiments.runner.build_run_report", boom)
-    _, layout = service.execute(
-        ExperimentId.READINESS_SAMPLE_SIZE,
-        config,
-        11,
-        1000,
-        PolicyId.FEDCRG,
-        lambda plan, run_layout: None,
-        ROOT,
-    )
-    assert RunManifestStore().load(layout.manifest).status is ExperimentStatus.COMPLETE
-    assert not (layout.root / "reports" / "summary.md").exists()
+    with pytest.raises(RuntimeError, match="report boom"):
+        service.execute(
+            ExperimentId.READINESS_SAMPLE_SIZE,
+            config,
+            11,
+            1000,
+            PolicyId.FEDCRG,
+            lambda plan, run_layout: _write_required_run_files(run_layout),
+            ROOT,
+        )
+    runs = list((tmp_path / "runs").iterdir())
+    assert RunManifestStore().load(runs[0] / "manifest.json").status is ExperimentStatus.FAILED
+    assert not (runs[0] / "reports" / "summary.md").exists()

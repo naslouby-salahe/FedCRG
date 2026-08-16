@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from fedcrg.config import ExperimentConfig
-from fedcrg.evidence.models import RunConfig, RunManifest
-from fedcrg.evidence.store import atomic_write_json
+from fedcrg.evidence.models import MetricRecord, RunConfig, RunManifest
+from fedcrg.evidence.store import atomic_write_json, write_jsonl
 from fedcrg.paths import OutputsLayout
 from fedcrg.thresholding.metrics import FederationMetrics
 from fedcrg.types import (
@@ -29,7 +29,7 @@ def write_completed_run(
     run_id: str,
     experiment_id: ExperimentId,
     policy_id: PolicyId,
-    config: ExperimentConfig,
+    config: ExperimentConfig | None,
     model_seed: ModelSeed,
     calibration_seed: CalibrationSeed,
     mebe: float = 0.02,
@@ -52,7 +52,7 @@ def write_completed_run(
         run_id=run_id,
         experiment_id=experiment_id,
         policy_id=policy_id,
-        config_hash=_HASH_A,
+        config_hash=config.config_hash if config is not None else _HASH_A,
         model_seed=model_seed,
         calibration_seed=calibration_seed,
         status=ExperimentStatus.COMPLETE,
@@ -66,7 +66,7 @@ def write_completed_run(
             parameters=config,
             model_seed=model_seed,
             calibration_seed=calibration_seed,
-            config_hash=_HASH_A,
+            config_hash=config.config_hash if config is not None else _HASH_A,
             data_spec_hash=_HASH_B,
             training_spec_hash=_HASH_C,
             git_commit="deadbeef",
@@ -93,6 +93,31 @@ def write_completed_run(
             mean_f1=mean_f1,
         )
         atomic_write_json(layout.federation_metrics, federation.model_dump(mode="json"))
+        write_jsonl(
+            layout.metric_records,
+            (
+                MetricRecord(
+                    run_id=run_id,
+                    policy_id=policy_id,
+                    client_id="nb01",
+                    benign_n=10,
+                    attack_n=5,
+                    fp=1,
+                    tn=9,
+                    tp=4,
+                    fn=1,
+                    fpr=0.1,
+                    tpr=0.8,
+                    precision=0.8,
+                    f1=0.8,
+                    balanced_accuracy=0.85,
+                    auroc=0.9,
+                    auprc=0.85,
+                    band_error=0.01,
+                    attack_balanced_tpr=0.8,
+                ),
+            ),
+        )
     return layout.root
 
 

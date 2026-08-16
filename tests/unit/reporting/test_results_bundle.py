@@ -18,11 +18,18 @@ from fedcrg.reporting import (
     build_results_bundle,
     verify_results_bundle,
 )
-from fedcrg.types import DataIntegrityError, ExperimentId, PolicyId
+from fedcrg.types import DataIntegrityError, ExperimentId, PolicyId, ResultsGenerationStatus
 
+from fedcrg.experiments.analyses import MismatchPowerResult, SyntheticExperimentEnvelope
+from fedcrg.reporting import ExperimentPublisher
 from tests._fixtures import primary_experiment_config
 from tests.unit.reporting._results_fixtures import write_fake_evidence
 from tests.unit.reporting._run_fixtures import write_completed_run
+
+
+def _publish(experiment_id: ExperimentId, outputs_root: Path) -> None:
+    config = primary_experiment_config(outputs_root, experiment_id)
+    ExperimentPublisher().publish(experiment_id, outputs_root, config)
 
 
 def test_results_builder_creates_bundle_and_marks_partial_evidence_incomplete(
@@ -50,13 +57,15 @@ def test_results_builder_creates_bundle_and_marks_partial_evidence_incomplete(
     assert manifest["file_count"] == len(checksums)
 
 
-def test_results_builder_refuses_to_overwrite(tmp_path: Path) -> None:
+def test_results_builder_is_idempotent(tmp_path: Path) -> None:
     outputs_root = tmp_path / "outputs"
     write_fake_evidence(outputs_root)
     builder = ResultsBuilder()
-    builder.build(outputs_root=outputs_root, results_root=tmp_path / "results")
-    with pytest.raises(FileExistsError):
-        builder.build(outputs_root=outputs_root, results_root=tmp_path / "results")
+    first = builder.build_with_status(outputs_root=outputs_root, results_root=tmp_path / "results")
+    second = builder.build_with_status(outputs_root=outputs_root, results_root=tmp_path / "results")
+    assert first.status is ResultsGenerationStatus.BUILT
+    assert second.status is ResultsGenerationStatus.ALREADY_GENERATED
+    assert first.path == second.path
 
 
 def test_results_builder_with_empty_outputs_root(tmp_path: Path) -> None:
@@ -277,6 +286,7 @@ def test_experiment_bundle_contains_run_artifacts_and_round_trips(tmp_path: Path
         model_seed=11,
         calibration_seed=1000,
     )
+    _publish(ExperimentId.PRIMARY_NBAIOT, outputs_root)
     destination = ResultsBuilder().build(
         outputs_root=outputs_root,
         results_root=results_root,
@@ -286,8 +296,8 @@ def test_experiment_bundle_contains_run_artifacts_and_round_trips(tmp_path: Path
     assert (destination / "manifest.json").is_file()
     assert (destination / "checksums.json").is_file()
     assert (destination / "runs" / "run-1" / "manifest.json").is_file()
-    assert (destination / "metrics" / "metric_records.json").is_file()
-    assert (destination / "resolved_configs" / "primary_nbaiot.json").is_file()
+    assert (destination / "json" / "metric_records.json").is_file()
+    assert (destination / "provenance" / "resolved_configs" / "primary_nbaiot.json").is_file()
 
     manifest = json.loads((destination / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["experiment_id"] == "primary_nbaiot"
@@ -296,7 +306,7 @@ def test_experiment_bundle_contains_run_artifacts_and_round_trips(tmp_path: Path
     assert verification.problems == ()
 
 
-def test_experiment_bundle_refuses_to_overwrite(tmp_path: Path) -> None:
+def test_experiment_bundle_is_idempotent(tmp_path: Path) -> None:
     outputs_root = tmp_path / "outputs"
     config = primary_experiment_config(outputs_root)
     write_completed_run(
@@ -308,29 +318,40 @@ def test_experiment_bundle_refuses_to_overwrite(tmp_path: Path) -> None:
         model_seed=11,
         calibration_seed=1000,
     )
+    _publish(ExperimentId.PRIMARY_NBAIOT, outputs_root)
     builder = ResultsBuilder()
-    builder.build(
+    first = builder.build_with_status(
         outputs_root=outputs_root,
         results_root=tmp_path / "results",
         experiment_id=ExperimentId.PRIMARY_NBAIOT,
     )
-    with pytest.raises(FileExistsError):
-        builder.build(
-            outputs_root=outputs_root,
-            results_root=tmp_path / "results",
-            experiment_id=ExperimentId.PRIMARY_NBAIOT,
-        )
+    second = builder.build_with_status(
+        outputs_root=outputs_root,
+        results_root=tmp_path / "results",
+        experiment_id=ExperimentId.PRIMARY_NBAIOT,
+    )
+    assert first.status is ResultsGenerationStatus.BUILT
+    assert second.status is ResultsGenerationStatus.ALREADY_GENERATED
 
 
 def test_experiment_bundle_for_synthetic_copies_analysis(tmp_path: Path) -> None:
     outputs_root = tmp_path / "outputs"
     analysis = OutputsLayout(outputs_root).analysis_result(ExperimentId.MISMATCH_POWER)
     analysis.parent.mkdir(parents=True)
-    analysis.write_text('{"power": 0.8}\n', encoding="utf-8")
+    envelope = SyntheticExperimentEnvelope(
+        experiment_id=ExperimentId.MISMATCH_POWER,
+        expected_monte_carlo_trials=0,
+        expected_exact_cells=1,
+        actual_monte_carlo_trials=0,
+        actual_cells=1,
+        cells=(MismatchPowerResult(sample_count=736, true_fpr=0.02, declaration_probability=0.8),),
+    )
+    analysis.write_text(envelope.model_dump_json(), encoding="utf-8")
+    _publish(ExperimentId.MISMATCH_POWER, outputs_root)
     destination = build_experiment_results_bundle(
         ExperimentId.MISMATCH_POWER, outputs_root, tmp_path / "results"
     )
-    assert (destination / "analysis" / "mismatch_power.json").is_file()
+    assert (destination / "json" / "results.json").is_file()
     manifest = json.loads((destination / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["experiment_id"] == "mismatch_power"
     assert manifest["complete"] is True
@@ -356,6 +377,7 @@ def test_campaign_verify_covers_experiment_bundles(tmp_path: Path) -> None:
         # repository report withholds contrasts instead of requiring the full grid.
         include_run_config=False,
     )
+    _publish(ExperimentId.PRIMARY_NBAIOT, outputs_root)
     build_experiment_results_bundle(ExperimentId.PRIMARY_NBAIOT, outputs_root, results_root)
     build_results_bundle(outputs_root, results_root)
     assert verify_results_bundle(results_root).valid
@@ -385,6 +407,7 @@ def test_campaign_checksums_exclude_experiment_bundles(tmp_path: Path) -> None:
         calibration_seed=1000,
         include_run_config=False,
     )
+    _publish(ExperimentId.PRIMARY_NBAIOT, outputs_root)
     build_experiment_results_bundle(ExperimentId.PRIMARY_NBAIOT, outputs_root, results_root)
     build_results_bundle(outputs_root, results_root)
     checksums = json.loads((results_root / "checksums.json").read_text(encoding="utf-8"))

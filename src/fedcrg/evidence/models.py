@@ -310,6 +310,43 @@ class ChecksumRecord(BaseModel):
     sha256: Sha256
 
 
+class EmpiricalPolicyResult(BaseModel):
+    """One completed policy cell's federation-level metrics."""
+
+    model_config = Frozen
+
+    run_id: RunId
+    policy_id: PolicyId
+    model_seed: ModelSeed
+    calibration_seed: CalibrationSeed
+    config_hash: Sha256
+    mebe: Fraction
+    high_excess: Fraction
+    band_violation_rate: Fraction
+    attack_balanced_macro_tpr: Tpr | None
+
+
+class EmpiricalExperimentResult(BaseModel):
+    """Machine-readable result payload for one empirical experiment."""
+
+    model_config = Frozen
+
+    experiment_id: ExperimentId
+    config_hash: Sha256
+    records: tuple[EmpiricalPolicyResult, ...]
+
+
+class ExperimentProvenance(BaseModel):
+    """Config and source-artifact identity recorded in an experiment result bundle."""
+
+    model_config = Frozen
+
+    experiment_id: ExperimentId
+    config_hash: Sha256
+    data_spec_hash: Sha256
+    source_digests: tuple[ChecksumRecord, ...]
+
+
 class CacheReference(BaseModel):
     """Content hash of a frozen cache artifact (e.g. a trained model or score cache), recorded so later reads can detect drift."""
 

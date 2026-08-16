@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from fedcrg.config import ExperimentConfig, ExperimentSpec
 from fedcrg.evidence.models import (
@@ -278,15 +278,23 @@ class ArtifactVerifier:
 
     def required_files(self, layout: RunLayout, definition: ExperimentSpec) -> tuple[Path, ...]:
         """List the artifact paths a run of this kind must produce."""
+        from fedcrg.evidence.contracts import experiment_contract
+
         required = [
             layout.run_config,
             layout.resolved_config,
             layout.environment,
             layout.manifest,
         ]
-        for artifact in definition.required_evidence:
+        contract = experiment_contract(definition.id)
+        artifacts = contract.run_artifacts or definition.required_evidence
+        for artifact in artifacts:
             if path := self._path_for(layout, artifact):
                 required.append(path)
+        if ArtifactType.REPORT in artifacts:
+            from fedcrg.paths import LayoutArtifact
+
+            required.append(layout.reports / LayoutArtifact.RUN_SUMMARY)
         return tuple(required)
 
     def record(self, layout: RunLayout, definition: ExperimentSpec) -> VerificationResult:
@@ -297,15 +305,17 @@ class ArtifactVerifier:
 
         for path in self.required_files(layout, definition):
             relative = path.relative_to(layout.root).as_posix()
-            if not path.is_file():
+            if not path.is_file() or path.stat().st_size == 0:
                 missing.append(relative)
                 continue
 
             digest = sha256_file(path)
             hashes.append(FileHashRecord(relative, digest))
 
-            if (expected := self._expected_hash(layout, relative)) and digest != expected:
-                mismatched.append(relative)
+        for pointer in (layout.model_reference, layout.score_reference):
+            mismatch = self._cache_pointer_mismatch(layout, pointer)
+            if mismatch is not None:
+                mismatched.append(mismatch)
 
         if layout.verification.is_dir():
             atomic_write_json(
@@ -326,21 +336,22 @@ class ArtifactVerifier:
         )
 
     @staticmethod
-    def _expected_hash(layout: RunLayout, relative: Identifier) -> Sha256 | None:
-        """Look up the frozen hash for the model or score cache; other artifact types have no reference to compare against."""
-        reference = None
-        if relative == layout.model_reference.relative_to(layout.root).as_posix():
-            reference = layout.model_reference
-        elif relative == layout.score_reference.relative_to(layout.root).as_posix():
-            reference = layout.score_reference
-
-        if reference is None or not reference.is_file():
+    def _cache_pointer_mismatch(layout: RunLayout, pointer: Path) -> PathString | None:
+        """Compare a cache pointer to its target file. Unreadable pointers are ignored."""
+        if not pointer.is_file():
             return None
-
         try:
-            return CacheReference.model_validate_json(reference.read_text(encoding="utf-8")).sha256
-        except ValueError:
+            reference = CacheReference.model_validate_json(pointer.read_text(encoding="utf-8"))
+        except (OSError, ValueError, ValidationError):
             return None
+        outputs_root = layout.root.parent.parent
+        target = Path(reference.relative_path)
+        if not target.is_absolute():
+            target = outputs_root / reference.relative_path
+        relative = pointer.relative_to(layout.root).as_posix()
+        if not target.is_file() or sha256_file(target) != reference.sha256:
+            return relative
+        return None
 
 
 def capture_environment(repository_root: Path) -> GitEnvironment:

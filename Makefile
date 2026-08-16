@@ -143,7 +143,7 @@ report: ## Build the repository hygiene report and publication manifest
 	$(PYTHON) -m fedcrg.cli report
 
 results: ## Build the campaign results bundle (per-experiment bundles are auto-built by run/campaign)
-	$(PYTHON) -m fedcrg.cli results build
+	$(PYTHON) -m fedcrg.cli results
 
 verify-results: ## Verify the campaign results bundle and every experiment bundle
 	$(PYTHON) -m fedcrg.cli results verify

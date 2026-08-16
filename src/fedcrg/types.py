@@ -524,6 +524,63 @@ class ExperimentStatus(StrEnum):
     INVALID = "invalid"
 
 
+class CompletionState(StrEnum):
+    NOT_STARTED = "not_started"
+    RUNNING = "running"
+    EXECUTION_INCOMPLETE = "execution_incomplete"
+    EVIDENCE_INCOMPLETE = "evidence_incomplete"
+    FAILED = "failed"
+    BLOCKED = "blocked"
+    INVALID = "invalid"
+    STALE = "stale"
+    ANALYSIS_COMPLETE = "analysis_complete"
+    FULLY_PASSED = "fully_passed"
+
+
+class ExecutionOutcome(StrEnum):
+    ALREADY_PASSED = "already_passed"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class ResultsGenerationStatus(StrEnum):
+    ALREADY_GENERATED = "already_generated"
+    BUILT = "built"
+    REBUILT = "rebuilt"
+
+
+class ExperimentApplicability(StrEnum):
+    REQUIRED = "required"
+    OPTIONAL = "optional"
+    INAPPLICABLE = "inapplicable"
+
+
+class CacheRole(StrEnum):
+    NONE = "none"
+    OWNER = "owner"
+    CONSUMER = "consumer"
+
+
+class SharedCacheKind(StrEnum):
+    NONE = "none"
+    NBAIOT_AUTOENCODER = "nbaiot_autoencoder"
+    NBAIOT_DEEP_SVDD = "nbaiot_deep_svdd"
+    DIAD_AUTOENCODER = "diad_autoencoder"
+
+
+class JsonResultKind(StrEnum):
+    SYNTHETIC_ENVELOPE = "synthetic_envelope"
+    BENCHMARK_REPORT = "benchmark_report"
+    EMPIRICAL_RESULTS = "empirical_results"
+
+
+class ResultFormat(StrEnum):
+    JSON = "json"
+    CSV = "csv"
+    FIGURE = "figure"
+    REPORT = "report"
+
+
 class ArtifactType(StrEnum):
     RESOLVED_CONFIG = "resolved_config"
     DATASET_MANIFEST = "dataset_manifest"
@@ -539,6 +596,9 @@ class ArtifactType(StrEnum):
     FIGURE = "figure"
     REPORT = "report"
     VERIFICATION = "verification"
+    ANALYSIS_RESULT = "analysis_result"
+    JSON_RESULT = "json_result"
+    RESULTS_BUNDLE = "results_bundle"
 
 
 class SupervisedClassLabel(IntEnum):

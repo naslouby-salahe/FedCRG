@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from fedcrg.config import ExperimentConfig, Study
+from fedcrg.experiments.execution import ExperimentRunResult
 from fedcrg.experiments.runner import (
     CampaignExecutor,
     CampaignStatus,
@@ -16,7 +17,14 @@ from fedcrg.experiments.runner import (
     WorkloadExecution,
     CampaignOutcomeRow,
 )
-from fedcrg.types import CalibrationSeed, CampaignStage, ExperimentId, ExperimentStatus
+from fedcrg.types import (
+    CalibrationSeed,
+    CampaignStage,
+    CompletionState,
+    ExecutionOutcome,
+    ExperimentId,
+    ExperimentStatus,
+)
 
 
 def _status() -> CampaignStatus:
@@ -68,6 +76,27 @@ class _FailingRunner(RunAllExperiments):
         return WorkloadExecution(experiment_id=experiment_id, models=(), run_directories=())
 
 
+class _ScriptedExecutor:
+    def execute(
+        self, experiment_id: ExperimentId, *, overwrite: bool = False
+    ) -> ExperimentRunResult:
+        if experiment_id is ExperimentId.PRIMARY_NBAIOT:
+            raise RuntimeError("boom")
+        return ExperimentRunResult(
+            experiment_id=experiment_id,
+            outcome=ExecutionOutcome.COMPLETED,
+            state=CompletionState.FULLY_PASSED,
+            json_paths=(),
+            csv_paths=(),
+            figure_paths=(),
+            report_paths=(),
+            bundle_path="results/experiments/readiness_sample_size",
+            output_root="outputs",
+            model_count=0,
+            run_directory_count=0,
+        )
+
+
 def test_campaign_runner_records_failures_and_continues(tmp_path: Path) -> None:
     store = CampaignStatusStore(campaigns_root=tmp_path)
     items = (
@@ -82,9 +111,13 @@ def test_campaign_runner_records_failures_and_continues(tmp_path: Path) -> None:
             prepared_root=tmp_path / "preprocessed",
         ),
     )
-    status = CampaignExecutor(study=Study.load(), status_store=store, runner=_FailingRunner()).run(
-        items, outputs_root=tmp_path / "outputs"
-    )
+    status = CampaignExecutor(
+        study=Study.load(),
+        status_store=store,
+        runner=_FailingRunner(),
+        executor=_ScriptedExecutor(),
+    ).run(items, outputs_root=tmp_path / "outputs")
     assert status.failed_experiments == (ExperimentId.PRIMARY_NBAIOT,)
-    assert status.completed_experiments == (ExperimentId.READINESS_SAMPLE_SIZE,)
+    assert status.completed_experiments == ()
+    assert status.experiments[-1].status is ExperimentStatus.BLOCKED
     assert status.current_stage is CampaignStage.FAILED

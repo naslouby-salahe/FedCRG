@@ -9,6 +9,7 @@ import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from graphlib import TopologicalSorter
 from pathlib import Path
 
@@ -111,14 +112,15 @@ from fedcrg.thresholding.policies import (
     oracle_choice,
 )
 from fedcrg.types import (
+    CompletionState,
     CalibrationAssignmentMode,
     CalibrationSeed,
     CampaignStage,
     ClientId,
     DataRole,
+    Description,
     ExperimentId,
     ExperimentStatus,
-    ExperimentType,
     FailureCode,
     FeatureName,
     Identifier,
@@ -133,21 +135,14 @@ from fedcrg.types import (
     Timestamp,
     Duration,
 )
-from fedcrg.experiments.analyses import (
-    ProtocolTablePrecomputer,
-    RunBenchmark,
-    RunSyntheticExperiments,
-)
-from fedcrg.reporting import (
-    build_results_bundle,
-    build_run_report,
-    ensure_experiment_results_bundle,
-)
+from fedcrg.reporting import build_run_report
+
+if TYPE_CHECKING:
+    from fedcrg.experiments.execution import ExperimentExecutor
 
 Frozen = ConfigDict(frozen=True)
 _LOGGER = get_logger(__name__)
 
-_ANALYSIS_CATEGORIES = frozenset({ExperimentType.SYNTHETIC, ExperimentType.BENCHMARK})
 _METADATA_COLUMNS = frozenset(PreparedColumn)
 _BASE_SCORE_ROLES = (
     DataRole.TRAIN,
@@ -392,6 +387,7 @@ class RunExperiment:
         try:
             result = runner(plan, layout)
             self._transition(layout, plan, policy, ExperimentStatus.VERIFYING)
+            build_run_report(layout.root)
             verification = self.verifier.record(layout, plan.definition)
             if not verification.valid:
                 raise RuntimeError(
@@ -402,20 +398,7 @@ class RunExperiment:
             self._transition(layout, plan, policy, ExperimentStatus.FAILED)
             raise
         self._transition(layout, plan, policy, ExperimentStatus.COMPLETE)
-        self._write_run_report(layout)
         return result, layout
-
-    @staticmethod
-    def _write_run_report(layout: RunLayout) -> None:
-        """Write the run's Markdown summary; a report failure never invalidates a completed run."""
-        try:
-            build_run_report(layout.root)
-        except Exception as exc:
-            _LOGGER.warning(
-                "Run %s completed but its summary report could not be written: %s",
-                layout.root.name,
-                exc,
-            )
 
 
 def _oracle_candidate_missing(client_id: ClientId) -> Threshold:
@@ -1432,6 +1415,13 @@ class FederationCellMaterializer:
         run_dirs: list[PolicyRunDirectory] = []
 
         for policy in selected:
+            run_id = build_run_id(config, model_seed, calibration_seed, policy)
+            existing = OutputsLayout(config.outputs_root).run(run_id)
+            if existing.root.is_dir() and self._reusable_run(existing, experiment_id, config):
+                run_dirs.append(PolicyRunDirectory(policy, existing.root))
+                continue
+            if existing.root.exists():
+                shutil.rmtree(existing.root)
 
             def materialize_policy(
                 _plan: ExperimentPlan, run_layout: RunLayout, policy: PolicyId = policy
@@ -1456,6 +1446,24 @@ class FederationCellMaterializer:
             model_seed=model_seed,
             calibration_seed=calibration_seed,
             run_directories=tuple(run_dirs),
+        )
+
+    @staticmethod
+    def _reusable_run(
+        layout: RunLayout, experiment_id: ExperimentId, config: ExperimentConfig
+    ) -> bool:
+        if not layout.manifest.is_file():
+            return False
+        try:
+            manifest = RunManifest.model_validate_json(layout.manifest.read_text(encoding="utf-8"))
+        except Exception:
+            return False
+        return (
+            manifest.experiment_id is experiment_id
+            and manifest.status is ExperimentStatus.COMPLETE
+            and manifest.config_hash == config.config_hash
+            and layout.federation_metrics.is_file()
+            and layout.reports.joinpath(LayoutArtifact.RUN_SUMMARY).is_file()
         )
 
 
@@ -1573,7 +1581,7 @@ class CampaignOutcomeRow(BaseModel):
 
     experiment_id: ExperimentId
     status: ExperimentStatus
-    problem: Identifier | None = None
+    problem: Description | None = None
     finished_at: Timestamp | None = None
 
     @property
@@ -1668,10 +1676,14 @@ class CampaignExecutor:
         study: Study | None = None,
         status_store: CampaignStatusStore | None = None,
         runner: RunAllExperiments | None = None,
+        executor: ExperimentExecutor | None = None,
     ) -> None:
         self.study = study or Study.load()
-        self.status_store = status_store or CampaignStatusStore()
+        self.status_store = status_store or CampaignStatusStore(
+            outputs_root=self.study.paths.outputs_root
+        )
         self.runner = runner or RunAllExperiments()
+        self.executor = executor
 
     def run(
         self,
@@ -1680,36 +1692,86 @@ class CampaignExecutor:
         outputs_root: Path,
         results_root: Path | None = None,
     ) -> CampaignStatus:
-        """Resume from any previously recorded status, skipping completed experiments; unlike a single run, a failing experiment here is recorded and the campaign continues rather than raising."""
+        """Resume by verifying current evidence; a failing experiment is recorded and the campaign continues."""
         now = datetime.now(UTC).isoformat()
-        try:
-            status = self.status_store.load()
-        except FileNotFoundError:
-            status = CampaignStatus(created_at=now, updated_at=now)
-
-        completed: set[ExperimentId] = set(status.completed_experiments)
-        rows: list[CampaignOutcomeRow] = list(status.experiments)
+        rows: list[CampaignOutcomeRow] = []
         started = time.monotonic()
+        from fedcrg.evidence.completion import ExperimentEvidenceAssessor
+        from fedcrg.evidence.contracts import experiment_contract
+        from fedcrg.experiments.execution import ExperimentExecutor
+        from fedcrg.types import ExecutionOutcome
+
+        assessor = ExperimentEvidenceAssessor(self.study)
+        executor = self.executor or ExperimentExecutor(study=self.study, empirical=self.runner)
 
         for item in work_items:
-            if item.experiment_id in completed:
+            contract = experiment_contract(item.experiment_id)
+            if contract.inapplicable:
+                rows.append(_completed_row(item.experiment_id, now))
                 continue
-            spec = self.study.spec(item.experiment_id)
-            config = self.study.resolve(item.experiment_id)
+            assessment = assessor.assess(item.experiment_id)
+            if assessment.passed:
+                rows.append(_completed_row(item.experiment_id, now))
+                continue
+            if contract.optional and assessment.state is CompletionState.NOT_STARTED:
+                continue
+            blockers = DependencyResolver(self.study).blockers(
+                item.experiment_id,
+                {row.experiment_id: row.status for row in rows},
+            )
+            if blockers:
+                rows.append(
+                    _blocked_row(
+                        item.experiment_id,
+                        "blocked_by_" + "_".join(item.value for item in blockers),
+                        now,
+                    )
+                )
+                continue
             self._record_progress(item.experiment_id, rows, now, started)
-            rows.append(self._run_one(item, spec, config, outputs_root, results_root, now))
+            try:
+                result = executor.execute(item.experiment_id)
+                if result.outcome is ExecutionOutcome.FAILED:
+                    rows.append(_failed_row(item.experiment_id, "execution failed", now))
+                else:
+                    rows.append(_completed_row(item.experiment_id, now))
+            except Exception as exc:
+                rows.append(_failed_row(item.experiment_id, str(exc), now))
 
         results_path = (
             self._build_results(outputs_root, results_root) if results_root is not None else None
         )
+        required_failed = any(
+            row.failed and not experiment_contract(row.experiment_id).optional for row in rows
+        )
+        required_missing = any(
+            not experiment_contract(item.experiment_id).optional
+            and not experiment_contract(item.experiment_id).inapplicable
+            and item.experiment_id not in {row.experiment_id for row in rows if not row.failed}
+            for item in work_items
+        )
+        done = (
+            not required_failed
+            and not required_missing
+            and all(
+                assessor.assess(item.experiment_id).passed
+                or experiment_contract(item.experiment_id).optional
+                or experiment_contract(item.experiment_id).inapplicable
+                for item in work_items
+            )
+        )
+        if done and results_root is not None:
+            from fedcrg.reporting import ResultsVerifier
+
+            verification = ResultsVerifier().verify(results_root)
+            if not verification.valid:
+                done = False
 
         final_status = CampaignStatus(
             created_at=now,
             updated_at=datetime.now(UTC).isoformat(),
             current_experiment=None,
-            current_stage=CampaignStage.DONE
-            if not any(r.failed for r in rows)
-            else CampaignStage.FAILED,
+            current_stage=CampaignStage.DONE if done else CampaignStage.FAILED,
             experiments=tuple(rows),
             results_path=results_path,
             elapsed_seconds=time.monotonic() - started,
@@ -1735,38 +1797,14 @@ class CampaignExecutor:
         )
         self.status_store.save(status)
 
-    def _run_one(
-        self,
-        item: CampaignWorkItem,
-        spec: ExperimentSpec,
-        config: ExperimentConfig,
-        outputs_root: Path,
-        results_root: Path | None,
-        now: Timestamp,
-    ) -> CampaignOutcomeRow:
-        """Execute one experiment, recording COMPLETE or FAILED without aborting the campaign."""
-        try:
-            ProtocolTablePrecomputer().precompute(config, spec)
-            if spec.category in _ANALYSIS_CATEGORIES:
-                output = OutputsLayout(outputs_root).analysis_result(item.experiment_id)
-                if item.experiment_id is ExperimentId.COMPUTATIONAL_BENCHMARK:
-                    RunBenchmark(spec, config).run(output)
-                else:
-                    RunSyntheticExperiments().run(item.experiment_id, spec, config, output)
-            else:
-                self.runner.execute(item.experiment_id, config, item.prepared_root)
-            if results_root is not None:
-                ensure_experiment_results_bundle(item.experiment_id, outputs_root, results_root)
-            return _completed_row(item.experiment_id, now)
-        except Exception as exc:
-            return _failed_row(item.experiment_id, str(exc), now)
+    def _build_results(self, outputs_root: Path, results_root: Path) -> Identifier:
+        from fedcrg.reporting import ResultsBuilder
 
-    @staticmethod
-    def _build_results(outputs_root: Path, results_root: Path) -> Identifier:
-        destination = results_root
-        if destination.joinpath(LayoutArtifact.MANIFEST).is_file():
-            return destination.as_posix()
-        return build_results_bundle(outputs_root, results_root).as_posix()
+        return (
+            ResultsBuilder()
+            .build(outputs_root=outputs_root, results_root=results_root, study=self.study)
+            .as_posix()
+        )
 
 
 def _completed_row(experiment_id: ExperimentId, finished_at: Timestamp) -> CampaignOutcomeRow:
@@ -1776,11 +1814,22 @@ def _completed_row(experiment_id: ExperimentId, finished_at: Timestamp) -> Campa
 
 
 def _failed_row(
-    experiment_id: ExperimentId, problem: Identifier, finished_at: Timestamp
+    experiment_id: ExperimentId, problem: Description, finished_at: Timestamp
 ) -> CampaignOutcomeRow:
     return CampaignOutcomeRow(
         experiment_id=experiment_id,
         status=ExperimentStatus.FAILED,
-        problem=problem,
+        problem=problem[:512],
+        finished_at=finished_at,
+    )
+
+
+def _blocked_row(
+    experiment_id: ExperimentId, problem: Description, finished_at: Timestamp
+) -> CampaignOutcomeRow:
+    return CampaignOutcomeRow(
+        experiment_id=experiment_id,
+        status=ExperimentStatus.BLOCKED,
+        problem=problem[:512],
         finished_at=finished_at,
     )

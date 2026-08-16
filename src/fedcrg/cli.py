@@ -4,43 +4,34 @@ from __future__ import annotations
 
 import platform
 import shutil
-from pathlib import Path
 
 import click
 import numpy
 import pandas
 import scipy
 import torch
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict
 
 from fedcrg.config import Study, validate_experiment_config
 from fedcrg.data.preparation import PrepareData
-from fedcrg.evidence.models import RunConfig, RunManifest
 from fedcrg.hashing import sha256_file
-from fedcrg.experiments.analyses import (
-    ProtocolTablePrecomputer,
-    RunBenchmark,
-    RunSyntheticExperiments,
-)
+from fedcrg.evidence.completion import ExperimentEvidenceAssessor, ExperimentArtifactPurger
+from fedcrg.experiments.execution import ExperimentExecutor
 from fedcrg.experiments.runner import (
     CampaignExecutor,
     CampaignStatusStore,
     CampaignWorkItem,
-    RunAllExperiments,
 )
 from fedcrg.paths import (
     ConfigLayout,
     OutputsLayout,
     PreparedDatasetLayout,
-    RunLayout,
     prepared_dataset_family_root,
 )
 from fedcrg.reporting import (
-    build_experiment_results_bundle,
+    ResultsBuilder,
     build_publication,
     build_repository_report,
-    build_results_bundle,
-    ensure_experiment_results_bundle,
     verify_results_bundle,
 )
 from fedcrg.runtime import (
@@ -52,11 +43,12 @@ from fedcrg.runtime import (
 from fedcrg.types import (
     CalibrationSeed,
     CampaignStage,
+    CompletionState,
     DatasetId,
     Description,
     Duration,
+    ExecutionOutcome,
     ExperimentId,
-    ExperimentStatus,
     ExperimentType,
     Identifier,
     ModelSeed,
@@ -65,11 +57,10 @@ from fedcrg.types import (
     DeviceName,
     PolicyId,
     PositiveCount,
+    ResultsGenerationStatus,
     Sha256,
     Version,
 )
-
-_SYNTHETIC_CATEGORIES = frozenset({ExperimentType.SYNTHETIC, ExperimentType.BENCHMARK})
 
 _DATASET_EXPERIMENTS: dict[DatasetId, ExperimentId] = {
     DatasetId.NBAIOT: ExperimentId.PRIMARY_NBAIOT,
@@ -134,6 +125,13 @@ class RunPayload(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     experiment: ExperimentId
+    status: ExecutionOutcome
+    completion: CompletionState
+    json_results: tuple[PathString, ...]
+    csv_results: tuple[PathString, ...]
+    figures: tuple[PathString, ...]
+    reports: tuple[PathString, ...]
+    result_bundle: PathString
     model_count: NonNegativeCount
     run_directory_count: NonNegativeCount
     output: PathString
@@ -144,23 +142,12 @@ class CampaignPayload(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    status: Identifier
+    status: CampaignStage
     completed: NonNegativeCount
     total: PositiveCount
     current_experiment: ExperimentId | None
     elapsed_seconds: Duration
     results_path: PathString | None
-
-
-class RunStatusCounts(BaseModel):
-    """Run counts by status for one experiment, used to build `StatusPayload`."""
-
-    model_config = ConfigDict()
-
-    total: NonNegativeCount = 0
-    completed: NonNegativeCount = 0
-    failed: NonNegativeCount = 0
-    running: NonNegativeCount = 0
 
 
 class ExperimentStatusRow(BaseModel):
@@ -169,10 +156,10 @@ class ExperimentStatusRow(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     experiment: ExperimentId
-    total: NonNegativeCount
-    completed: NonNegativeCount
-    failed: NonNegativeCount
-    running: NonNegativeCount
+    state: CompletionState
+    problems: tuple[Description, ...]
+    complete_run_count: NonNegativeCount
+    expected_run_count: NonNegativeCount
 
 
 class StatusPayload(BaseModel):
@@ -180,7 +167,7 @@ class StatusPayload(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    campaign_stage: Identifier | None
+    campaign_stage: CampaignStage | None
     experiments: tuple[ExperimentStatusRow, ...]
 
 
@@ -194,10 +181,11 @@ class ReportPayload(BaseModel):
 
 
 class ResultsBuildPayload(BaseModel):
-    """Output of `fedcrg results build`."""
+    """Output of `fedcrg results`."""
 
     model_config = ConfigDict(frozen=True)
 
+    status: ResultsGenerationStatus
     results_path: PathString
 
 
@@ -220,32 +208,6 @@ def _study(ctx: click.Context) -> Study:
 def _print(payload: BaseModel) -> None:
     """Print a payload as indented JSON."""
     click.echo(payload.model_dump_json(indent=2))
-
-
-def _precompute_protocol_tables(study: Study, experiment_id: ExperimentId) -> None:
-    """Precompute and cache the readiness/mismatch lookup tables an experiment depends on."""
-    spec = study.spec(experiment_id)
-    config = study.resolve(experiment_id)
-    ProtocolTablePrecomputer().precompute(config, spec)
-
-
-def _purge_experiment_evidence(experiment_id: ExperimentId, outputs_root: Path) -> None:
-    """Delete run directories belonging to an experiment, ahead of an `--overwrite` re-run."""
-    runs_root = OutputsLayout(outputs_root).runs
-    if not runs_root.is_dir():
-        return
-    for run_dir in runs_root.iterdir():
-        run_config_path = RunLayout(run_dir).run_config
-        if not run_config_path.is_file():
-            continue
-        try:
-            run_config = RunConfig.model_validate_json(run_config_path.read_text(encoding="utf-8"))
-        except (OSError, ValidationError):
-            # An unreadable run_config can't be attributed to this experiment; leave it alone
-            # rather than guess, so --overwrite never deletes evidence it can't identify.
-            continue
-        if run_config.experiment_id is experiment_id:
-            shutil.rmtree(run_dir, ignore_errors=True)
 
 
 @click.group()
@@ -367,44 +329,23 @@ def preprocess(ctx: click.Context, dataset_id: str | None, overwrite: bool) -> N
 @click.option("--overwrite", is_flag=True, help="Re-run and replace regenerable evidence.")
 @click.pass_context
 def run(ctx: click.Context, experiment_id: str, overwrite: bool) -> None:
-    """Run one experiment end to end, writing run summaries and refreshing the repository report, reusing cached artifacts unless `--overwrite` is set."""
+    """Run one experiment end to end. A current fully-passed experiment is not rerun unless `--overwrite` is set."""
     study = _study(ctx)
     experiment = ExperimentId(experiment_id)
-    spec = study.spec(experiment)
-    config = study.resolve(experiment)
-    outputs_root = config.outputs_root
-    if overwrite:
-        _purge_experiment_evidence(experiment, outputs_root)
-    layout = OutputsLayout(outputs_root)
-    if spec.category in _SYNTHETIC_CATEGORIES:
-        _precompute_protocol_tables(study, experiment)
-        output = layout.analysis_result(experiment)
-        if overwrite and output.is_file():
-            output.unlink()
-        if experiment is ExperimentId.COMPUTATIONAL_BENCHMARK:
-            RunBenchmark(spec, config).run(output)
-        else:
-            RunSyntheticExperiments().run(experiment, spec, config, output)
-        ensure_experiment_results_bundle(experiment, outputs_root, study.paths.results_root)
-        _print(
-            RunPayload(
-                experiment=experiment,
-                model_count=0,
-                run_directory_count=0,
-                output=output.as_posix(),
-            )
-        )
-        return
-    _precompute_protocol_tables(study, experiment)
-    workload = RunAllExperiments().execute(experiment, config, config.preprocessed_root)
-    build_repository_report(outputs_root, config)
-    ensure_experiment_results_bundle(experiment, outputs_root, study.paths.results_root)
+    result = ExperimentExecutor(study=study).execute(experiment, overwrite=overwrite)
     _print(
         RunPayload(
-            experiment=experiment,
-            model_count=len(workload.models),
-            run_directory_count=len(workload.run_directories),
-            output=layout.runs.as_posix(),
+            experiment=result.experiment_id,
+            status=result.outcome,
+            completion=result.state,
+            json_results=result.json_paths,
+            csv_results=result.csv_paths,
+            figures=result.figure_paths,
+            reports=result.report_paths,
+            result_bundle=result.bundle_path,
+            model_count=result.model_count,
+            run_directory_count=result.run_directory_count,
+            output=result.output_root,
         )
     )
 
@@ -416,11 +357,8 @@ def campaign(ctx: click.Context, overwrite: bool) -> None:
     """Run every experiment in the catalogue in dependency order."""
     study = _study(ctx)
     outputs_root = study.paths.outputs_root
-    store = CampaignStatusStore(outputs_root=outputs_root)
     if overwrite:
-        status_path = store.path_for()
-        if status_path.is_file():
-            status_path.unlink()
+        ExperimentArtifactPurger(study).purge_campaign()
     work_items = tuple(
         CampaignWorkItem(
             experiment_id=spec.id,
@@ -446,32 +384,6 @@ def campaign(ctx: click.Context, overwrite: bool) -> None:
     )
 
 
-def _collect_run_status_counts(runs_root: Path) -> dict[ExperimentId, RunStatusCounts]:
-    """Tally run status per experiment by reading each run directory's manifest."""
-    counts: dict[ExperimentId, RunStatusCounts] = {}
-    if not runs_root.is_dir():
-        return counts
-    for run_dir in runs_root.iterdir():
-        run_layout = RunLayout(run_dir)
-        if not run_layout.manifest.is_file():
-            continue
-        try:
-            manifest = RunManifest.model_validate_json(
-                run_layout.manifest.read_text(encoding="utf-8")
-            )
-        except (OSError, ValidationError):
-            continue
-        counter = counts.setdefault(manifest.experiment_id, RunStatusCounts())
-        counter.total += 1
-        if manifest.status is ExperimentStatus.COMPLETE:
-            counter.completed += 1
-        elif manifest.status is ExperimentStatus.FAILED:
-            counter.failed += 1
-        else:
-            counter.running += 1
-    return counts
-
-
 @cli.command(name="status")
 @click.argument(
     "experiment_id",
@@ -480,25 +392,28 @@ def _collect_run_status_counts(runs_root: Path) -> dict[ExperimentId, RunStatusC
 )
 @click.pass_context
 def status(ctx: click.Context, experiment_id: str | None) -> None:
-    """Show run counts by status, for one experiment or all of them."""
+    """Show derived completion state for one experiment or every catalogue entry."""
     study = _study(ctx)
-    outputs_root = study.paths.outputs_root
-    layout = OutputsLayout(outputs_root)
-    counts = _collect_run_status_counts(layout.runs)
+    assessor = ExperimentEvidenceAssessor(study)
+    selected = (
+        (ExperimentId(experiment_id),)
+        if experiment_id is not None
+        else tuple(spec.id for spec in study.catalogue.all())
+    )
     rows = tuple(
         ExperimentStatusRow(
-            experiment=experiment,
-            total=values.total,
-            completed=values.completed,
-            failed=values.failed,
-            running=values.running,
+            experiment=item,
+            state=assessment.state,
+            problems=tuple(problem.detail for problem in assessment.problems),
+            complete_run_count=assessment.complete_run_count,
+            expected_run_count=assessment.expected_run_count,
         )
-        for experiment, values in sorted(counts.items(), key=lambda item: item[0])
-        if experiment_id is None or experiment == experiment_id
+        for item in selected
+        for assessment in (assessor.assess(item),)
     )
     campaign_stage: Identifier | None = None
     try:
-        campaign_status = CampaignStatusStore(outputs_root=outputs_root).load()
+        campaign_status = CampaignStatusStore(outputs_root=study.paths.outputs_root).load()
         campaign_stage = campaign_status.current_stage if campaign_status.current_stage else None
     except FileNotFoundError:
         pass
@@ -553,33 +468,30 @@ def report(ctx: click.Context) -> None:
     )
 
 
-@cli.group(name="results")
-def results_group() -> None:
-    """Commands for building and verifying packaged results bundles."""
-
-
-@results_group.command(name="build")
+@cli.group(name="results", invoke_without_command=True)
+@click.option(
+    "--overwrite", is_flag=True, help="Rebuild the delivery bundle from verified sources."
+)
 @click.argument(
     "experiment_id",
     required=False,
     type=click.Choice([member.value for member in ExperimentId]),
 )
 @click.pass_context
-def results_build(ctx: click.Context, experiment_id: str | None) -> None:
-    """Build the campaign results bundle, or one experiment's bundle when an experiment id is given."""
+def results_group(ctx: click.Context, overwrite: bool, experiment_id: str | None) -> None:
+    """Build the campaign results bundle, or one experiment bundle. Reuses a current valid bundle."""
+    if ctx.invoked_subcommand is not None:
+        return
     study = _study(ctx)
-    if experiment_id is None:
-        path = build_results_bundle(
-            outputs_root=study.paths.outputs_root,
-            results_root=study.paths.results_root,
-        )
-    else:
-        path = build_experiment_results_bundle(
-            ExperimentId(experiment_id),
-            outputs_root=study.paths.outputs_root,
-            results_root=study.paths.results_root,
-        )
-    _print(ResultsBuildPayload(results_path=path.as_posix()))
+    resolved = ExperimentId(experiment_id) if experiment_id is not None else None
+    built = ResultsBuilder().build_with_status(
+        outputs_root=study.paths.outputs_root,
+        results_root=study.paths.results_root,
+        experiment_id=resolved,
+        overwrite=overwrite,
+        study=study,
+    )
+    _print(ResultsBuildPayload(status=built.status, results_path=built.path.as_posix()))
 
 
 @results_group.command(name="verify")

@@ -109,6 +109,7 @@ def test_results_bundle_layout_required_directories_are_paths(tmp_path: Path) ->
     """Every required results-bundle directory is a concrete Path."""
     layout = ResultsBundleLayout(tmp_path)
     assert layout.required_directories == (
+        layout.json_dir,
         layout.metrics,
         layout.statistics,
         layout.tables,
