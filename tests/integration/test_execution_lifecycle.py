@@ -399,8 +399,9 @@ def test_optional_and_inapplicable_contracts() -> None:
         update={"applicability": ExperimentApplicability.INAPPLICABLE}
     )
     assert inapplicable.inapplicable
+    contract = all_experiment_contracts()[0]
     with pytest.raises(ValueError, match="duplicate"):
-        ExperimentContractCatalogue((all_experiment_contracts()[0], all_experiment_contracts()[0]))
+        ExperimentContractCatalogue((contract, contract))
 
 
 def test_failed_execution_cannot_leave_pass(tmp_path: Path) -> None:
@@ -414,6 +415,7 @@ def test_failed_execution_cannot_leave_pass(tmp_path: Path) -> None:
     ) -> None:
         raise RuntimeError("workload failed")
 
+    executor = ExperimentExecutor(study=study, workload=boom)
     with pytest.raises(RuntimeError, match="workload failed"):
-        ExperimentExecutor(study=study, workload=boom).execute(ExperimentId.MISMATCH_POWER)
+        executor.execute(ExperimentId.MISMATCH_POWER)
     assert not ExperimentEvidenceAssessor(study).assess(ExperimentId.MISMATCH_POWER).passed

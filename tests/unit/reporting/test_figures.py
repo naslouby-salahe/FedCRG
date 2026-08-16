@@ -124,17 +124,17 @@ def test_build_per_client_operating_points_figure_produces_png(tmp_path: Path) -
 
 
 def test_build_per_client_operating_points_figure_missing_table_raises(tmp_path: Path) -> None:
+    output = tmp_path / "figures" / "per_client.png"
+    frame = pd.DataFrame()
     with pytest.raises(ValueError):
-        build_per_client_operating_points_figure(
-            tmp_path / "figures" / "per_client.png", pd.DataFrame()
-        )
+        build_per_client_operating_points_figure(output, frame)
 
 
 def test_build_per_client_operating_points_figure_requires_columns(tmp_path: Path) -> None:
+    output = tmp_path / "figures" / "per_client.png"
+    frame = pd.DataFrame({"only_column": [1, 2]})
     with pytest.raises(ValueError, match="client_id/fpr"):
-        build_per_client_operating_points_figure(
-            tmp_path / "figures" / "per_client.png", pd.DataFrame({"only_column": [1, 2]})
-        )
+        build_per_client_operating_points_figure(output, frame)
 
 
 def test_build_reliability_utility_frontier_figure_produces_png(tmp_path: Path) -> None:
@@ -145,10 +145,10 @@ def test_build_reliability_utility_frontier_figure_produces_png(tmp_path: Path) 
 
 
 def test_build_reliability_utility_frontier_figure_requires_columns(tmp_path: Path) -> None:
+    output = tmp_path / "figures" / "reliability.png"
+    frame = pd.DataFrame({"policy_id": ["fedcrg"]})
     with pytest.raises(ValueError, match="MEBE/ABMacroTPR"):
-        build_reliability_utility_frontier_figure(
-            tmp_path / "figures" / "reliability.png", pd.DataFrame({"policy_id": ["fedcrg"]})
-        )
+        build_reliability_utility_frontier_figure(output, frame)
 
 
 def test_build_assumption_stress_figure_produces_png(tmp_path: Path) -> None:
@@ -158,15 +158,17 @@ def test_build_assumption_stress_figure_produces_png(tmp_path: Path) -> None:
 
 
 def test_build_assumption_stress_figure_missing_statistics_dir_raises(tmp_path: Path) -> None:
+    output = tmp_path / "figures" / "stress.png"
+    frame = pd.DataFrame()
     with pytest.raises(ValueError):
-        build_assumption_stress_figure(tmp_path / "figures" / "stress.png", pd.DataFrame())
+        build_assumption_stress_figure(output, frame)
 
 
 def test_build_assumption_stress_figure_no_coverage_entries_raises(tmp_path: Path) -> None:
+    output = tmp_path / "figures" / "stress.png"
+    frame = pd.DataFrame({"other": [1]})
     with pytest.raises(ValueError):
-        build_assumption_stress_figure(
-            tmp_path / "figures" / "stress.png", pd.DataFrame({"other": [1]})
-        )
+        build_assumption_stress_figure(output, frame)
 
 
 def test_build_external_replication_figure_produces_png(tmp_path: Path) -> None:
@@ -176,7 +178,7 @@ def test_build_external_replication_figure_produces_png(tmp_path: Path) -> None:
 
 
 def test_build_external_replication_figure_requires_columns(tmp_path: Path) -> None:
+    output = tmp_path / "figures" / "external.png"
+    frame = pd.DataFrame({"only_column": [1]})
     with pytest.raises(ValueError, match="client_id/fpr"):
-        build_external_replication_figure(
-            tmp_path / "figures" / "external.png", pd.DataFrame({"only_column": [1]})
-        )
+        build_external_replication_figure(output, frame)

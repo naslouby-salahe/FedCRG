@@ -1138,7 +1138,7 @@ class ExperimentPublisher:
         outputs = OutputsLayout(outputs_root)
         json_path = self._write_json(contract.json_kind, experiment_id, outputs, config)
         csv_paths = self._write_csv(contract, experiment_id, outputs, json_path)
-        figure_paths = self._write_figures(contract, experiment_id, outputs, json_path, csv_paths)
+        figure_paths = self._write_figures(contract, experiment_id, outputs, csv_paths)
         report_path = self._write_report(contract, experiment_id, outputs, json_path)
         return ExperimentPublication(
             experiment_id=experiment_id,
@@ -1259,7 +1259,6 @@ class ExperimentPublisher:
         contract: ExperimentArtifactContract,
         experiment_id: ExperimentId,
         outputs: OutputsLayout,
-        json_path: Path,
         csv_paths: tuple[Path, ...],
     ) -> tuple[Path, ...]:
         if not contract.figure_files:
@@ -1339,41 +1338,55 @@ class ExperimentPublisher:
     def _operating_points_from_runs(
         output: Path, experiment_id: ExperimentId, outputs: OutputsLayout
     ) -> Path:
-        rows: list[OperatingPointRow] = []
-        if outputs.runs.is_dir():
-            for run_dir in outputs.runs.iterdir():
-                if not run_dir.is_dir():
-                    continue
-                layout = RunLayout(run_dir)
-                if not layout.manifest.is_file() or not layout.metric_records.is_file():
-                    continue
-                try:
-                    manifest = RunManifest.model_validate_json(
-                        layout.manifest.read_text(encoding="utf-8")
-                    )
-                except pydantic.ValidationError:
-                    continue
-                if manifest.experiment_id is not experiment_id:
-                    continue
-                for line in layout.metric_records.read_text(encoding="utf-8").splitlines():
-                    if not line:
-                        continue
-                    try:
-                        record = MetricRecord.model_validate_json(line)
-                    except pydantic.ValidationError:
-                        continue
-                    rows.append(
-                        OperatingPointRow(
-                            client_id=record.client_id,
-                            fpr=record.fpr,
-                            policy_id=record.policy_id,
-                        )
-                    )
+        rows = ExperimentPublisher._collect_operating_points(experiment_id, outputs)
         if not rows:
             raise ValueError("Operating-points figure requires per-client metric records")
         return build_per_client_operating_points_figure(
             output, pd.DataFrame.from_records([row.model_dump(mode="json") for row in rows])
         )
+
+    @staticmethod
+    def _collect_operating_points(
+        experiment_id: ExperimentId, outputs: OutputsLayout
+    ) -> list[OperatingPointRow]:
+        if not outputs.runs.is_dir():
+            return []
+        rows: list[OperatingPointRow] = []
+        for run_dir in outputs.runs.iterdir():
+            rows.extend(ExperimentPublisher._run_operating_points(run_dir, experiment_id))
+        return rows
+
+    @staticmethod
+    def _run_operating_points(
+        run_dir: Path, experiment_id: ExperimentId
+    ) -> list[OperatingPointRow]:
+        if not run_dir.is_dir():
+            return []
+        layout = RunLayout(run_dir)
+        if not layout.manifest.is_file() or not layout.metric_records.is_file():
+            return []
+        try:
+            manifest = RunManifest.model_validate_json(layout.manifest.read_text(encoding="utf-8"))
+        except pydantic.ValidationError:
+            return []
+        if manifest.experiment_id is not experiment_id:
+            return []
+        rows: list[OperatingPointRow] = []
+        for line in layout.metric_records.read_text(encoding="utf-8").splitlines():
+            if not line:
+                continue
+            try:
+                record = MetricRecord.model_validate_json(line)
+            except pydantic.ValidationError:
+                continue
+            rows.append(
+                OperatingPointRow(
+                    client_id=record.client_id,
+                    fpr=record.fpr,
+                    policy_id=record.policy_id,
+                )
+            )
+        return rows
 
     @staticmethod
     def _replication_figure(
@@ -1652,21 +1665,21 @@ class ResultsBuilder:
             *(
                 (
                     outputs.experiment_tables(experiment_id) / item.filename,
-                    layout.csv_dir / item.filename,
+                    layout.csv_dir / Path(item.filename).name,
                 )
                 for item in contract.csv_files
             ),
             *(
                 (
                     outputs.experiment_figures(experiment_id) / item.filename,
-                    layout.figures / item.filename,
+                    layout.figures / Path(item.filename).name,
                 )
                 for item in contract.figure_files
             ),
             *(
                 (
                     outputs.experiment_reports(experiment_id) / item.filename,
-                    layout.reports / item.filename,
+                    layout.reports / Path(item.filename).name,
                 )
                 for item in contract.report_files
             ),
@@ -1995,30 +2008,47 @@ class ResultsVerifier:
             *((layout.reports / item.filename, "report") for item in contract.report_files),
         )
         for path, kind in required:
-            if not path.is_file():
-                problems.append(f"missing required {kind} artifact: {path.name}")
-            elif path.stat().st_size == 0:
-                problems.append(f"empty required {kind} artifact: {path.name}")
-            elif kind == "json":
-                problems.extend(ResultsVerifier._validate_result_json(path, contract.json_kind))
-            elif kind == "csv":
-                try:
-                    frame = pd.read_csv(path)
-                except (OSError, pd.errors.ParserError, UnicodeError):
-                    problems.append(f"unreadable CSV artifact: {path.name}")
-                else:
-                    if frame.empty:
-                        problems.append(f"CSV artifact has no data rows: {path.name}")
-        if not layout.provenance_json.is_file():
-            problems.append("missing experiment bundle provenance")
-        else:
-            try:
-                ExperimentProvenance.model_validate_json(
-                    layout.provenance_json.read_text(encoding="utf-8")
-                )
-            except pydantic.ValidationError:
-                problems.append("experiment bundle provenance failed schema validation")
+            problems.extend(
+                ResultsVerifier._required_artifact_problems(path, kind, contract.json_kind)
+            )
+        problems.extend(ResultsVerifier._provenance_problems(layout))
         return problems
+
+    @staticmethod
+    def _required_artifact_problems(
+        path: Path, kind: Identifier, json_kind: JsonResultKind
+    ) -> list[Identifier]:
+        if not path.is_file():
+            return [f"missing required {kind} artifact: {path.name}"]
+        if path.stat().st_size == 0:
+            return [f"empty required {kind} artifact: {path.name}"]
+        if kind == "json":
+            return ResultsVerifier._validate_result_json(path, json_kind)
+        if kind == "csv":
+            return ResultsVerifier._csv_artifact_problems(path)
+        return []
+
+    @staticmethod
+    def _csv_artifact_problems(path: Path) -> list[Identifier]:
+        try:
+            frame = pd.read_csv(path)
+        except (OSError, pd.errors.ParserError, UnicodeError):
+            return [f"unreadable CSV artifact: {path.name}"]
+        if frame.empty:
+            return [f"CSV artifact has no data rows: {path.name}"]
+        return []
+
+    @staticmethod
+    def _provenance_problems(layout: ExperimentResultsBundleLayout) -> list[Identifier]:
+        if not layout.provenance_json.is_file():
+            return ["missing experiment bundle provenance"]
+        try:
+            ExperimentProvenance.model_validate_json(
+                layout.provenance_json.read_text(encoding="utf-8")
+            )
+        except pydantic.ValidationError:
+            return ["experiment bundle provenance failed schema validation"]
+        return []
 
     @staticmethod
     def _validate_result_json(path: Path, kind: JsonResultKind) -> list[Identifier]:
@@ -2050,21 +2080,16 @@ class ResultsVerifier:
     def _checksum_mismatches(
         destination: Path, checksums_path: Path, *, exclude_experiments: bool
     ) -> list[Identifier]:
-        problems: list[Identifier] = []
-        try:
-            checksums = tuple(
-                ChecksumRecord.model_validate(entry)
-                for entry in json.loads(checksums_path.read_text(encoding="utf-8"))
-            )
-        except (OSError, json.JSONDecodeError, pydantic.ValidationError):
+        listed = ResultsVerifier._load_checksums(checksums_path)
+        if listed is None:
             return ["bundle checksums.json failed schema validation"]
-        listed = {record.relative_path: record.sha256 for record in checksums}
+        problems: list[Identifier] = []
         seen: set[PathString] = set()
         for path in sorted(destination.rglob("*")):
             if not path.is_file() or path.name == checksums_path.name:
                 continue
             relative = path.relative_to(destination).as_posix()
-            if exclude_experiments and relative.startswith(f"{LayoutDirectory.EXPERIMENTS}/"):
+            if ResultsVerifier._is_excluded_relative(relative, exclude_experiments):
                 continue
             seen.add(relative)
             expected = listed.get(relative)
@@ -2073,11 +2098,28 @@ class ResultsVerifier:
             elif str(expected) != sha256_file(path):
                 problems.append(f"bundle hash mismatch: {relative}")
         for relative in listed:
-            if exclude_experiments and relative.startswith(f"{LayoutDirectory.EXPERIMENTS}/"):
+            if ResultsVerifier._is_excluded_relative(relative, exclude_experiments):
                 continue
             if relative not in seen:
                 problems.append(f"missing checksummed bundle file: {relative}")
         return problems
+
+    @staticmethod
+    def _load_checksums(checksums_path: Path) -> dict[PathString, Sha256] | None:
+        try:
+            return {
+                record.relative_path: record.sha256
+                for record in (
+                    ChecksumRecord.model_validate(entry)
+                    for entry in json.loads(checksums_path.read_text(encoding="utf-8"))
+                )
+            }
+        except (OSError, json.JSONDecodeError, pydantic.ValidationError):
+            return None
+
+    @staticmethod
+    def _is_excluded_relative(relative: PathString, exclude_experiments: bool) -> bool:
+        return exclude_experiments and relative.startswith(f"{LayoutDirectory.EXPERIMENTS}/")
 
 
 def build_results_bundle(

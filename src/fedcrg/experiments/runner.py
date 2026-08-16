@@ -138,6 +138,7 @@ from fedcrg.types import (
 from fedcrg.reporting import build_run_report
 
 if TYPE_CHECKING:
+    from fedcrg.evidence.completion import ExperimentEvidenceAssessor
     from fedcrg.experiments.execution import ExperimentExecutor
 
 Frozen = ConfigDict(frozen=True)
@@ -1697,50 +1698,85 @@ class CampaignExecutor:
         rows: list[CampaignOutcomeRow] = []
         started = time.monotonic()
         from fedcrg.evidence.completion import ExperimentEvidenceAssessor
-        from fedcrg.evidence.contracts import experiment_contract
         from fedcrg.experiments.execution import ExperimentExecutor
-        from fedcrg.types import ExecutionOutcome
 
         assessor = ExperimentEvidenceAssessor(self.study)
         executor = self.executor or ExperimentExecutor(study=self.study, empirical=self.runner)
 
         for item in work_items:
-            contract = experiment_contract(item.experiment_id)
-            if contract.inapplicable:
-                rows.append(_completed_row(item.experiment_id, now))
-                continue
-            assessment = assessor.assess(item.experiment_id)
-            if assessment.passed:
-                rows.append(_completed_row(item.experiment_id, now))
-                continue
-            if contract.optional and assessment.state is CompletionState.NOT_STARTED:
-                continue
-            blockers = DependencyResolver(self.study).blockers(
-                item.experiment_id,
-                {row.experiment_id: row.status for row in rows},
-            )
-            if blockers:
-                rows.append(
-                    _blocked_row(
-                        item.experiment_id,
-                        "blocked_by_" + "_".join(item.value for item in blockers),
-                        now,
-                    )
-                )
-                continue
-            self._record_progress(item.experiment_id, rows, now, started)
-            try:
-                result = executor.execute(item.experiment_id)
-                if result.outcome is ExecutionOutcome.FAILED:
-                    rows.append(_failed_row(item.experiment_id, "execution failed", now))
-                else:
-                    rows.append(_completed_row(item.experiment_id, now))
-            except Exception as exc:
-                rows.append(_failed_row(item.experiment_id, str(exc), now))
+            self._run_item(item, rows, assessor, executor, now, started)
 
         results_path = (
             self._build_results(outputs_root, results_root) if results_root is not None else None
         )
+        done = self._campaign_done(work_items, rows, assessor, results_root)
+
+        final_status = CampaignStatus(
+            created_at=now,
+            updated_at=datetime.now(UTC).isoformat(),
+            current_experiment=None,
+            current_stage=CampaignStage.DONE if done else CampaignStage.FAILED,
+            experiments=tuple(rows),
+            results_path=results_path,
+            elapsed_seconds=time.monotonic() - started,
+        )
+        self.status_store.save(final_status)
+        return final_status
+
+    def _run_item(
+        self,
+        item: CampaignWorkItem,
+        rows: list[CampaignOutcomeRow],
+        assessor: ExperimentEvidenceAssessor,
+        executor: ExperimentExecutor,
+        now: Timestamp,
+        started: Duration,
+    ) -> None:
+        from fedcrg.evidence.contracts import experiment_contract
+        from fedcrg.types import ExecutionOutcome
+
+        contract = experiment_contract(item.experiment_id)
+        if contract.inapplicable:
+            rows.append(_completed_row(item.experiment_id, now))
+            return
+        assessment = assessor.assess(item.experiment_id)
+        if assessment.passed:
+            rows.append(_completed_row(item.experiment_id, now))
+            return
+        if contract.optional and assessment.state is CompletionState.NOT_STARTED:
+            return
+        blockers = DependencyResolver(self.study).blockers(
+            item.experiment_id,
+            {row.experiment_id: row.status for row in rows},
+        )
+        if blockers:
+            rows.append(
+                _blocked_row(
+                    item.experiment_id,
+                    "blocked_by_" + "_".join(item.value for item in blockers),
+                    now,
+                )
+            )
+            return
+        self._record_progress(item.experiment_id, rows, now, started)
+        try:
+            result = executor.execute(item.experiment_id)
+            if result.outcome is ExecutionOutcome.FAILED:
+                rows.append(_failed_row(item.experiment_id, "execution failed", now))
+            else:
+                rows.append(_completed_row(item.experiment_id, now))
+        except Exception as exc:
+            rows.append(_failed_row(item.experiment_id, str(exc), now))
+
+    def _campaign_done(
+        self,
+        work_items: tuple[CampaignWorkItem, ...],
+        rows: list[CampaignOutcomeRow],
+        assessor: ExperimentEvidenceAssessor,
+        results_root: Path | None,
+    ) -> bool:
+        from fedcrg.evidence.contracts import experiment_contract
+
         required_failed = any(
             row.failed and not experiment_contract(row.experiment_id).optional for row in rows
         )
@@ -1766,18 +1802,7 @@ class CampaignExecutor:
             verification = ResultsVerifier().verify(results_root)
             if not verification.valid:
                 done = False
-
-        final_status = CampaignStatus(
-            created_at=now,
-            updated_at=datetime.now(UTC).isoformat(),
-            current_experiment=None,
-            current_stage=CampaignStage.DONE if done else CampaignStage.FAILED,
-            experiments=tuple(rows),
-            results_path=results_path,
-            elapsed_seconds=time.monotonic() - started,
-        )
-        self.status_store.save(final_status)
-        return final_status
+        return done
 
     def _record_progress(
         self,

@@ -606,7 +606,7 @@ class ScoreCache:
         if not observed:
             raise ValueError("Score cache has no clients")
         for client_id, roles in observed.items():
-            if roles != _REQUIRED_BASE_ROLES:
+            if roles != set(_REQUIRED_BASE_ROLES):
                 missing = _REQUIRED_BASE_ROLES - roles
                 extra = roles - _REQUIRED_BASE_ROLES
                 raise ValueError(

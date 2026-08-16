@@ -179,7 +179,7 @@ class ExperimentEvidenceAssessor:
             )
 
         execution_state, execution_problems = self._execution_state(
-            contract, experiment_id, config, outputs, runs, expected
+            contract, experiment_id, outputs, runs, expected
         )
         problems.extend(execution_problems)
 
@@ -269,7 +269,6 @@ class ExperimentEvidenceAssessor:
         self,
         contract: ExperimentArtifactContract,
         experiment_id: ExperimentId,
-        config: ExperimentConfig,
         outputs: OutputsLayout,
         runs: tuple[Path, ...],
         expected: NonNegativeCount,
@@ -286,15 +285,7 @@ class ExperimentEvidenceAssessor:
             return CompletionState.FAILED, tuple(problems)
 
         if contract.requires_analysis_json:
-            analysis = outputs.analysis_result(experiment_id)
-            analysis_problems = self._validate_json_kind(contract, analysis)
-            if analysis_problems:
-                if not analysis.exists():
-                    if self._any_experiment_artifact(contract, experiment_id, outputs):
-                        return CompletionState.EXECUTION_INCOMPLETE, analysis_problems
-                    return CompletionState.NOT_STARTED, analysis_problems
-                return CompletionState.INVALID, analysis_problems
-            return CompletionState.ANALYSIS_COMPLETE, ()
+            return self._analysis_execution_state(contract, experiment_id, outputs)
 
         if expected == 0:
             return CompletionState.NOT_STARTED, (
@@ -312,6 +303,22 @@ class ExperimentEvidenceAssessor:
                 )
             )
             return CompletionState.EXECUTION_INCOMPLETE, tuple(problems)
+        return CompletionState.ANALYSIS_COMPLETE, ()
+
+    def _analysis_execution_state(
+        self,
+        contract: ExperimentArtifactContract,
+        experiment_id: ExperimentId,
+        outputs: OutputsLayout,
+    ) -> tuple[CompletionState, tuple[CompletionProblem, ...]]:
+        analysis = outputs.analysis_result(experiment_id)
+        analysis_problems = self._validate_json_kind(contract, analysis)
+        if analysis_problems:
+            if not analysis.exists():
+                if self._any_experiment_artifact(contract, experiment_id, outputs):
+                    return CompletionState.EXECUTION_INCOMPLETE, tuple(analysis_problems)
+                return CompletionState.NOT_STARTED, tuple(analysis_problems)
+            return CompletionState.INVALID, tuple(analysis_problems)
         return CompletionState.ANALYSIS_COMPLETE, ()
 
     def _publication_problems(
@@ -432,37 +439,43 @@ class ExperimentEvidenceAssessor:
 
     def _validate_json_kind(
         self, contract: ExperimentArtifactContract, path: Path
-    ) -> tuple[CompletionProblem, ...]:
+    ) -> list[CompletionProblem]:
+        problem = self._json_kind_problem(contract, path)
+        return [problem] if problem else []
+
+    def _json_kind_problem(
+        self, contract: ExperimentArtifactContract, path: Path
+    ) -> CompletionProblem | None:
         if not path.is_file():
-            return (_problem("missing_json", f"Missing JSON result: {path.name}"),)
+            return _problem("missing_json", f"Missing JSON result: {path.name}")
         if path.stat().st_size == 0:
-            return (_problem("empty_json", f"Empty JSON result: {path.name}"),)
+            return _problem("empty_json", f"Empty JSON result: {path.name}")
         try:
             payload = path.read_text(encoding="utf-8")
         except OSError as exc:
-            return (_problem("unreadable_json", str(exc)[:200]),)
+            return _problem("unreadable_json", str(exc)[:200])
         try:
             parsed = json.loads(payload)
         except json.JSONDecodeError:
-            return (_problem("malformed_json", f"JSON does not parse: {path.name}"),)
+            return _problem("malformed_json", f"JSON does not parse: {path.name}")
         if not isinstance(parsed, dict) or not parsed:
-            return (_problem("empty_json", f"JSON result has no content: {path.name}"),)
+            return _problem("empty_json", f"JSON result has no content: {path.name}")
         try:
             if contract.json_kind is JsonResultKind.SYNTHETIC_ENVELOPE:
                 envelope = SyntheticExperimentEnvelope.model_validate_json(payload)
                 if not envelope.cells:
-                    return (_problem("empty_json", "Synthetic envelope contains no cells"),)
+                    return _problem("empty_json", "Synthetic envelope contains no cells")
             elif contract.json_kind is JsonResultKind.BENCHMARK_REPORT:
                 report = BenchmarkReport.model_validate_json(payload)
                 if not report.cells:
-                    return (_problem("empty_json", "Benchmark report contains no cells"),)
+                    return _problem("empty_json", "Benchmark report contains no cells")
             else:
                 result = EmpiricalExperimentResult.model_validate_json(payload)
                 if not result.records:
-                    return (_problem("empty_json", "Empirical result contains no records"),)
+                    return _problem("empty_json", "Empirical result contains no records")
         except pydantic.ValidationError:
-            return (_problem("malformed_json", f"JSON failed its typed schema: {path.name}"),)
-        return ()
+            return _problem("malformed_json", f"JSON failed its typed schema: {path.name}")
+        return None
 
     @staticmethod
     def _validate_required_files(
