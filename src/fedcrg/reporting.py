@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 
 import pydantic
 from collections.abc import Callable
@@ -1664,22 +1665,22 @@ class ResultsBuilder:
             ),
             *(
                 (
-                    outputs.experiment_tables(experiment_id) / Path(item.filename).name,
-                    layout.csv_dir / Path(item.filename).name,
+                    outputs.experiment_tables(experiment_id) / os.path.basename(item.filename),
+                    layout.csv_dir / os.path.basename(item.filename),
                 )
                 for item in contract.csv_files
             ),
             *(
                 (
-                    outputs.experiment_figures(experiment_id) / Path(item.filename).name,
-                    layout.figures / Path(item.filename).name,
+                    outputs.experiment_figures(experiment_id) / os.path.basename(item.filename),
+                    layout.figures / os.path.basename(item.filename),
                 )
                 for item in contract.figure_files
             ),
             *(
                 (
-                    outputs.experiment_reports(experiment_id) / Path(item.filename).name,
-                    layout.reports / Path(item.filename).name,
+                    outputs.experiment_reports(experiment_id) / os.path.basename(item.filename),
+                    layout.reports / os.path.basename(item.filename),
                 )
                 for item in contract.report_files
             ),
