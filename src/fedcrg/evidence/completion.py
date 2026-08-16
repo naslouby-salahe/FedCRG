@@ -450,12 +450,16 @@ class ExperimentEvidenceAssessor:
             return _problem("missing_json", f"Missing JSON result: {path.name}")
         if path.stat().st_size == 0:
             return _problem("empty_json", f"Empty JSON result: {path.name}")
+        return self._typed_json_problem(contract, path)
+
+    def _typed_json_problem(
+        self, contract: ExperimentArtifactContract, path: Path
+    ) -> CompletionProblem | None:
         try:
             payload = path.read_text(encoding="utf-8")
+            parsed = json.loads(payload)
         except OSError as exc:
             return _problem("unreadable_json", str(exc)[:200])
-        try:
-            parsed = json.loads(payload)
         except json.JSONDecodeError:
             return _problem("malformed_json", f"JSON does not parse: {path.name}")
         if not isinstance(parsed, dict) or not parsed:

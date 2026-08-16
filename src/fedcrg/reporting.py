@@ -1664,21 +1664,21 @@ class ResultsBuilder:
             ),
             *(
                 (
-                    outputs.experiment_tables(experiment_id) / item.filename,
+                    outputs.experiment_tables(experiment_id) / Path(item.filename).name,
                     layout.csv_dir / Path(item.filename).name,
                 )
                 for item in contract.csv_files
             ),
             *(
                 (
-                    outputs.experiment_figures(experiment_id) / item.filename,
+                    outputs.experiment_figures(experiment_id) / Path(item.filename).name,
                     layout.figures / Path(item.filename).name,
                 )
                 for item in contract.figure_files
             ),
             *(
                 (
-                    outputs.experiment_reports(experiment_id) / item.filename,
+                    outputs.experiment_reports(experiment_id) / Path(item.filename).name,
                     layout.reports / Path(item.filename).name,
                 )
                 for item in contract.report_files
