@@ -1,5 +1,3 @@
-"""Pydantic models for run manifests, threshold/metric records, and cached-artifact hashes."""
-
 from __future__ import annotations
 
 import hashlib
@@ -48,8 +46,6 @@ Frozen = ConfigDict(frozen=True)
 
 
 class SourceFileManifest(BaseModel):
-    """Hash and size of one raw source file the dataset was prepared from."""
-
     model_config = Frozen
 
     relative_path: PurePosixPath
@@ -58,8 +54,6 @@ class SourceFileManifest(BaseModel):
 
 
 class CalibrationAssignmentReference(BaseModel):
-    """Hash of one persisted calibration-role assignment file."""
-
     model_config = Frozen
 
     calibration_seed: CalibrationSeed
@@ -69,8 +63,6 @@ class CalibrationAssignmentReference(BaseModel):
 
 
 class RoleArtifactManifest(BaseModel):
-    """Hash and row count of one client's prepared data file for a single role."""
-
     model_config = Frozen
 
     role: DataRole
@@ -81,15 +73,12 @@ class RoleArtifactManifest(BaseModel):
 
 
 class ClientDatasetManifest(BaseModel):
-    """Prepared-data artifacts for one client, grouped by role."""
-
     model_config = Frozen
 
     client_id: ClientId
     roles: tuple[RoleArtifactManifest, ...]
 
     def role(self, role: DataRole) -> RoleArtifactManifest:
-        """Return this client's artifact for the given role."""
         for item in self.roles:
             if item.role is role:
                 return item
@@ -97,8 +86,6 @@ class ClientDatasetManifest(BaseModel):
 
 
 class PreparedDatasetManifest(BaseModel):
-    """Full record of a dataset preparation run: source files, per-client artifacts, and calibration assignments."""
-
     model_config = Frozen
 
     dataset_id: DatasetId
@@ -115,7 +102,6 @@ class PreparedDatasetManifest(BaseModel):
 
     @property
     def deterministic_payload_sha256(self) -> Sha256:
-        """Hash the manifest excluding ``created_at`` so re-running preparation on identical data reproduces the same digest."""
         payload = self.model_dump(
             mode="json",
             exclude={"created_at", "deterministic_payload_sha256"},
@@ -125,11 +111,9 @@ class PreparedDatasetManifest(BaseModel):
 
     @property
     def client_ids(self) -> tuple[ClientId, ...]:
-        """Ids of every client covered by this manifest."""
         return tuple(client.client_id for client in self.clients)
 
     def client(self, client_id: ClientId) -> ClientDatasetManifest:
-        """Return the dataset manifest for the given client."""
         for client in self.clients:
             if client.client_id == client_id:
                 return client
@@ -137,8 +121,6 @@ class PreparedDatasetManifest(BaseModel):
 
 
 class ClientTrainingCount(BaseModel):
-    """Number of rows one client trained on."""
-
     model_config = Frozen
 
     client_id: ClientId
@@ -146,8 +128,6 @@ class ClientTrainingCount(BaseModel):
 
 
 class TrainingManifest(BaseModel):
-    """Record of a completed federated training run, tying the resulting model to its data and config hashes."""
-
     model_config = Frozen
 
     dataset_id: DatasetId
@@ -164,8 +144,6 @@ class TrainingManifest(BaseModel):
 
 
 class CalibrationRoleManifest(BaseModel):
-    """Row count and row-id hash for one client's calibration-role assignment."""
-
     model_config = Frozen
 
     role: DataRole
@@ -174,15 +152,12 @@ class CalibrationRoleManifest(BaseModel):
 
 
 class ClientCalibrationManifest(BaseModel):
-    """Calibration-role assignment record for one client."""
-
     model_config = Frozen
 
     client_id: ClientId
     roles: tuple[CalibrationRoleManifest, ...]
 
     def role(self, role: DataRole) -> CalibrationRoleManifest:
-        """Return this client's assignment record for the given role."""
         for item in self.roles:
             if item.role is role:
                 return item
@@ -190,8 +165,6 @@ class ClientCalibrationManifest(BaseModel):
 
 
 class CalibrationAssignmentManifest(BaseModel):
-    """Calibration-role assignment record for every client under one calibration seed."""
-
     model_config = Frozen
 
     calibration_seed: CalibrationSeed
@@ -199,7 +172,6 @@ class CalibrationAssignmentManifest(BaseModel):
     clients: tuple[ClientCalibrationManifest, ...]
 
     def client(self, client_id: ClientId) -> ClientCalibrationManifest:
-        """Return the calibration manifest for the given client."""
         for client in self.clients:
             if client.client_id == client_id:
                 return client
@@ -207,8 +179,6 @@ class CalibrationAssignmentManifest(BaseModel):
 
 
 class EligibilityManifest(BaseModel):
-    """Clients that met the eligibility rule for a dataset."""
-
     model_config = Frozen
 
     dataset_id: DatasetId
@@ -216,8 +186,6 @@ class EligibilityManifest(BaseModel):
 
 
 class RunManifest(BaseModel):
-    """Identity and status of one experiment run."""
-
     model_config = Frozen
 
     run_id: RunId
@@ -230,8 +198,6 @@ class RunManifest(BaseModel):
 
 
 class RunConfig(BaseModel):
-    """Full resolved configuration and environment pin for one run."""
-
     model_config = Frozen
 
     run_id: RunId
@@ -251,8 +217,6 @@ class RunConfig(BaseModel):
 
 
 class ThresholdRecord(BaseModel):
-    """Per-client threshold decision produced by one policy in one run."""
-
     model_config = Frozen
 
     run_id: RunId
@@ -277,8 +241,6 @@ class ThresholdRecord(BaseModel):
 
 
 class MetricRecord(BaseModel):
-    """Per-client detection metrics produced by one policy in one run."""
-
     model_config = Frozen
 
     run_id: RunId
@@ -302,8 +264,6 @@ class MetricRecord(BaseModel):
 
 
 class ChecksumRecord(BaseModel):
-    """Hash of one file, identified by its path relative to the run directory."""
-
     model_config = Frozen
 
     relative_path: PathString
@@ -311,8 +271,6 @@ class ChecksumRecord(BaseModel):
 
 
 class EmpiricalPolicyResult(BaseModel):
-    """One completed policy cell's federation-level metrics."""
-
     model_config = Frozen
 
     run_id: RunId
@@ -327,8 +285,6 @@ class EmpiricalPolicyResult(BaseModel):
 
 
 class EmpiricalExperimentResult(BaseModel):
-    """Machine-readable result payload for one empirical experiment."""
-
     model_config = Frozen
 
     experiment_id: ExperimentId
@@ -337,8 +293,6 @@ class EmpiricalExperimentResult(BaseModel):
 
 
 class ExperimentProvenance(BaseModel):
-    """Config and source-artifact identity recorded in an experiment result bundle."""
-
     model_config = Frozen
 
     experiment_id: ExperimentId
@@ -348,8 +302,6 @@ class ExperimentProvenance(BaseModel):
 
 
 class CacheReference(BaseModel):
-    """Content hash of a frozen cache artifact (e.g. a trained model or score cache), recorded so later reads can detect drift."""
-
     model_config = Frozen
 
     relative_path: Identifier
@@ -358,8 +310,6 @@ class CacheReference(BaseModel):
 
 
 class GitEnvironment(BaseModel):
-    """Git commit and working-tree state captured at run time, plus a pointer to the environment pin."""
-
     model_config = Frozen
 
     git_commit: Identifier
@@ -370,8 +320,6 @@ class GitEnvironment(BaseModel):
 
 
 class EnvironmentPin(BaseModel):
-    """Interpreter, library, and platform versions captured at run time."""
-
     model_config = Frozen
 
     python: Version
@@ -382,6 +330,5 @@ class EnvironmentPin(BaseModel):
 
     @property
     def sha256(self) -> Sha256:
-        """Identify this exact interpreter/library/platform/commit combination for reproducibility checks."""
         serialized = self.model_dump_json().encode("utf-8")
         return hashlib.sha256(serialized).hexdigest()

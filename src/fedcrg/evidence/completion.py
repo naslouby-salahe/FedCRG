@@ -1,5 +1,3 @@
-"""Single experiment-level completeness assessor and owned-artifact purge."""
-
 from __future__ import annotations
 
 import json
@@ -50,8 +48,6 @@ Frozen = ConfigDict(frozen=True, extra="forbid")
 
 
 class CompletionProblem(BaseModel):
-    """One completeness or verification problem for an experiment."""
-
     model_config = Frozen
 
     code: Description
@@ -59,8 +55,6 @@ class CompletionProblem(BaseModel):
 
 
 class CompletionAssessment(BaseModel):
-    """Derived experiment-level completion state and the problems that produced it."""
-
     model_config = Frozen
 
     experiment_id: ExperimentId
@@ -85,7 +79,6 @@ def _problem(code: Description, detail: Description) -> CompletionProblem:
 
 
 def expected_run_count(config: ExperimentConfig) -> NonNegativeCount:
-    """Seed-by-policy grid size for an empirical experiment."""
     return (
         len(config.randomness.model_seeds)
         * len(config.dataset.calibration_seeds)
@@ -98,7 +91,6 @@ def experiment_source_files(
     outputs_root: Path,
     experiment_id: ExperimentId,
 ) -> tuple[Path, ...]:
-    """Source artifacts that must be current for the experiment result bundle."""
     outputs = OutputsLayout(outputs_root)
     paths: list[Path] = []
     analysis = outputs.analysis_result(experiment_id)
@@ -123,7 +115,6 @@ def source_digests(
     outputs_root: Path,
     experiment_id: ExperimentId,
 ) -> tuple[ChecksumRecord, ...]:
-    """Hashes of current source artifacts used to detect a stale delivery bundle."""
     records: list[ChecksumRecord] = []
     for path in experiment_source_files(contract, outputs_root, experiment_id):
         if not path.is_file():
@@ -138,8 +129,6 @@ def source_digests(
 
 
 class ExperimentEvidenceAssessor:
-    """Derives experiment completion from the artifact contract and verified files."""
-
     def __init__(self, study: Study | None = None) -> None:
         self.study = study or Study.load()
 
@@ -150,7 +139,6 @@ class ExperimentEvidenceAssessor:
         outputs_root: Path | None = None,
         results_root: Path | None = None,
     ) -> CompletionAssessment:
-        """Evaluate one experiment's execution, publication, and delivery evidence."""
         contract = experiment_contract(experiment_id)
         config = self.study.resolve(experiment_id)
         outputs_root = outputs_root or config.outputs_root
@@ -576,13 +564,10 @@ class ExperimentEvidenceAssessor:
 
 
 class ExperimentArtifactPurger:
-    """Deletes artifacts owned by an experiment without touching shared prerequisites."""
-
     def __init__(self, study: Study | None = None) -> None:
         self.study = study or Study.load()
 
     def purge(self, experiment_id: ExperimentId) -> None:
-        """Remove run, analysis, publication, cache, and bundle artifacts this experiment owns."""
         contract = experiment_contract(experiment_id)
         outputs = OutputsLayout(self.study.paths.outputs_root)
         self._purge_runs(experiment_id, outputs)

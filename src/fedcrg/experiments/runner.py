@@ -1,5 +1,3 @@
-"""Trains detectors, computes scores, evaluates threshold policies, and drives experiments through their manifest lifecycle."""
-
 from __future__ import annotations
 
 import hashlib
@@ -7,7 +5,6 @@ import os
 import shutil
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from graphlib import TopologicalSorter
 from pathlib import Path
 
 import numpy as np
@@ -139,8 +136,6 @@ _BASE_SCORE_ROLES = (
 
 
 class PreflightReport(BaseModel):
-    """Validity result of a pre-run check, with the specific problems found."""
-
     model_config = Frozen
 
     valid: bool
@@ -154,8 +149,6 @@ def _tensor_sha256(tensor: torch.Tensor) -> Sha256:
 
 
 class ExperimentPlan(BaseModel):
-    """Resolved experiment definition bound to one model seed and calibration seed."""
-
     model_config = Frozen
 
     definition: ExperimentSpec
@@ -182,51 +175,11 @@ _ALLOWED_TRANSITIONS: dict[ExperimentStatus, tuple[ExperimentStatus, ...]] = {
 
 
 def assert_transition(current: ExperimentStatus, target: ExperimentStatus) -> None:
-    """Raise if `target` is not a status this experiment lifecycle allows from `current`."""
     if target not in _ALLOWED_TRANSITIONS[current]:
         raise ValueError(f"Invalid experiment transition: {current} -> {target}")
 
 
-class DependencyResolver:
-    """Resolves which experiments block a given experiment and topologically orders a requested set with its dependencies."""
-
-    def __init__(self, study: Study | None = None) -> None:
-        self.study = study or Study.load()
-
-    def blockers(
-        self,
-        experiment_id: ExperimentId,
-        statuses: Mapping[ExperimentId, ExperimentStatus],
-    ) -> tuple[ExperimentId, ...]:
-        """Return the dependencies of `experiment_id` that are not yet COMPLETE."""
-        return tuple(
-            dependency
-            for dependency in self.study.catalogue.spec(experiment_id).dependencies
-            if statuses.get(dependency) is not ExperimentStatus.COMPLETE
-        )
-
-    def order(self, experiment_ids: tuple[ExperimentId, ...]) -> tuple[ExperimentId, ...]:
-        """Topologically sort the requested experiments together with every transitive dependency they pull in."""
-        expanded = set(experiment_ids)
-        stack = list(experiment_ids)
-        while stack:
-            current = stack.pop()
-            for dependency in self.study.catalogue.spec(current).dependencies:
-                if dependency not in expanded:
-                    expanded.add(dependency)
-                    stack.append(dependency)
-        sorter = TopologicalSorter(
-            {
-                ex_id: self.study.catalogue.spec(ex_id).dependencies
-                for ex_id in sorted(expanded, key=str)
-            }
-        )
-        return tuple(item for item in sorter.static_order() if item in expanded)
-
-
 class ExperimentPlanner:
-    """Builds a validated ExperimentPlan for one (experiment, model seed, calibration seed) request."""
-
     def __init__(self, study: Study | None = None) -> None:
         self.study = study or Study.load()
 
@@ -237,7 +190,6 @@ class ExperimentPlanner:
         model_seed: ModelSeed,
         calibration_seed: CalibrationSeed,
     ) -> ExperimentPlan:
-        """Validate the requested seeds and policies against the study catalogue and build an ExperimentPlan."""
         if config.id is not experiment_id:
             raise ValueError(
                 f"Experiment identity mismatch: plan={experiment_id}, config={config.id}"
@@ -264,8 +216,6 @@ class ExperimentPlanner:
 
 
 class RunExperiment:
-    """Drives one experiment cell through its manifest lifecycle from PENDING to COMPLETE or FAILED."""
-
     def __init__(
         self,
         planner: ExperimentPlanner | None = None,
@@ -313,7 +263,6 @@ class RunExperiment:
         policy: PolicyId,
         repository_root: Path,
     ) -> tuple[ExperimentPlan, RunLayout]:
-        """Materialize a fresh run directory and manifest, advancing it to READY before any actual work runs."""
         if policy not in config.policies:
             raise ValueError(f"Policy {policy} is not configured for this experiment")
 
@@ -364,7 +313,6 @@ class RunExperiment:
         runner: Callable[[ExperimentPlan, RunLayout], FederationMetrics | None],
         repository_root: Path,
     ) -> tuple[FederationMetrics | None, RunLayout]:
-        """Run one experiment cell to completion, marking the manifest FAILED and re-raising on any error instead of leaving it stuck mid-lifecycle."""
         plan, layout = self.prepare(
             experiment_id, config, model_seed, calibration_seed, policy, repository_root
         )
@@ -390,7 +338,6 @@ def _oracle_candidate_missing(client_id: ClientId) -> Threshold:
 
 
 def feature_columns(frame: pd.DataFrame, expected_count: PositiveCount) -> tuple[FeatureName, ...]:
-    """Return the dataframe's numeric feature columns, excluding metadata, and check the count matches `expected_count`."""
     columns = tuple(
         col
         for col in frame.columns
@@ -406,8 +353,6 @@ def feature_columns(frame: pd.DataFrame, expected_count: PositiveCount) -> tuple
 
 
 class TrainDetector:
-    """Trains a detector model from cached prepared data, or returns the cached frozen model if one already exists for this seed."""
-
     def __init__(
         self,
         trainer: FederatedTrainer | None = None,
@@ -419,7 +364,6 @@ class TrainDetector:
         self.dataset_manifests = dataset_manifests or PreparedDatasetManifestStore()
 
     def create_model(self, config: ExperimentConfig) -> DetectorModel:
-        """Instantiate a fresh, untrained detector model for `config`."""
         if config.detector is None:
             raise ValueError("Training requires a detector profile")
         return create_detector(config.dataset.feature_count, config.detector)
@@ -487,7 +431,6 @@ class TrainDetector:
         prepared_root: Path,
         model_seed: ModelSeed,
     ) -> tuple[Path, Path]:
-        """Return the cached frozen model for this model seed, validating it against the current config, or train and cache one if absent."""
         if int(model_seed) not in config.randomness.model_seeds:
             raise ValueError(f"Model seed {int(model_seed)} is not configured")
 
@@ -611,7 +554,6 @@ class TrainDetector:
                 raise ValueError(msg)
 
     def load_model(self, config: ExperimentConfig, model_path: Path) -> DetectorModel:
-        """Load a frozen model's weights from `model_path` and check its architecture against `config`."""
         model = self.create_model(config)
         state = torch.load(model_path, map_location="cpu", weights_only=True)
         model.load_state_dict(state, strict=True)
@@ -620,8 +562,6 @@ class TrainDetector:
 
 
 class ComputeScores:
-    """Computes and caches detector scores for a frozen model, or returns the cached score set if one already exists."""
-
     def __init__(
         self,
         computer: ScoreComputer | None = None,
@@ -735,7 +675,6 @@ class ComputeScores:
         model_seed: ModelSeed,
         training_manifest: Path,
     ) -> Path:
-        """Return the cached score set for this frozen model, or compute and cache one if absent; the frozen model's weights must hash to the exact value recorded at training time."""
         prepared_layout = PreparedDatasetLayout(prepared_root)
         prepared_manifest = self.dataset_manifests.load_model(prepared_layout.manifest)
 
@@ -801,8 +740,6 @@ class ComputeScores:
 
 
 class EvaluatePolicies:
-    """Evaluates every configured threshold policy for all clients under one calibration-seed repartitioning of cached scores."""
-
     def __init__(
         self,
         selector: PolicyThresholdSelector | None = None,
@@ -946,7 +883,6 @@ class EvaluatePolicies:
         calibration_seed: CalibrationSeed,
         mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
     ) -> EvaluationBundle:
-        """Evaluate every configured policy for all clients under one calibration-seed repartitioning of the frozen score cache."""
         descriptor = self.score_cache.load_descriptor(score_root)
         self._validate_score_identity(config, descriptor)
 
@@ -1014,8 +950,6 @@ class EvaluatePolicies:
         }
 
         if len(calibration_sizes) != 1:
-            # readiness is evaluated once against a shared sample size, so it cannot be
-            # computed unless every client's calibration view has the same length.
             raise ValueError("Calibration evidence count must be identical across clients")
 
         plan = self.protocol.require_readiness(calibration_sizes.pop(), config.protocol)
@@ -1072,7 +1006,6 @@ class EvaluatePolicies:
         policy: PolicyId,
         bundle: EvaluationBundle,
     ) -> tuple[Path, Path]:
-        """Write one policy's per-client threshold and metric records and federation metrics to the run layout."""
         protocol_by_client = {item.client_id: item for item in bundle.protocol_results}
 
         threshold_records = [
@@ -1140,8 +1073,6 @@ class EvaluatePolicies:
 
 
 class EvaluationSummary(BaseModel):
-    """Snapshot of one policy-evaluation run: calibration seed, score-cache hash, and the resulting evaluation bundle."""
-
     model_config = Frozen
 
     calibration_seed: CalibrationSeed
@@ -1152,8 +1083,6 @@ class EvaluationSummary(BaseModel):
 
 @dataclass(frozen=True, slots=True)
 class FrozenCacheInputs:
-    """Paths to the frozen prepared-data, model, training-manifest, and score-cache artifacts one federation cell reads from."""
-
     prepared_root: Path
     model_path: Path
     training_manifest: Path
@@ -1161,8 +1090,6 @@ class FrozenCacheInputs:
 
 
 class PolicyCellMaterializer:
-    """Evaluates a federation cell from frozen caches and writes its per-policy artifacts to disk."""
-
     def __init__(
         self,
         evaluator: EvaluatePolicies | None = None,
@@ -1184,7 +1111,6 @@ class PolicyCellMaterializer:
         calibration_seed: CalibrationSeed,
         assignment_mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
     ) -> EvaluationBundle:
-        """Evaluate every configured policy for all clients from frozen cached inputs at one calibration seed."""
         self.validate_upstream(config, caches)
         descriptor = self.score_cache.load_descriptor(caches.score_root)
         if descriptor.identity.data_spec_hash != config.data_spec_hash:
@@ -1206,7 +1132,6 @@ class PolicyCellMaterializer:
         bundle: EvaluationBundle,
         assignment_mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
     ) -> FederationMetrics | None:
-        """Persist one policy's evaluation artifacts and manifests into its run directory."""
         self._copy_manifests(layout, caches)
         self._write_cache_references(config, layout, caches)
         descriptor = self.score_cache.load_descriptor(caches.score_root)
@@ -1224,7 +1149,6 @@ class PolicyCellMaterializer:
         return next((item for item in bundle.federations if item.policy is policy), None)
 
     def validate_upstream(self, config: ExperimentConfig, caches: FrozenCacheInputs) -> None:
-        """Fail loudly if the prepared-dataset, training, and score-cache artifacts are missing or their provenance chain is broken."""
         prepared_layout = PreparedDatasetLayout(caches.prepared_root)
         score_layout = ScoreCacheLayout(caches.score_root)
 
@@ -1339,15 +1263,11 @@ class PolicyCellMaterializer:
 
 @dataclass(frozen=True, slots=True)
 class PolicyRunDirectory:
-    """A policy and the run directory its artifacts were written to."""
-
     policy: PolicyId
     path: Path
 
 
 class FederationCellResult(BaseModel):
-    """Run directories produced for one (model seed, calibration seed) federation cell, indexed by policy."""
-
     model_config = ConfigDict(
         frozen=True, arbitrary_types_allowed=True, revalidate_instances="never"
     )
@@ -1358,7 +1278,6 @@ class FederationCellResult(BaseModel):
     run_directories: tuple[PolicyRunDirectory, ...]
 
     def directory_for(self, policy: PolicyId) -> Path:
-        """Return the run directory recorded for `policy`."""
         for entry in self.run_directories:
             if entry.policy is policy:
                 return entry.path
@@ -1366,8 +1285,6 @@ class FederationCellResult(BaseModel):
 
 
 class FederationCellMaterializer:
-    """Evaluates a federation cell once and persists the result separately per policy through its own run lifecycle."""
-
     def __init__(
         self,
         policy_cells: PolicyCellMaterializer | None = None,
@@ -1386,7 +1303,6 @@ class FederationCellMaterializer:
         policies: tuple[PolicyId, ...] | None = None,
         assignment_mode: CalibrationAssignmentMode = CalibrationAssignmentMode.SEEDED_PERMUTATION,
     ) -> FederationCellResult:
-        """Evaluate the federation once for this (model_seed, calibration_seed) pair and persist the result separately per policy through its own run lifecycle."""
         selected = config.policies if policies is None else policies
         if not selected:
             raise ValueError("At least one policy must be materialized")
@@ -1452,8 +1368,6 @@ class FederationCellMaterializer:
 
 
 class FrozenModelEvidence(BaseModel):
-    """Frozen model artifacts and cached scores for one model seed."""
-
     model_config = Frozen
 
     model_seed: ModelSeed
@@ -1463,8 +1377,6 @@ class FrozenModelEvidence(BaseModel):
 
 
 class WorkloadExecution(BaseModel):
-    """Frozen model evidence and run directories produced by executing one experiment's full workload."""
-
     model_config = Frozen
 
     experiment_id: ExperimentId
@@ -1473,8 +1385,6 @@ class WorkloadExecution(BaseModel):
 
 
 class ResearchExecution(BaseModel):
-    """Preflight check result paired with the workload execution it gated."""
-
     model_config = Frozen
 
     preflight: PreflightReport
@@ -1482,8 +1392,6 @@ class ResearchExecution(BaseModel):
 
 
 class RunAllExperiments:
-    """Trains and scores once per configured model seed, then materializes a federation cell for every (model seed, calibration seed) pair."""
-
     def __init__(
         self,
         trainer: TrainDetector | None = None,
@@ -1502,7 +1410,6 @@ class RunAllExperiments:
         *,
         calibration_seeds: tuple[CalibrationSeed, ...] | None = None,
     ) -> WorkloadExecution:
-        """Train/score once per configured model seed, then materialize a federation cell for every (model_seed, calibration_seed) combination."""
         seed_values = calibration_seeds or tuple(
             int(seed) for seed in config.dataset.calibration_seeds
         )

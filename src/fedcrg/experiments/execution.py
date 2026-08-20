@@ -1,5 +1,3 @@
-"""Experiment-level execution, idempotent reruns, and publication completion."""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -34,8 +32,6 @@ Frozen = ConfigDict(frozen=True, extra="forbid")
 
 
 class ExperimentRunResult(BaseModel):
-    """Outcome of `fedcrg run` after evidence assessment and optional execution."""
-
     model_config = Frozen
 
     experiment_id: ExperimentId
@@ -54,8 +50,6 @@ WorkloadRunner = Callable[[ExperimentId, ExperimentSpec, ExperimentConfig, Path]
 
 
 class ExperimentExecutor:
-    """Runs one experiment through execution, publication, bundle rebuild, and verification."""
-
     def __init__(
         self,
         study: Study | None = None,
@@ -77,7 +71,6 @@ class ExperimentExecutor:
     def execute(
         self, experiment_id: ExperimentId, *, overwrite: bool = False
     ) -> ExperimentRunResult:
-        """Validate existing evidence, skip if already passed, or run and publish to a verified pass."""
         if overwrite:
             self.purger.purge(experiment_id)
         assessment = self.assessor.assess(experiment_id)

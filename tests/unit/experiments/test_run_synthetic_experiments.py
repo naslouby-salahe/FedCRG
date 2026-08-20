@@ -1,5 +1,3 @@
-"""Tests for the synthetic and robustness experiment runners."""
-
 from __future__ import annotations
 
 from pathlib import Path

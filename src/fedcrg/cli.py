@@ -1,5 +1,3 @@
-"""The `fedcrg` command-line interface."""
-
 from __future__ import annotations
 
 import platform
@@ -58,8 +56,6 @@ _DATASET_EXPERIMENTS: dict[DatasetId, ExperimentId] = {
 
 
 class DoctorPayload(BaseModel):
-    """Output of `fedcrg doctor`: environment and CUDA availability."""
-
     model_config = ConfigDict(frozen=True)
 
     python: Version
@@ -73,8 +69,6 @@ class DoctorPayload(BaseModel):
 
 
 class ValidationPayload(BaseModel):
-    """Output of `fedcrg validate`."""
-
     model_config = ConfigDict(frozen=True)
 
     valid: bool
@@ -84,8 +78,6 @@ class ValidationPayload(BaseModel):
 
 
 class PlanPayload(BaseModel):
-    """Output of `fedcrg plan`."""
-
     model_config = ConfigDict(frozen=True)
 
     experiment: ExperimentId
@@ -98,8 +90,6 @@ class PlanPayload(BaseModel):
 
 
 class PreprocessPayload(BaseModel):
-    """Output of `fedcrg preprocess`."""
-
     model_config = ConfigDict(frozen=True)
 
     dataset: DatasetId
@@ -109,8 +99,6 @@ class PreprocessPayload(BaseModel):
 
 
 class RunPayload(BaseModel):
-    """Output of `fedcrg run`."""
-
     model_config = ConfigDict(frozen=True)
 
     experiment: ExperimentId
@@ -126,8 +114,6 @@ class RunPayload(BaseModel):
 
 
 class ExperimentStatusRow(BaseModel):
-    """One experiment's row in `StatusPayload`."""
-
     model_config = ConfigDict(frozen=True)
 
     experiment: ExperimentId
@@ -138,16 +124,12 @@ class ExperimentStatusRow(BaseModel):
 
 
 class StatusPayload(BaseModel):
-    """Output of `fedcrg status`."""
-
     model_config = ConfigDict(frozen=True)
 
     experiments: tuple[ExperimentStatusRow, ...]
 
 
 class ResultsBuildPayload(BaseModel):
-    """Output of `fedcrg results`."""
-
     model_config = ConfigDict(frozen=True)
 
     status: ResultsGenerationStatus
@@ -155,8 +137,6 @@ class ResultsBuildPayload(BaseModel):
 
 
 class ResultsVerifyPayload(BaseModel):
-    """Output of `fedcrg results verify`."""
-
     model_config = ConfigDict(frozen=True)
 
     valid: bool
@@ -164,14 +144,12 @@ class ResultsVerifyPayload(BaseModel):
 
 
 def _study(ctx: click.Context) -> Study:
-    """Fetch the `Study` stashed on the Click context by the top-level group callback."""
     study = ctx.obj
     assert isinstance(study, Study)
     return study
 
 
 def _print(payload: BaseModel) -> None:
-    """Print a payload as indented JSON."""
     click.echo(payload.model_dump_json(indent=2))
 
 
@@ -179,7 +157,6 @@ def _print(payload: BaseModel) -> None:
 @click.version_option(package_name="fedcrg")
 @click.pass_context
 def cli(ctx: click.Context) -> None:
-    """Load the study configuration and configure logging before any subcommand runs."""
     study = Study.load()
     ctx.obj = study
     configure_logging(logs_root=OutputsLayout(study.paths.outputs_root).logs)
@@ -187,7 +164,6 @@ def cli(ctx: click.Context) -> None:
 
 @cli.command(name="doctor")
 def doctor() -> None:
-    """Report library versions and CUDA availability."""
     cuda_available = torch.cuda.is_available()
     _print(
         DoctorPayload(
@@ -207,7 +183,6 @@ def doctor() -> None:
 @click.argument("experiment_id", type=click.Choice([member.value for member in ExperimentId]))
 @click.pass_context
 def validate(ctx: click.Context, experiment_id: str) -> None:
-    """Resolve and validate an experiment's configuration without running it."""
     study = _study(ctx)
     experiment = ExperimentId(experiment_id)
     spec = study.spec(experiment)
@@ -230,7 +205,6 @@ def validate(ctx: click.Context, experiment_id: str) -> None:
 @click.argument("experiment_id", type=click.Choice([member.value for member in ExperimentId]))
 @click.pass_context
 def plan(ctx: click.Context, experiment_id: str) -> None:
-    """Show what an experiment would run: seeds, policies, and dependencies."""
     study = _study(ctx)
     experiment = ExperimentId(experiment_id)
     spec = study.spec(experiment)
@@ -257,7 +231,6 @@ def plan(ctx: click.Context, experiment_id: str) -> None:
 @click.option("--overwrite", is_flag=True, help="Rebuild the prepared cache explicitly.")
 @click.pass_context
 def preprocess(ctx: click.Context, dataset_id: str | None, overwrite: bool) -> None:
-    """Prepare (or reuse the cached preparation of) one or all raw datasets."""
     study = _study(ctx)
     if dataset_id is None:
         datasets = tuple(_DATASET_EXPERIMENTS)
@@ -294,7 +267,6 @@ def preprocess(ctx: click.Context, dataset_id: str | None, overwrite: bool) -> N
 @click.option("--overwrite", is_flag=True, help="Re-run and replace regenerable evidence.")
 @click.pass_context
 def run(ctx: click.Context, experiment_id: str, overwrite: bool) -> None:
-    """Run one experiment end to end. A current fully-passed experiment is not rerun unless `--overwrite` is set."""
     study = _study(ctx)
     experiment = ExperimentId(experiment_id)
     result = ExperimentExecutor(study=study).execute(experiment, overwrite=overwrite)
@@ -322,7 +294,6 @@ def run(ctx: click.Context, experiment_id: str, overwrite: bool) -> None:
 )
 @click.pass_context
 def status(ctx: click.Context, experiment_id: str | None) -> None:
-    """Show derived completion state for one experiment or every catalogue entry."""
     study = _study(ctx)
     assessor = ExperimentEvidenceAssessor(study)
     selected = (
@@ -354,7 +325,6 @@ def status(ctx: click.Context, experiment_id: str | None) -> None:
 )
 @click.pass_context
 def monitor(ctx: click.Context, interval: float, samples: int | None) -> None:
-    """Stream resource telemetry to stdout and a log file until interrupted."""
     study = _study(ctx)
     telemetry_path = OutputsLayout(study.paths.outputs_root).telemetry_file
     monitor = ResourceMonitor()
@@ -377,7 +347,6 @@ def monitor(ctx: click.Context, interval: float, samples: int | None) -> None:
 @click.argument("experiment_id", type=click.Choice([member.value for member in ExperimentId]))
 @click.pass_context
 def results_group(ctx: click.Context, overwrite: bool, experiment_id: str) -> None:
-    """Build one experiment's results bundle. Reuses a current valid bundle."""
     if ctx.invoked_subcommand is not None:
         return
     study = _study(ctx)
@@ -395,7 +364,6 @@ def results_group(ctx: click.Context, overwrite: bool, experiment_id: str) -> No
 @click.argument("experiment_id", type=click.Choice([member.value for member in ExperimentId]))
 @click.pass_context
 def results_verify(ctx: click.Context, experiment_id: str) -> None:
-    """Verify one experiment's results bundle."""
     study = _study(ctx)
     verification = verify_results_bundle(
         study.paths.results_root,

@@ -1,5 +1,3 @@
-"""Fits train-only min/max scaling (and DIAD median imputation) and applies it across federated clients."""
-
 from __future__ import annotations
 
 import numpy as np
@@ -27,7 +25,6 @@ _METADATA = frozenset(PreparedColumn)
 
 
 def model_feature_columns(frame: pd.DataFrame, expected: PositiveCount) -> tuple[FeatureName, ...]:
-    """Return a frame's model feature columns, excluding prepared-artifact metadata columns."""
     columns = tuple(col for col in frame.columns if col not in _METADATA)
     if len(columns) != expected:
         raise DataIntegrityError(f"Expected {expected} model features, found {len(columns)}")
@@ -35,8 +32,6 @@ def model_feature_columns(frame: pd.DataFrame, expected: PositiveCount) -> tuple
 
 
 class ClientPreprocessingParameters(BaseModel):
-    """One client's imputation medians and training-row hash, carried in the shared scaling model."""
-
     model_config = Frozen
 
     client_id: ClientId
@@ -45,8 +40,6 @@ class ClientPreprocessingParameters(BaseModel):
 
 
 class PreprocessingModel(BaseModel):
-    """Federated min/max scaling: global feature extrema plus per-client imputation parameters."""
-
     model_config = Frozen
 
     dataset: DatasetId
@@ -57,21 +50,18 @@ class PreprocessingModel(BaseModel):
 
     @property
     def constant_features(self) -> tuple[bool, ...]:
-        """Whether each feature has zero span (min == max) across all clients' training data."""
         return tuple(
             minimum == maximum
             for minimum, maximum in zip(self.global_minima, self.global_maxima, strict=True)
         )
 
     def parameters_for(self, client_id: ClientId) -> ClientPreprocessingParameters:
-        """Return the preprocessing parameters for one client."""
         match = next((item for item in self.clients if item.client_id == client_id), None)
         if match is None:
             raise KeyError(client_id)
         return match
 
     def transform(self, frame: pd.DataFrame, client_id: ClientId) -> pd.DataFrame:
-        """Scale by global (cross-client) min/max; output is intentionally left unclipped to [0, 1] to preserve anomaly-score geometry."""
         features = list(self.feature_columns)
         values = frame.loc[:, features].to_numpy(dtype=np.float64, copy=True)
         parameters = self.parameters_for(client_id)
@@ -90,7 +80,6 @@ class PreprocessingModel(BaseModel):
         minima = np.asarray(self.global_minima, dtype=np.float64)
         span = np.asarray(self.global_maxima, dtype=np.float64) - minima
 
-        # Constant features (span == 0) are left at 0 rather than dividing by zero.
         scaled = np.zeros_like(values)
         np.divide(values - minima, span, out=scaled, where=span.astype(bool))
 
@@ -100,8 +89,6 @@ class PreprocessingModel(BaseModel):
 
 
 class ClientPreprocessingStatistics(BaseModel):
-    """One client's local min/max/median statistics, computed from its training rows only."""
-
     model_config = Frozen
 
     client_id: ClientId
@@ -113,8 +100,6 @@ class ClientPreprocessingStatistics(BaseModel):
 
 
 class TrainOnlyPreprocessing:
-    """Fits preprocessing statistics from each client's training rows only, then aggregates them into a shared scaling model."""
-
     def validate_training_rows(
         self,
         splits: ClientSplits,
@@ -123,7 +108,6 @@ class TrainOnlyPreprocessing:
         *,
         finite_rate_minimum: Probability | None = None,
     ) -> tuple[FeatureName, ...]:
-        """Check training-feature finiteness for a client and return its model feature columns."""
         train = splits.get(DataRole.TRAIN)
         columns = model_feature_columns(train, expected_features)
         values = train.loc[:, list(columns)].to_numpy(dtype=np.float64)
@@ -154,7 +138,6 @@ class TrainOnlyPreprocessing:
         *,
         finite_rate_minimum: Probability | None = None,
     ) -> ClientPreprocessingStatistics:
-        """Fits local min/max/median from this client's training rows only, for later federated aggregation."""
         columns = self.validate_training_rows(
             splits,
             dataset,
@@ -197,7 +180,6 @@ class TrainOnlyPreprocessing:
         statistics: tuple[ClientPreprocessingStatistics, ...],
         dataset: DatasetId,
     ) -> PreprocessingModel:
-        """Elementwise min/max of clients' local extrema; this is federated communication of derived statistics, not a privacy-preserving computation."""
         if not statistics:
             raise DataIntegrityError("Cannot fit preprocessing without clients")
 

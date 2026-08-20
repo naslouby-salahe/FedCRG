@@ -1,5 +1,3 @@
-"""Builds immutable experiment results bundles from verified execution artifacts."""
-
 from __future__ import annotations
 
 import json
@@ -69,7 +67,6 @@ def _run_manifest(run_dir: Path) -> RunManifest | None:
     try:
         return RunManifest.model_validate_json(manifest_path.read_text(encoding="utf-8"))
     except pydantic.ValidationError:
-        # An unreadable manifest is treated as an incomplete run rather than an error.
         return None
 
 
@@ -79,7 +76,6 @@ def _band_guide_lines() -> tuple[Fpr, Fpr, Fpr]:
 
 
 def build_per_client_operating_points_figure(output: Path, frame: pd.DataFrame) -> Path:
-    """Plot each client's final-test FPR by policy, against the operating band."""
     if frame.empty:
         raise ValueError("operating-points figure requires a non-empty results table")
     if "client_id" not in frame.columns or "fpr" not in frame.columns:
@@ -101,7 +97,6 @@ def build_per_client_operating_points_figure(output: Path, frame: pd.DataFrame) 
 
 
 def build_reliability_utility_frontier_figure(output: Path, frame: pd.DataFrame) -> Path:
-    """Plot mean excess band error against attack-balanced macro TPR for each policy."""
     if frame.empty:
         raise ValueError("reliability-utility figure requires a non-empty results table")
     required = {"policy_id", "mebe", "attack_balanced_macro_tpr"}
@@ -125,7 +120,6 @@ def build_reliability_utility_frontier_figure(output: Path, frame: pd.DataFrame)
 
 
 def build_external_replication_figure(output: Path, frame: pd.DataFrame) -> Path:
-    """Plot each eligible external-replication client's final-test FPR against the operating band."""
     if frame.empty:
         raise ValueError("external-replication figure requires a non-empty results table")
     if "client_id" not in frame.columns or "fpr" not in frame.columns:
@@ -145,8 +139,6 @@ def build_external_replication_figure(output: Path, frame: pd.DataFrame) -> Path
 
 
 class OperatingPointRow(BaseModel):
-    """One client/policy false-positive rate used to render an operating-points figure."""
-
     model_config = Frozen
 
     client_id: ClientId
@@ -155,8 +147,6 @@ class OperatingPointRow(BaseModel):
 
 
 class ExperimentPublication(BaseModel):
-    """Paths written by publishing one experiment's delivery artifacts."""
-
     model_config = ConfigDict(frozen=True, extra="forbid", arbitrary_types_allowed=True)
 
     experiment_id: ExperimentId
@@ -166,12 +156,9 @@ class ExperimentPublication(BaseModel):
 
 
 class ExperimentPublisher:
-    """Writes experiment-owned JSON, tables, and figures from verified execution artifacts."""
-
     def publish(
         self, experiment_id: ExperimentId, outputs_root: Path, config: ExperimentConfig
     ) -> ExperimentPublication:
-        """Materialize the experiment's required publication artifacts from existing execution evidence."""
         from fedcrg.evidence.contracts import experiment_contract
 
         contract = experiment_contract(experiment_id)
@@ -437,8 +424,6 @@ class ExperimentPublisher:
 
 
 class ResultsManifest(BaseModel):
-    """Top-level manifest describing a results bundle's provenance and completeness."""
-
     model_config = Frozen
 
     experiment_id: ExperimentId | None = None
@@ -456,23 +441,17 @@ class ResultsManifest(BaseModel):
 
 @dataclass(frozen=True, slots=True)
 class ResultsVerification:
-    """Result of checking a results bundle's structure and checksums."""
-
     valid: bool
     problems: tuple[Description, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class ResultsBuildResult:
-    """Outcome of building or reusing a results bundle."""
-
     path: Path
     status: ResultsGenerationStatus
 
 
 class ResultsBuilder:
-    """Assembles a delivery results bundle from verified execution artifacts."""
-
     def build(
         self,
         *,
@@ -482,7 +461,6 @@ class ResultsBuilder:
         overwrite: bool = False,
         study: Study | None = None,
     ) -> Path:
-        """Assemble one experiment bundle under results/experiments/."""
         return self.build_with_status(
             outputs_root=outputs_root,
             results_root=results_root,
@@ -500,7 +478,6 @@ class ResultsBuilder:
         overwrite: bool = False,
         study: Study | None = None,
     ) -> ResultsBuildResult:
-        """Assemble a bundle, reusing a current valid one unless `overwrite` is set."""
         resolved = study or Study.load()
         return self._build_experiment(
             experiment_id, outputs_root, results_root, overwrite=overwrite, study=resolved
@@ -588,7 +565,6 @@ class ResultsBuilder:
         complete: bool,
         completion_state: CompletionState,
     ) -> None:
-        """Write the bundle manifest first, then checksums that also cover it."""
         checksums = ResultsBuilder._checksums(layout)
         manifest = ResultsBuilder._manifest(
             config,
@@ -692,7 +668,6 @@ class ResultsBuilder:
     def _copy_run_artifacts(
         outputs_root: Path, layout: ExperimentResultsBundleLayout, experiment_id: ExperimentId
     ) -> None:
-        """Copy each completed run's manifest, verification hashes, and summary report into the bundle."""
         runs_root = OutputsLayout(outputs_root).runs
         if not runs_root.exists():
             return
@@ -755,14 +730,11 @@ class ResultsBuilder:
 
 
 class ResultsVerifier:
-    """Verifies a previously built results bundle's structure and checksums."""
-
     def verify(
         self,
         results_root: Path,
         experiment_id: ExperimentId,
     ) -> ResultsVerification:
-        """Check one experiment's results bundle."""
         destination = experiment_results_root(results_root, experiment_id)
         if not destination.exists():
             return ResultsVerification(
@@ -773,7 +745,6 @@ class ResultsVerifier:
 
     @staticmethod
     def _verify_bundle(layout: ExperimentResultsBundleLayout) -> list[Identifier]:
-        """Check one bundle's required directories, manifest, checksums, and files."""
         destination = layout.root
         problems: list[Identifier] = []
         for directory in layout.required_directories:
@@ -932,7 +903,6 @@ def build_experiment_results_bundle(
     *,
     overwrite: bool = False,
 ) -> Path:
-    """Build the results bundle for one experiment under results/experiments/."""
     return ResultsBuilder().build(
         outputs_root=outputs_root,
         results_root=results_root,
@@ -945,5 +915,4 @@ def verify_results_bundle(
     results_root: Path,
     experiment_id: ExperimentId,
 ) -> ResultsVerification:
-    """Verify one experiment's results bundle."""
     return ResultsVerifier().verify(results_root, experiment_id=experiment_id)

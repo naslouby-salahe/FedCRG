@@ -1,5 +1,3 @@
-"""Contract tests for execution, verification, result bundles, rerun, and overwrite."""
-
 from __future__ import annotations
 
 from pathlib import Path

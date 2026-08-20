@@ -1,5 +1,3 @@
-"""Synthetic/robustness experiment runners, benchmark harness, and cross-run statistical analyses."""
-
 from __future__ import annotations
 
 import collections
@@ -76,8 +74,6 @@ _CLIENT_ID_ADAPTER = TypeAdapter(ClientId)
 
 
 class BenchmarkPrimitive(StrEnum):
-    """Names of the primitives measured by the computational-overhead benchmark."""
-
     REFERENCE_CONSTRUCTION = "reference_construction"
     READINESS_ORDER_STATISTIC = "readiness_order_statistic"
     MISMATCH_EVIDENCE = "mismatch_evidence"
@@ -85,8 +81,6 @@ class BenchmarkPrimitive(StrEnum):
 
 
 class SyntheticCoverageResult(BaseModel):
-    """Coverage-check outcome for one synthetic Monte Carlo cell."""
-
     model_config = Frozen
 
     experiment: ExperimentId
@@ -99,8 +93,6 @@ class SyntheticCoverageResult(BaseModel):
 
 
 class MismatchPowerResult(BaseModel):
-    """Exact mismatch-declaration probability for one (sample count, true FPR) cell."""
-
     model_config = Frozen
 
     sample_count: SampleCount
@@ -109,8 +101,6 @@ class MismatchPowerResult(BaseModel):
 
 
 class RobustnessCell(BaseModel):
-    """Empirical in-band coverage for one robustness-stress axis value."""
-
     model_config = Frozen
 
     axis: ExperimentAxisId
@@ -123,8 +113,6 @@ SyntheticCell = SyntheticCoverageResult | RobustnessCell | MismatchPowerResult
 
 
 class SyntheticExperimentEnvelope(BaseModel):
-    """Full set of cells produced by one synthetic experiment, with expected vs actual trial/cell counts."""
-
     model_config = Frozen
 
     experiment_id: ExperimentId
@@ -136,8 +124,6 @@ class SyntheticExperimentEnvelope(BaseModel):
 
 
 class PairedBootstrapInterval(BaseModel):
-    """Bootstrap interval for a paired method-vs-comparator difference."""
-
     model_config = Frozen
 
     observed_difference: Metric
@@ -148,8 +134,6 @@ class PairedBootstrapInterval(BaseModel):
 
 
 class DescriptiveSummary(BaseModel):
-    """Mean/median/spread summary of a set of metric values."""
-
     model_config = Frozen
 
     values: tuple[Metric, ...]
@@ -161,8 +145,6 @@ class DescriptiveSummary(BaseModel):
 
 
 class SplitSensitivitySummary(BaseModel):
-    """Median/IQR/percentile summary of a metric across calibration-split repetitions."""
-
     model_config = Frozen
 
     median: Metric
@@ -172,7 +154,6 @@ class SplitSensitivitySummary(BaseModel):
 
 
 def describe(values: tuple[Metric, ...]) -> DescriptiveSummary:
-    """Compute mean, standard deviation, median, minimum, and maximum of a value set."""
     data = np.asarray(values, dtype=np.float64)
     if data.ndim != 1 or len(data) == 0 or not np.isfinite(data).all():
         raise ValueError("Summary values must be finite and non-empty")
@@ -189,7 +170,6 @@ def describe(values: tuple[Metric, ...]) -> DescriptiveSummary:
 def split_sensitivity_summary(
     values: tuple[Metric, ...], percentiles_config: tuple[Percentage, ...]
 ) -> SplitSensitivitySummary:
-    """`percentiles_config` must be five ascending percentiles ordered (p05, p25, p50, p75, p95); positions are read positionally below."""
     data = np.asarray(values, dtype=np.float64)
     if len(data) == 0:
         raise ValueError("Split sensitivity requires values")
@@ -210,7 +190,6 @@ def paired_model_seed_bootstrap(
     seed: AnalysisSeed,
     ci_percentiles: tuple[Percentage, Percentage],
 ) -> PairedBootstrapInterval:
-    """Resample model-seed indices jointly for `method` and `comparator` so each replicate keeps the method/comparator pairing within a seed, then interval the resampled paired differences."""
     left = np.asarray(method, dtype=np.float64)
     right = np.asarray(comparator, dtype=np.float64)
     if left.shape != right.shape or left.ndim != 1 or len(left) == 0:
@@ -234,7 +213,6 @@ def draw_distribution(
     size: SampleCount,
     synthetic: SyntheticConfig,
 ) -> np.ndarray:
-    """Draw a Monte Carlo sample from the given synthetic distribution."""
     if size <= 0:
         raise ValueError("Synthetic sample size must be positive")
     match distribution:
@@ -261,7 +239,6 @@ def draw_distribution(
 def distribution_cdf(
     distribution: SyntheticDistribution, threshold: Score, synthetic: SyntheticConfig
 ) -> Metric:
-    """Evaluate the CDF of the given synthetic distribution at a threshold."""
     match distribution:
         case SyntheticDistribution.NORMAL:
             return float(norm.cdf(threshold))
@@ -286,7 +263,6 @@ def distribution_cdf(
 
 
 def _threshold(scores: np.ndarray, rank: PositiveCount) -> Score:
-    """`rank` is the 1-based order statistic (rank=1 is the smallest score)."""
     scores_copy = np.copy(scores)
     scores_copy.partition(rank - 1)
     return float(scores_copy[rank - 1])
@@ -304,7 +280,6 @@ def iid_readiness_validation(
     seed: AnalysisSeed,
     synthetic: SyntheticConfig,
 ) -> SyntheticCoverageResult:
-    """Check the plan's exact coverage probability against empirical Monte Carlo coverage on i.i.d. draws from `distribution`, within a tolerance sized to the Monte Carlo standard error."""
     band = OperatingBand(
         lower=max(0.0, alpha * (1.0 - rho)),
         upper=min(1.0, alpha * (1.0 + rho)),
@@ -354,7 +329,6 @@ def contamination_validation(
     assurance: Assurance,
     synthetic: SyntheticConfig,
 ) -> SyntheticCoverageResult:
-    """Empirical-only coverage check (no `accepted` verdict) for calibration data contaminated with a shifted component, used to probe robustness rather than to validate an exact guarantee."""
     if not 0.0 <= fraction <= 1.0:
         raise ValueError("Contamination fraction must be in [0,1]")
     plan = ReadinessPlanBuilder().build(sample_count, band, assurance)
@@ -392,13 +366,9 @@ def exact_mismatch_power(
     band: OperatingBand,
     confidence: ConfidenceLevel,
 ) -> MismatchPowerResult:
-    """Compute the exact probability that a mismatch would be declared when the true FPR is `true_fpr`."""
     if sample_count <= 0 or not 0.0 <= true_fpr <= 1.0:
         raise ValueError("Mismatch power requires n>0 and true_fpr in [0,1]")
 
-    # Enumerate exceedance counts whose Clopper-Pearson interval falls entirely below/above the
-    # band, i.e. counts that would trigger a mismatch declaration; sum their binomial mass under
-    # true_fpr to get the exact probability of declaring a mismatch.
     low_max, high_min = -1, float("inf")
     for exceedances in range(sample_count + 1):
         interval = clopper_pearson_interval(BinomialCounts(exceedances, sample_count), confidence)
@@ -426,7 +396,6 @@ def temporal_dependence_stress(
     assurance: Assurance,
     seed: AnalysisSeed,
 ) -> RobustnessCell:
-    """Empirical coverage of the readiness band when calibration scores follow an AR(1) process instead of the i.i.d. assumption the plan was built under."""
     if not -1.0 < phi < 1.0:
         raise ValueError("AR(1) phi must be strictly inside (-1,1)")
     plan = ReadinessPlanBuilder().build(sample_count, band, assurance)
@@ -459,7 +428,6 @@ def calibration_shift_stress(
     seed: AnalysisSeed,
     sample_count: SampleCount,
 ) -> RobustnessCell:
-    """Empirical coverage of the readiness band when the deployment-time score distribution has drifted by `mean_shift` from the calibration-time distribution used to build the plan."""
     plan = ReadinessPlanBuilder().build(sample_count, band, assurance)
     rng = np.random.Generator(np.random.PCG64(int(seed)))
     inside = sum(
@@ -484,8 +452,6 @@ def calibration_shift_stress(
 
 
 class RunSyntheticExperiments:
-    """Runs one of the registered synthetic or robustness experiments and writes its result envelope."""
-
     @staticmethod
     def _int_values(spec: ExperimentSpec, axis: ExperimentAxisId) -> tuple[NonNegativeCount, ...]:
         values = spec.axis(axis).values
@@ -523,7 +489,6 @@ class RunSyntheticExperiments:
         cells: tuple[SyntheticCell, ...],
         actual_trials: NonNegativeCount,
     ) -> Path:
-        """Persist `cells` as a SyntheticExperimentEnvelope after checking they match the spec's declared trial/cell counts."""
         envelope = SyntheticExperimentEnvelope(
             experiment_id=spec.id,
             expected_monte_carlo_trials=spec.workload.monte_carlo_trials,
@@ -532,8 +497,6 @@ class RunSyntheticExperiments:
             actual_cells=len(cells),
             cells=cells,
         )
-        # Guards against an experiment silently running fewer trials/cells than declared in its
-        # spec (e.g. an axis was dropped), which would invalidate the reported coverage figures.
         if spec.workload.monte_carlo_trials and actual_trials != spec.workload.monte_carlo_trials:
             raise RuntimeError(
                 f"{spec.id} trial ledger mismatch: "
@@ -556,7 +519,6 @@ class RunSyntheticExperiments:
         config: ExperimentConfig,
         output: Path,
     ) -> Path:
-        """Dispatch to the runner registered for `experiment_id`."""
         try:
             runner = self._RUNNERS[experiment_id]
         except KeyError:
@@ -702,8 +664,6 @@ class RunSyntheticExperiments:
 
 
 class FederationResultRecord(BaseModel):
-    """One (run, policy) row of federation-level metrics loaded from run artifacts."""
-
     model_config = Frozen
 
     run_id: RunId
@@ -719,7 +679,6 @@ class FederationResultRecord(BaseModel):
 
 
 def load_federation_results(run_dirs: tuple[Path, ...]) -> tuple[FederationResultRecord, ...]:
-    """Load completed, well-formed runs and skip anything incomplete, missing, or malformed rather than failing the whole aggregation over one bad run directory."""
     from fedcrg.evidence.models import RunConfig, RunManifest
     from fedcrg.evidence.store import load_json_model
     from fedcrg.paths import RunLayout
@@ -762,8 +721,6 @@ def load_federation_results(run_dirs: tuple[Path, ...]) -> tuple[FederationResul
 
 
 class ContrastMetricResult(BaseModel):
-    """Method-vs-comparator summary and paired difference for one metric."""
-
     model_config = Frozen
 
     metric: Identifier
@@ -774,8 +731,6 @@ class ContrastMetricResult(BaseModel):
 
 
 class PolicyContrastResult(BaseModel):
-    """All metric contrasts between FedCRG and one comparator policy."""
-
     model_config = Frozen
 
     comparator: PolicyId
@@ -791,7 +746,6 @@ def confirmatory_contrasts(
     bootstrap_replicates: BootstrapReplicateCount,
     bootstrap_ci_percentiles: tuple[Percentage, Percentage],
 ) -> tuple[PolicyContrastResult, ...]:
-    """Contrast FedCRG against each comparator policy at a fixed calibration seed, pairing rows by model seed so the bootstrap resamples matched (method, comparator) pairs from the same federation run rather than independent samples."""
     comparators = (
         PolicyId.GLOBAL_QUANTILE,
         PolicyId.LOCAL_QUANTILE,
@@ -837,8 +791,6 @@ def confirmatory_contrasts(
                     method_summary=describe(left),
                     comparator_summary=describe(right),
                     paired_difference=bootstrap,
-                    # Not applicable rather than a division artifact when the comparator's own
-                    # metric is zero or undefined.
                     relative_difference=(bootstrap.observed_difference / comparator_mean)
                     if comparator_mean > 0.0
                     else None,
@@ -849,8 +801,6 @@ def confirmatory_contrasts(
 
 
 class ThresholdStability(BaseModel):
-    """Spread of a threshold value across calibration-split repetitions."""
-
     model_config = Frozen
 
     count: PositiveCount
@@ -861,8 +811,6 @@ class ThresholdStability(BaseModel):
 
 
 class StateFrequency(BaseModel):
-    """Fraction of repetitions that landed in one decision state."""
-
     model_config = Frozen
 
     state: DecisionState
@@ -870,8 +818,6 @@ class StateFrequency(BaseModel):
 
 
 class StateStability(BaseModel):
-    """Transition frequency and state distribution across calibration-split repetitions."""
-
     model_config = Frozen
 
     count: PositiveCount
@@ -883,7 +829,6 @@ class StateStability(BaseModel):
 def summarize_threshold_stability(
     values: tuple[Metric, ...], iqr_percentiles: tuple[Percentage, Percentage]
 ) -> ThresholdStability:
-    """Summarize the spread of a threshold across calibration-split repetitions."""
     data = np.asarray(values, dtype=np.float64)
     if data.ndim != 1 or len(data) == 0 or not np.isfinite(data).all():
         raise ValueError("Threshold stability requires finite non-empty values")
@@ -897,7 +842,6 @@ def summarize_threshold_stability(
 
 
 def summarize_state_stability(states: tuple[DecisionState, ...]) -> StateStability:
-    """Summarize decision-state transitions and frequencies across calibration-split repetitions."""
     if not states:
         raise ValueError("State stability requires at least one state")
     transitions = sum(
@@ -909,7 +853,7 @@ def summarize_state_stability(states: tuple[DecisionState, ...]) -> StateStabili
     return StateStability(
         count=total,
         transition_count=transitions,
-        transition_frequency=transitions / max(1, total - 1),  # avoids /0 for a single state
+        transition_frequency=transitions / max(1, total - 1),
         state_frequencies=tuple(
             StateFrequency(state=state, frequency=counts[state] / total) for state in DecisionState
         ),
@@ -917,8 +861,6 @@ def summarize_state_stability(states: tuple[DecisionState, ...]) -> StateStabili
 
 
 class SplitSensitivityRow(BaseModel):
-    """One (model seed, policy, metric) split-sensitivity summary row."""
-
     model_config = Frozen
 
     model_seed: ModelSeed
@@ -932,8 +874,6 @@ class SplitSensitivityRow(BaseModel):
 
 
 class StabilityMetricId(StrEnum):
-    """Metrics tracked for split-sensitivity summaries."""
-
     MEBE = "mebe"
     HIGH_EXCESS = "high_excess"
     ATTACK_BALANCED_MACRO_TPR = "attack_balanced_macro_tpr"
@@ -942,7 +882,6 @@ class StabilityMetricId(StrEnum):
 def split_sensitivity(
     records: tuple[FederationResultRecord, ...], percentiles_config: tuple[Percentage, ...]
 ) -> tuple[SplitSensitivityRow, ...]:
-    """Summarize each (model seed, policy, metric) group across its calibration-role permutations; these are repeated repartitions of the same fixed data, not independent samples, so only the distributional summary (median/IQR/percentiles) is reported."""
     grouped: dict[tuple[ModelSeed, PolicyId, StabilityMetricId], list[Metric]] = (
         collections.defaultdict(list)
     )
@@ -977,7 +916,6 @@ def split_sensitivity(
 
 
 def source_order_blocks(scores: np.ndarray, block_count: BlockCount) -> tuple[np.ndarray, ...]:
-    """Split scores into contiguous blocks in their original row order."""
     values = np.asarray(scores, dtype=np.float64)
     if block_count <= 0 or len(values) < block_count:
         raise ValueError("Source-order block analysis needs at least one row per block")
@@ -992,7 +930,6 @@ def contaminate_benign_scores(
     fraction: ContaminationFraction,
     seed: AnalysisSeed,
 ) -> np.ndarray:
-    """Replace a fraction of benign scores with attack-development scores to simulate calibration contamination."""
     if not 0.0 <= fraction <= 1.0:
         raise ValueError("Contamination fraction must be in [0,1]")
     values = np.asarray(benign, dtype=np.float64).copy()
@@ -1011,8 +948,6 @@ def contaminate_benign_scores(
 
 
 class MismatchCutoffCell(BaseModel):
-    """Exceedance-count cutoffs at which a mismatch declaration flips, for one sample count."""
-
     model_config = Frozen
 
     sample_count: SampleCount
@@ -1021,15 +956,12 @@ class MismatchCutoffCell(BaseModel):
 
 
 class ProtocolTablePrecomputer:
-    """Precomputes and caches the readiness plans and mismatch cutoffs an experiment run will need."""
-
     def precompute(
         self,
         config: ExperimentConfig,
         spec: ExperimentSpec,
         root: Path | None = None,
     ) -> tuple[Path, Path]:
-        """Build and persist the readiness-plan cache and, if configured, the mismatch-cutoff table for `spec`."""
         from fedcrg.evidence.store import atomic_write_json
         from fedcrg.paths import OutputsLayout
         from fedcrg.thresholding.readiness import ReadinessPlanCache
@@ -1140,7 +1072,6 @@ class ProtocolTablePrecomputer:
         band: OperatingBand,
         confidence: ConfidenceLevel,
     ) -> MismatchCutoffCell:
-        """Largest exceedance count still declared low and smallest still declared high, i.e. the two exceedance-count cutoffs at which a mismatch declaration flips."""
         lows: list[NonNegativeCount] = []
         highs: list[NonNegativeCount] = []
         for exceedances in range(sample_count + 1):
@@ -1159,8 +1090,6 @@ class ProtocolTablePrecomputer:
 
 
 class BenchmarkCell(BaseModel):
-    """Timing and memory measurement for one benchmark primitive at one sample size."""
-
     model_config = Frozen
 
     primitive: Identifier
@@ -1173,8 +1102,6 @@ class BenchmarkCell(BaseModel):
 
 
 class BenchmarkReport(BaseModel):
-    """Full set of benchmark measurements for one benchmark experiment run."""
-
     model_config = Frozen
 
     experiment_id: ExperimentId
@@ -1183,8 +1110,6 @@ class BenchmarkReport(BaseModel):
 
 
 class RunBenchmark:
-    """Runs the computational-overhead benchmark and writes a BenchmarkReport."""
-
     def __init__(self, spec: ExperimentSpec, config: ExperimentConfig) -> None:
         self.spec = spec
         self.config = config
@@ -1207,8 +1132,6 @@ class RunBenchmark:
 
     @staticmethod
     def _pin_single_cpu() -> None:
-        # Reduces scheduler-induced timing variance in the benchmark; best-effort since CPU
-        # affinity is not available on every platform.
         try:
             import os
 
@@ -1217,7 +1140,6 @@ class RunBenchmark:
             pass
 
     def run(self, output: Path) -> Path:
-        """Run every benchmark primitive with warmups, then write results to `output`."""
         self._pin_single_cpu()
         warmups = self._warmups()
         repetitions = self._repetitions()
@@ -1326,8 +1248,6 @@ class RunBenchmark:
 
 
 class TimedRepetitions(BaseModel):
-    """Median/p95 timing and peak memory across repeated calls of a primitive."""
-
     model_config = Frozen
 
     median_seconds: Duration
@@ -1338,7 +1258,6 @@ class TimedRepetitions(BaseModel):
 def _timed_repetitions(
     primitive: Callable[[], BaseModel], repetitions: RepetitionCount, p95_percentile: Percentage
 ) -> TimedRepetitions:
-    """Time repeated calls to `primitive` and report median/p95 latency and peak RSS."""
     import resource
     import time
 

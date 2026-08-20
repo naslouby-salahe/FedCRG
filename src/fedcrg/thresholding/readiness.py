@@ -1,5 +1,3 @@
-"""Reference-threshold construction, local calibration readiness, reference-mismatch testing, and the resulting per-client deployment decision."""
-
 from __future__ import annotations
 
 import json
@@ -43,8 +41,6 @@ Frozen = ConfigDict(frozen=True)
 
 
 class ReferenceThreshold(BaseModel):
-    """Pooled quantile threshold shared across the federation, and the sample it was computed from."""
-
     model_config = Frozen
 
     value: Threshold
@@ -55,8 +51,6 @@ class ReferenceThreshold(BaseModel):
 
 
 class ReadinessPlan(BaseModel):
-    """The rank and coverage probability selected for a given calibration sample size, band, and assurance level, fixed before any scores are observed."""
-
     model_config = Frozen
 
     sample_count: SampleCount
@@ -68,8 +62,6 @@ class ReadinessPlan(BaseModel):
 
 
 class ContinuityDiagnostics(BaseModel):
-    """Duplicate-value statistics on a calibration sample, used to check the continuous-score assumption behind the rank formula."""
-
     model_config = Frozen
 
     unique_score_fraction: Fraction
@@ -79,8 +71,6 @@ class ContinuityDiagnostics(BaseModel):
 
 
 class CalibrationReadiness(BaseModel):
-    """Result of applying a readiness plan's rank to one client's observed calibration scores."""
-
     model_config = Frozen
 
     plan: ReadinessPlan
@@ -89,13 +79,10 @@ class CalibrationReadiness(BaseModel):
 
     @property
     def tie_count(self) -> ExceedanceCount:
-        """Number of calibration scores tied with the selected order statistic."""
         return self.diagnostics.selected_threshold_multiplicity
 
 
 class MismatchEvidence(BaseModel):
-    """Exceedance count, Clopper-Pearson interval, and resulting LOW/HIGH/NO_MATERIAL_DIFFERENCE classification for one client's reference threshold."""
-
     model_config = Frozen
 
     sample_count: SampleCount
@@ -110,8 +97,6 @@ class MismatchEvidence(BaseModel):
 
 
 class ThresholdDecision(BaseModel):
-    """Final threshold and state chosen for a client, and the reason it was chosen."""
-
     model_config = Frozen
 
     state: DecisionState
@@ -122,8 +107,6 @@ class ThresholdDecision(BaseModel):
 
 
 class ClientEvaluationResult(BaseModel):
-    """Bundle of the reference threshold, readiness result, mismatch evidence, and final decision for one client."""
-
     model_config = Frozen
 
     client_id: ClientId
@@ -134,7 +117,6 @@ class ClientEvaluationResult(BaseModel):
 
 
 def reference_rank(sample_count: SampleCount, alpha: Alpha) -> PositiveCount:
-    """Order-statistic rank giving exact or conservative (1-alpha) coverage under a finite sample."""
     if sample_count <= 0:
         raise ValueError("sample_count must be positive")
     return min(sample_count, math.ceil((sample_count + 1) * (1.0 - alpha)))
@@ -144,7 +126,6 @@ def build_reference_threshold(
     scores_by_client: Mapping[ClientId, np.ndarray],
     alpha: Alpha,
 ) -> ReferenceThreshold:
-    """Pool equal-sized per-client score samples and take the (1-alpha) order statistic as the shared reference threshold."""
     if not scores_by_client:
         raise ValueError("At least one client must contribute reference scores")
 
@@ -154,7 +135,6 @@ def build_reference_threshold(
     if samples_per_client == 0:
         raise ValueError("Reference score arrays must be non-empty")
     if any(arr.size != samples_per_client for arr in arrays):
-        # equal contribution per client keeps high-traffic clients from dominating the pooled order statistic
         raise ValueError("Each client must contribute the same number of reference scores")
 
     pooled = np.concatenate(arrays)
@@ -174,7 +154,6 @@ def build_reference_threshold(
 def coverage_probability(
     rank: PositiveCount, sample_count: SampleCount, band: OperatingBand
 ) -> CoverageProbability:
-    """P[a <= FPR(tau_r) <= b] under repeated benign sampling, since FPR at the r-th order statistic is Beta(n+1-r, r)."""
     if not 1 <= rank <= sample_count:
         raise ValueError("rank must be inside [1, sample_count]")
     upper_shape = sample_count + 1 - rank
@@ -185,12 +164,9 @@ def coverage_probability(
 
 
 class ReadinessPlanBuilder:
-    """Computes readiness plans from (sample size, band, assurance) alone, with no dependence on observed data."""
-
     def build(
         self, sample_count: SampleCount, band: OperatingBand, assurance: Assurance
     ) -> ReadinessPlan:
-        """Select the rank maximizing coverage probability, purely from (n, band, assurance) before any scores are observed."""
         if sample_count <= 0:
             raise ValueError("sample_count must be positive")
         if not 0.0 < assurance < 1.0:
@@ -204,7 +180,6 @@ class ReadinessPlanBuilder:
         )
 
         max_prob = np.max(probs)
-        # ties broken toward the larger rank: it is the more conservative (higher) threshold
         close_mask = np.isclose(probs, max_prob, rtol=0.0, atol=1e-15)
         best_rank = int(np.max(ranks[close_mask]))
         best_probability = float(probs[best_rank - 1])
@@ -226,8 +201,6 @@ class ReadinessPlanBuilder:
 
 
 class ReadinessPlanCache:
-    """Stores readiness plans keyed by (sample count, band, assurance) so ranks are computed once, before any real scores are seen, and reused at evaluation time."""
-
     def __init__(
         self,
         path: Path | None = None,
@@ -244,7 +217,6 @@ class ReadinessPlanCache:
 
     @staticmethod
     def key(sample_count: SampleCount, band: OperatingBand, assurance: Assurance) -> PlanKey:
-        """Cache key for a given (sample count, band, assurance) combination."""
         return (
             f"n={sample_count}|a={band.lower:.17g}|b={band.upper:.17g}|assurance={assurance:.17g}"
         )
@@ -252,7 +224,6 @@ class ReadinessPlanCache:
     def precompute(
         self, sample_count: SampleCount, band: OperatingBand, assurance: Assurance
     ) -> ReadinessPlan:
-        """Build (or reuse) a readiness plan and store it in the cache, raising if a differently-computed plan already exists under the same key."""
         key = self.key(sample_count, band, assurance)
         candidate = self.builder.build(sample_count, band, assurance)
         existing = self._plans.get(key)
@@ -264,7 +235,6 @@ class ReadinessPlanCache:
     def require(
         self, sample_count: SampleCount, band: OperatingBand, assurance: Assurance
     ) -> ReadinessPlan:
-        """Look up an already-computed plan; raises rather than computing on demand, since the rank must be fixed before real scores are evaluated."""
         key = self.key(sample_count, band, assurance)
         try:
             return self._plans[key]
@@ -275,11 +245,9 @@ class ReadinessPlanCache:
             ) from exc
 
     def plans(self) -> tuple[ReadinessPlan, ...]:
-        """All cached plans, sorted by key."""
         return tuple(plan for _, plan in sorted(self._plans.items()))
 
     def load_plans(self, plans: tuple[ReadinessPlan, ...]) -> None:
-        """Load plans into the cache after verifying each one still matches what the formula would produce."""
         for plan in plans:
             expected_key = self.key(plan.sample_count, plan.band, plan.assurance)
             regenerated = self.builder.build(plan.sample_count, plan.band, plan.assurance)
@@ -293,7 +261,6 @@ class ReadinessPlanCache:
             self._plans[expected_key] = plan
 
     def save(self, path: Path | None = None) -> None:
-        """Write all cached plans to disk as JSON."""
         from fedcrg.evidence.store import atomic_write_json
 
         target = path or self.path
@@ -305,7 +272,6 @@ class ReadinessPlanCache:
         )
 
     def load(self, path: Path) -> None:
-        """Load plans from a JSON file previously written by `save`."""
         raw: object = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(raw, list):
             raise ValueError("Readiness-plan table must be a JSON array")
@@ -313,10 +279,7 @@ class ReadinessPlanCache:
 
 
 class CalibrationReadinessEvaluator:
-    """Applies a precomputed readiness plan to a client's observed calibration scores."""
-
     def evaluate(self, scores: np.ndarray, plan: ReadinessPlan) -> CalibrationReadiness:
-        """Apply a rank chosen from `plan` (fixed before these scores were seen) to pick the local threshold."""
         values = np.asarray(scores, dtype=np.float64)
         if values.ndim != 1 or values.size != plan.sample_count:
             raise ValueError("Observed calibration size does not match the frozen readiness plan")
@@ -336,7 +299,6 @@ class CalibrationReadinessEvaluator:
 def continuity_diagnostics(
     scores: np.ndarray, selected_rank: PositiveCount
 ) -> ContinuityDiagnostics:
-    """Multiplicity > 1 at the selected rank means duplicate values there, violating the continuous-score assumption the rank formula relies on."""
     values = np.asarray(scores, dtype=np.float64)
     if values.ndim != 1 or values.size == 0:
         raise ValueError("Continuity diagnostics require a non-empty score vector")
@@ -361,7 +323,6 @@ def continuity_diagnostics(
 def familywise_readiness_assurance(
     client_count: PositiveCount, familywise_alpha: Probability
 ) -> Assurance:
-    """Bonferroni-split per-client assurance so the fleet-wide false-readiness rate stays under `familywise_alpha`."""
     if client_count <= 0:
         raise ValueError("client_count must be positive")
     if not 0.0 < familywise_alpha < 1.0:
@@ -372,7 +333,6 @@ def familywise_readiness_assurance(
 def clopper_pearson_interval(
     counts: BinomialCounts, confidence: ConfidenceLevel
 ) -> ConfidenceInterval:
-    """Exact two-sided binomial confidence interval via the incomplete-beta inverse, with no normal approximation."""
     if not 0.0 < confidence < 1.0:
         raise ValueError("confidence must be in (0, 1)")
     tail = (1.0 - confidence) / 2.0
@@ -390,7 +350,6 @@ def clopper_pearson_interval(
 def minimum_bidirectional_sample_count(
     lower_band: Fpr, confidence: ConfidenceLevel
 ) -> SampleCount | None:
-    """Smallest n_G for which x=0 exceedances can still put the Clopper-Pearson upper bound under `lower_band`; None when `lower_band` is 0 and any n suffices."""
     if not 0.0 <= lower_band < 1.0:
         raise ValueError("lower_band must be in [0, 1)")
     if not 0.0 < confidence < 1.0:
@@ -416,7 +375,6 @@ class ReferenceMismatchEvaluator:
         band: OperatingBand,
         confidence: ConfidenceLevel,
     ) -> MismatchEvidence:
-        """NO_MATERIAL_DIFFERENCE means mismatch was not established at this confidence, not that the reference threshold is correct."""
         values = np.asarray(scores, dtype=np.float64)
         if values.ndim != 1 or values.size == 0:
             raise ValueError("Mismatch evidence requires a non-empty one-dimensional array")
@@ -453,8 +411,6 @@ class ReferenceMismatchEvaluator:
 
 
 class FleetMismatchDecision(BaseModel):
-    """One client's mismatch outcome and directional p-values under a fleet-wide multiplicity-corrected test."""
-
     model_config = Frozen
 
     client_id: ClientId
@@ -464,8 +420,6 @@ class FleetMismatchDecision(BaseModel):
 
 
 class DirectionalHypothesis(BaseModel):
-    """A single LOW- or HIGH-direction test for one client, used as input to the Holm step-down procedure."""
-
     model_config = Frozen
 
     client_id: ClientId
@@ -487,7 +441,6 @@ def bonferroni_fleet_sensitivity(
     *,
     familywise_alpha: Probability,
 ) -> tuple[FleetMismatchDecision, ...]:
-    """Bonferroni-corrected Clopper-Pearson intervals per client so `familywise_alpha` bounds the fleet-wide false-mismatch rate."""
     if not counts_by_client:
         return ()
 
@@ -520,7 +473,6 @@ def _holm_rejected(
     hypotheses: list[DirectionalHypothesis],
     alpha: Probability,
 ) -> set[tuple[ClientId, MismatchOutcome]]:
-    """Holm step-down: reject in ascending p-value order against alpha/(remaining count), stop at the first non-rejection."""
     ordered = sorted(
         hypotheses,
         key=lambda item: (item.p_value, item.client_id, item.outcome),
@@ -542,7 +494,6 @@ def holm_directional_fleet_sensitivity(
     *,
     familywise_alpha: Probability,
 ) -> tuple[FleetMismatchDecision, ...]:
-    """Holm-corrected test across both LOW and HIGH hypotheses for every client, pooled into one family so `familywise_alpha` still bounds the fleet-wide error rate."""
     hypotheses = []
     diagnostics = {}
 
@@ -589,8 +540,6 @@ def holm_directional_fleet_sensitivity(
 
 
 class DeploymentDecision:
-    """Combines readiness and mismatch evidence into the final per-client threshold decision."""
-
     def decide(
         self,
         reference: ReferenceThreshold,
@@ -598,7 +547,6 @@ class DeploymentDecision:
         mismatch: MismatchEvidence,
         reject_calibration_ties: bool,
     ) -> ThresholdDecision:
-        """Admit local personalization only when mismatch is proven, the local calibration sample is ready, and the selected rank has no tie."""
         tie_count = readiness.tie_count
 
         if mismatch.outcome is MismatchOutcome.INSUFFICIENT_EVIDENCE:

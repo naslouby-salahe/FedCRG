@@ -1,5 +1,3 @@
-"""Public API for calibration readiness, reference-mismatch detection, and the resulting deployment decision."""
-
 from fedcrg.thresholding.readiness import (
     CalibrationReadinessEvaluator,
     ClientEvaluationResult,

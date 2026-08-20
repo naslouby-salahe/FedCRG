@@ -1,5 +1,3 @@
-"""Tests for federated aggregation and server behavior."""
-
 from __future__ import annotations
 
 from typing import cast

@@ -1,5 +1,3 @@
-"""Tests for the publication figure builders."""
-
 from __future__ import annotations
 
 from pathlib import Path

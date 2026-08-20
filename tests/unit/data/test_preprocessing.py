@@ -1,5 +1,3 @@
-"""Tests for train-only min/max scaling and DIAD median imputation."""
-
 from __future__ import annotations
 
 import numpy as np

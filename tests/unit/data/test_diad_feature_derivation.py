@@ -1,5 +1,3 @@
-"""Tests for the DIAD numeric-safe feature derivation."""
-
 from __future__ import annotations
 
 import numpy as np

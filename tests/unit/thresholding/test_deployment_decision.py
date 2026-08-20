@@ -156,8 +156,6 @@ def test_decide_is_insensitive_to_mismatch_direction() -> None:
 
 
 def test_decide_flags_assumption_violation_on_calibration_tie() -> None:
-    """A duplicate value at the selected rank makes the order statistic ambiguous, so ties
-    block personalization by default rather than being silently jittered away."""
     plan = ReadinessPlanBuilder().build(2000, _BAND, 0.95)
     values = np.linspace(0.5, 1.0, 2000)
     values[plan.rank - 8 : plan.rank + 7] = values[plan.rank - 1]

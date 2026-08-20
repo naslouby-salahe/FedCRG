@@ -1,5 +1,3 @@
-"""Shared immutable value types, enums, and error classes used across the package."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -41,8 +39,6 @@ MetricDifference = Annotated[float, Field()]
 LearningRate = PositiveFloat
 OptimizerEpsilon = PositiveFloat
 XavierGain = PositiveFloat
-# Bounds collapse to a single point deliberately: weight decay is locked at 0 and client
-# participation is locked at full (1.0) for the duration of the study.
 WeightDecay = Annotated[float, Field(ge=0.0, le=0.0)]
 ClientFraction = Annotated[float, Field(ge=1.0, le=1.0)]
 RoundCount = PositiveInt
@@ -215,8 +211,6 @@ SourceFileId = Annotated[str, StringConstraints(min_length=1, strip_whitespace=T
 
 
 class OperatingBand(BaseModel):
-    """A closed [lower, upper] false-positive-rate interval."""
-
     model_config = ConfigDict(frozen=True)
 
     lower: Fpr
@@ -233,8 +227,6 @@ class OperatingBand(BaseModel):
 
 
 class ConfidenceInterval(BaseModel):
-    """A closed [lower, upper] confidence interval over a false-positive rate."""
-
     model_config = ConfigDict(frozen=True)
 
     lower: Fpr
@@ -249,8 +241,6 @@ class ConfidenceInterval(BaseModel):
 
 @dataclass(frozen=True, slots=True)
 class BinomialCounts:
-    """An exceedance count x out of n trials, with 0 <= x <= n enforced."""
-
     x: ExceedanceCount
     n: PositiveCount
 
@@ -265,8 +255,6 @@ class BinomialCounts:
 
 @dataclass(frozen=True, slots=True)
 class ClassMoments:
-    """Mean and standard deviation of a score distribution."""
-
     mean: Score
     std: Spacing
 
@@ -318,14 +306,11 @@ class CalibrationReadinessState(StrEnum):
 class MismatchOutcome(StrEnum):
     LOW = "LOW_MISMATCH"
     HIGH = "HIGH_MISMATCH"
-    # An absence of demonstrated mismatch, not a finding that the reference threshold is correct.
     NO_MATERIAL_DIFFERENCE = "NO_MATERIAL_MISMATCH_DEMONSTRATED"
     INSUFFICIENT_EVIDENCE = "GATE_B_INSUFFICIENT"
 
 
 class DecisionState(StrEnum):
-    # Reference threshold stays in force because no material mismatch was demonstrated — this is
-    # an absence of evidence, not evidence that the reference threshold is correct.
     REFERENCE_RETAINED = "NO_MATERIAL_MISMATCH_DEMONSTRATED"
     PERSONALIZED = "LOCAL_PERSONALIZE"
     CALIBRATION_DEFICIT = "CALIBRATION_DEFICIT"
@@ -589,16 +574,16 @@ class SupervisedClassLabel(IntEnum):
 
 
 class FedCRGError(Exception):
-    """Base class for errors raised by this package."""
+    pass
 
 
 class ConfigurationError(FedCRGError):
-    """Raised for invalid or unresolvable configuration."""
+    pass
 
 
 class DataIntegrityError(FedCRGError):
-    """Raised when prepared data fails an integrity check."""
+    pass
 
 
 class ImmutableRunError(FedCRGError):
-    """Raised when code attempts to modify an artifact that must stay immutable once written."""
+    pass

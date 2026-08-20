@@ -1,5 +1,3 @@
-"""Tests for output-directory layout helpers."""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -19,7 +17,6 @@ from fedcrg.types import DatasetId, ExperimentId
 
 
 def test_config_layout_resolves_the_three_frozen_documents(tmp_path: Path) -> None:
-    """ConfigLayout points at the study, dataset, and experiment config files."""
     layout = ConfigLayout(tmp_path)
     assert layout.study == tmp_path / "study.yaml"
     assert layout.datasets == tmp_path / "datasets.yaml"
@@ -27,7 +24,6 @@ def test_config_layout_resolves_the_three_frozen_documents(tmp_path: Path) -> No
 
 
 def test_prepared_dataset_layout_resolves_cache_artifacts(tmp_path: Path) -> None:
-    """PreparedDatasetLayout points at each expected cached artifact under the dataset root."""
     layout = PreparedDatasetLayout(tmp_path)
     assert layout.manifest == tmp_path / "manifest.json"
     assert layout.preprocessing == tmp_path / "preprocessing.json"
@@ -40,14 +36,12 @@ def test_prepared_dataset_layout_resolves_cache_artifacts(tmp_path: Path) -> Non
 
 
 def test_prepared_dataset_root_propagates_custom_preprocessed_root(tmp_path: Path) -> None:
-    """The prepared dataset root is derived from the dataset id and truncated content hashes."""
     root = prepared_dataset_root(tmp_path, DatasetId.NBAIOT, "a" * 64, "b" * 64)
     assert root == tmp_path / "nbaiot" / f"{'a' * 16}-{'b' * 16}"
     assert prepared_dataset_family_root(tmp_path, DatasetId.NBAIOT) == tmp_path / "nbaiot"
 
 
 def test_outputs_layout_returns_model_and_score_cache_layouts(tmp_path: Path) -> None:
-    """Model and score cache paths are keyed by dataset, detector, seed, and training hash."""
     from tests._fixtures import primary_experiment_config
 
     config = primary_experiment_config(tmp_path)
@@ -81,7 +75,6 @@ def test_outputs_layout_returns_model_and_score_cache_layouts(tmp_path: Path) ->
 
 
 def test_outputs_layout_run_and_analysis(tmp_path: Path) -> None:
-    """Run and analysis-result paths resolve under the outputs root."""
     from fedcrg.types import ExperimentId
 
     layout = OutputsLayout(tmp_path)
@@ -92,7 +85,6 @@ def test_outputs_layout_run_and_analysis(tmp_path: Path) -> None:
 
 
 def test_outputs_layout_experiment_json_tables_and_figures(tmp_path: Path) -> None:
-    """Per-experiment json/table/figure paths nest under the experiment id."""
     from fedcrg.types import ExperimentId
 
     layout = OutputsLayout(tmp_path)
@@ -106,7 +98,6 @@ def test_outputs_layout_experiment_json_tables_and_figures(tmp_path: Path) -> No
 
 
 def test_experiment_results_bundle_layout_required_directories_are_paths(tmp_path: Path) -> None:
-    """Every required experiment-bundle directory is a concrete Path."""
     layout = ExperimentResultsBundleLayout(tmp_path)
     assert layout.required_directories == (
         layout.json_dir,
@@ -118,7 +109,6 @@ def test_experiment_results_bundle_layout_required_directories_are_paths(tmp_pat
 
 
 def test_experiment_results_root(tmp_path: Path) -> None:
-    """Experiment results bundles live under results/experiments/<experiment_id>/."""
     assert (
         experiment_results_root(tmp_path, ExperimentId.PRIMARY_NBAIOT)
         == tmp_path / "experiments" / "primary_nbaiot"

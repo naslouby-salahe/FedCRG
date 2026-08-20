@@ -1,5 +1,3 @@
-"""Builds and caches a dataset's prepared per-client splits, preprocessing, and calibration-role assignments."""
-
 from __future__ import annotations
 
 import hashlib
@@ -84,8 +82,6 @@ _CALIBRATION_ROLES = (
 
 
 class PrepareData:
-    """Materializes a dataset's prepared client data, reusing a verified cache when one exists."""
-
     def __init__(
         self,
         splitter: CalibrationAssignmentBuilder | None = None,
@@ -106,7 +102,6 @@ class PrepareData:
 
     @staticmethod
     def adapter(dataset: DatasetConfig, root: Path) -> DatasetAdapter:
-        """Return the filesystem adapter for a dataset config."""
         if dataset.id is DatasetId.NBAIOT:
             return NBaiotAdapter(root, dataset)
         if dataset.id is DatasetId.DIAD:
@@ -121,7 +116,6 @@ class PrepareData:
         return hashlib.sha256(payload).hexdigest()
 
     def prepared_root(self, config: ExperimentConfig, source_identity_hash: Sha256) -> Path:
-        """Return the cache directory keyed by this dataset's spec and source-file identity."""
         return prepared_dataset_root(
             config.preprocessed_root,
             config.dataset.id,
@@ -130,7 +124,6 @@ class PrepareData:
         )
 
     def cache_root(self, config: ExperimentConfig, manifest: PreparedDatasetManifest) -> Path:
-        """Return the cache directory for an already-materialized manifest."""
         return self.prepared_root(config, self._source_identity_hash(manifest.source_files))
 
     def ensure_prepared(
@@ -140,7 +133,6 @@ class PrepareData:
         adapter_override: DatasetAdapter | None = None,
         include_source_order_assignment: bool = True,
     ) -> PreparedDatasetManifest:
-        """Return the prepared dataset for this config, rebuilding it if no valid cache exists."""
         adapter = adapter_override or self.adapter(
             config.dataset,
             data_root / config.dataset.source_directory,
@@ -160,8 +152,6 @@ class PrepareData:
                     final_root, config, sources, data_root / config.dataset.source_directory
                 )
             except DataIntegrityError as exc:
-                # A cache that fails verification (hash mismatch, missing artifact) is untrusted;
-                # rebuild from raw sources rather than risk serving stale or tampered splits.
                 _LOGGER.warning("prepared cache invalid (%s); rebuilding %s", exc, final_root)
                 shutil.rmtree(final_root, ignore_errors=True)
 
@@ -255,8 +245,6 @@ class PrepareData:
         self._validate_source_identity_count(config, discovered)
 
         final_root.parent.mkdir(parents=True, exist_ok=True)
-        # Build in a uniquely named staging directory and publish via a single atomic rename so a
-        # crash mid-materialization can never leave a partially written cache at final_root.
         staging_root = final_root.parent / f".{final_root.name}.staging-{uuid.uuid4().hex}"
         staging_root.mkdir()
         staging_layout = PreparedDatasetLayout(staging_root)
@@ -396,7 +384,6 @@ class PrepareData:
 
     @staticmethod
     def _validate_nbaiot_count(config: ExperimentConfig, data: ClientData) -> None:
-        """N-BaIoT has no fallback eligibility path, so an undersized benign pool must fail fast instead of silently truncating a role."""
         required_size = (
             config.dataset.split.reservoir_size
             + config.dataset.split.train_benign
@@ -482,9 +469,6 @@ class PrepareData:
 
         for item in splits.roles:
             frame = item.frame
-            # Only TRAIN is scaled here; other roles are persisted raw and must be transformed by
-            # callers via the same PreprocessingModel, since calibration/test scaling is
-            # deliberately left unclipped and must not retroactively affect the fitted extrema.
             if item.role is DataRole.TRAIN:
                 frame = preprocessing.transform(frame, splits.client_id)
 

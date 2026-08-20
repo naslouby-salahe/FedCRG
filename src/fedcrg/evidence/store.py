@@ -1,5 +1,3 @@
-"""File-backed persistence for evidence manifests, plus atomic writes and artifact verification."""
-
 from __future__ import annotations
 
 import contextlib
@@ -44,7 +42,6 @@ from fedcrg.types import (
 
 
 def _jsonable(value: object) -> JsonValue:
-    """Recursively coerce a value to JSON-safe types, falling back to ``str()`` for anything without a dedicated case (e.g. enums, paths)."""
     match value:
         case BaseModel():
             return value.model_dump(mode="json")
@@ -62,7 +59,6 @@ def _jsonable(value: object) -> JsonValue:
 
 @contextlib.contextmanager
 def atomic_file(path: Path):
-    """Write through a sibling temp file and ``os.replace`` so readers never observe a partially written artifact; the temp file is removed if writing fails."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = path.with_name(f".{path.name}.tmp-{uuid.uuid4().hex}")
     try:
@@ -76,32 +72,27 @@ def atomic_file(path: Path):
 
 
 def atomic_write_json(path: Path, payload: object) -> None:
-    """Write `payload` as pretty-printed, sorted-key JSON atomically."""
     with atomic_file(path) as handle:
         json.dump(_jsonable(payload), handle, indent=2, sort_keys=True)
         handle.write("\n")
 
 
 def atomic_write_text(path: Path, content: str) -> None:
-    """Write `content` to `path` atomically."""
     with atomic_file(path) as handle:
         handle.write(content)
 
 
 def write_jsonl(path: Path, records: tuple[BaseModel, ...]) -> None:
-    """Write one JSON object per line, atomically."""
     with atomic_file(path) as handle:
         for record in records:
             handle.write(json.dumps(record.model_dump(mode="json"), sort_keys=True) + "\n")
 
 
 def load_json_model[ModelT: BaseModel](path: Path, model: type[ModelT]) -> ModelT:
-    """Parse a JSON file into the given pydantic model type."""
     return model.model_validate_json(path.read_text(encoding="utf-8"))
 
 
 def load_yaml_mapping(path: Path) -> object:
-    """Load a YAML file and require its top-level document to be a mapping."""
     raw: object = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError(f"Configuration document must be a mapping: {path}")
@@ -109,43 +100,31 @@ def load_yaml_mapping(path: Path) -> object:
 
 
 class ModelStore[ModelT: BaseModel]:
-    """Atomic JSON persistence for a single pydantic model type."""
-
     model: type[ModelT]
 
     def save(self, path: Path, manifest: ModelT) -> None:
-        """Write the manifest to `path` atomically."""
         atomic_write_json(path, manifest)
 
     def load(self, path: Path) -> ModelT:
-        """Read and parse the manifest at `path`."""
         return load_json_model(path, self.model)
 
     def load_model(self, path: Path) -> ModelT:
-        """Read and parse the manifest at `path`."""
         return load_json_model(path, self.model)
 
 
 class PreparedDatasetManifestStore(ModelStore[PreparedDatasetManifest]):
-    """Persistence for `PreparedDatasetManifest`."""
-
     model = PreparedDatasetManifest
 
 
 class TrainingManifestStore(ModelStore[TrainingManifest]):
-    """Persistence for `TrainingManifest`."""
-
     model = TrainingManifest
 
 
 class RunManifestStore(ModelStore[RunManifest]):
-    """Persistence for `RunManifest`, refusing to silently overwrite a finalized run."""
-
     model = RunManifest
     _TERMINAL_STATUSES = frozenset({ExperimentStatus.COMPLETE, ExperimentStatus.FAILED})
 
     def save(self, path: Path, manifest: RunManifest) -> None:
-        """Refuse to overwrite a run manifest that already reached a terminal status with a different status."""
         if path.is_file():
             try:
                 existing = self.load(path)
@@ -165,25 +144,18 @@ class RunManifestStore(ModelStore[RunManifest]):
 
 
 class EligibilityManifestStore(ModelStore[EligibilityManifest]):
-    """Persistence for `EligibilityManifest`."""
-
     model = EligibilityManifest
 
 
 class CalibrationAssignmentManifestStore(ModelStore[CalibrationAssignmentManifest]):
-    """Persistence for `CalibrationAssignmentManifest`."""
-
     model = CalibrationAssignmentManifest
 
 
 class CacheReferenceStore(ModelStore[CacheReference]):
-    """Persistence for `CacheReference`."""
-
     model = CacheReference
 
     @staticmethod
     def build(path: Path, outputs_root: Path) -> CacheReference:
-        """Hash a file and record its path relative to the outputs root."""
         resolved = path.resolve()
         try:
             relative = resolved.relative_to(outputs_root.resolve()).as_posix()
@@ -203,7 +175,6 @@ def build_run_id(
     calibration_seed: CalibrationSeed,
     policy: PolicyId,
 ) -> RunId:
-    """Encode the run's identity into a stable, filesystem-safe string; float parameters are rounded to fixed-precision integers so the id is reproducible."""
     protocol = config.protocol
     if config.detector is None:
         raise ValueError("Run identity requires a real-data detector profile")
@@ -224,31 +195,24 @@ def build_run_id(
 
 @dataclass(frozen=True, slots=True)
 class FileHashRecord:
-    """Hash of one run artifact, identified by its path relative to the run root."""
-
     relative_path: Identifier
     sha256: Sha256
 
 
 @dataclass(frozen=True, slots=True)
 class VerificationResult:
-    """Outcome of checking a run's required artifacts for presence and hash consistency."""
-
     valid: bool
     missing: tuple[Identifier, ...]
     mismatched: tuple[Identifier, ...]
     hashes: tuple[FileHashRecord, ...]
 
     def hash_for(self, relative_path: Identifier) -> Sha256 | None:
-        """Return the recorded hash for a file, or None if it wasn't checked."""
         return next(
             (record.sha256 for record in self.hashes if record.relative_path == relative_path), None
         )
 
 
 class ArtifactVerifier:
-    """Checks that a run's required artifacts exist and match their recorded hashes."""
-
     def _path_for(self, layout: RunLayout, artifact: ArtifactType) -> Path | None:
         match artifact:
             case ArtifactType.RESOLVED_CONFIG:
@@ -277,7 +241,6 @@ class ArtifactVerifier:
                 return None
 
     def required_files(self, layout: RunLayout, definition: ExperimentSpec) -> tuple[Path, ...]:
-        """List the artifact paths a run of this kind must produce."""
         from fedcrg.evidence.contracts import experiment_contract
 
         required = [
@@ -294,7 +257,6 @@ class ArtifactVerifier:
         return tuple(required)
 
     def record(self, layout: RunLayout, definition: ExperimentSpec) -> VerificationResult:
-        """Hash every required artifact, compare against recorded references, and write the verification file."""
         missing: list[PathString] = []
         mismatched: list[PathString] = []
         hashes: list[FileHashRecord] = []
@@ -333,7 +295,6 @@ class ArtifactVerifier:
 
     @staticmethod
     def _cache_pointer_mismatch(layout: RunLayout, pointer: Path) -> PathString | None:
-        """Compare a cache pointer to its target file. Unreadable pointers are ignored."""
         if not pointer.is_file():
             return None
         try:
@@ -351,7 +312,6 @@ class ArtifactVerifier:
 
 
 def capture_environment(repository_root: Path) -> GitEnvironment:
-    """Snapshot the current git commit/dirty state and interpreter/library versions."""
     import torch
 
     def run(*args: str) -> str:

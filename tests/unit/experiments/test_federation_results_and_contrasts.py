@@ -1,5 +1,3 @@
-"""Tests for loading federation results from run artifacts and computing confirmatory policy contrasts."""
-
 from __future__ import annotations
 
 from pathlib import Path

@@ -255,8 +255,6 @@ def test_precompute_persists_then_runtime_requires_exact_contract(tmp_path: Path
 
 
 def test_minimum_bidirectional_sample_count_is_locked() -> None:
-    """736 is the minimum exceedance count needed to resolve the protocol's lower band at its
-    target confidence; other fixtures reuse this exact sample size."""
     protocol = primary_protocol()
     minimum = minimum_bidirectional_sample_count(protocol.band.lower, protocol.mismatch_confidence)
     assert minimum == 736

@@ -1,5 +1,3 @@
-"""Fixed directory and filename layout for config, cache, and output artifacts."""
-
 from __future__ import annotations
 
 from enum import StrEnum
@@ -91,8 +89,6 @@ class ConfigArtifact(StrEnum):
 
 
 class StudyPaths(BaseModel):
-    """Root directories for raw data, prepared-data cache, outputs, and published results."""
-
     model_config = FrozenModel
 
     data_root: Path
@@ -102,8 +98,6 @@ class StudyPaths(BaseModel):
 
 
 class ConfigLayout:
-    """Locates the study, dataset, and experiment YAML files under a config root."""
-
     def __init__(self, config_root: Path = Path(LayoutDirectory.CONFIG)) -> None:
         self.config_root = config_root
 
@@ -121,8 +115,6 @@ class ConfigLayout:
 
 
 class PreparedDatasetLayout:
-    """Paths inside a single prepared-dataset cache directory, keyed by content hash."""
-
     def __init__(self, root: Path) -> None:
         self.root = root
 
@@ -169,7 +161,6 @@ def prepared_dataset_root(
     data_spec_hash: Sha256,
     source_identity_hash: Sha256,
 ) -> Path:
-    """Keys the prepared-dataset cache on both the data spec and the raw source identity, so either changing invalidates the cache."""
     return (
         prepared_dataset_family_root(preprocessed_root, dataset_id)
         / f"{data_spec_hash[:16]}-{source_identity_hash[:16]}"
@@ -177,8 +168,6 @@ def prepared_dataset_root(
 
 
 class ModelCacheLayout:
-    """Paths inside a single trained-model cache directory, keyed by training-spec hash."""
-
     def __init__(self, root: Path) -> None:
         self.root = root
 
@@ -192,8 +181,6 @@ class ModelCacheLayout:
 
 
 class ScoreCacheLayout:
-    """Paths inside a single score cache directory, keyed by training-spec hash."""
-
     def __init__(self, root: Path) -> None:
         self.root = root
 
@@ -207,8 +194,6 @@ class ScoreCacheLayout:
 
 
 class RunLayout:
-    """Paths inside a single experiment run directory."""
-
     def __init__(self, root: Path) -> None:
         self.root = root
 
@@ -321,7 +306,6 @@ class RunLayout:
         return self.verification / LayoutArtifact.HASHES
 
     def create(self) -> None:
-        """Fails if the run directory already exists, so an existing run's artifacts are never silently reused or overwritten."""
         self.root.mkdir(parents=True, exist_ok=False)
         for directory in (
             self.data,
@@ -338,8 +322,6 @@ class RunLayout:
 
 
 class ExperimentResultsBundleLayout:
-    """Paths inside a packaged, checksummed results bundle for one experiment."""
-
     def __init__(self, root: Path) -> None:
         self.root = root
 
@@ -410,8 +392,6 @@ def experiment_results_root(results_root: Path, experiment_id: ExperimentId) -> 
 
 
 class OutputsLayout:
-    """Top-level output directory layout: runs, caches, logs, tables, and figures."""
-
     def __init__(self, outputs_root: Path = Path(LayoutDirectory.OUTPUTS)) -> None:
         self.outputs_root = outputs_root
 

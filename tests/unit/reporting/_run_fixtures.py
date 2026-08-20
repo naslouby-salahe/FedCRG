@@ -1,5 +1,3 @@
-"""Shared fixtures for writing completed run artifacts used by reporting tests."""
-
 from __future__ import annotations
 
 from pathlib import Path

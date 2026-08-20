@@ -1,5 +1,3 @@
-"""Tests for resource monitoring, telemetry rendering, and telemetry persistence."""
-
 from __future__ import annotations
 
 import json
@@ -17,7 +15,6 @@ from fedcrg.runtime import (
 
 
 def test_monitor_samples_process_and_system_resources() -> None:
-    """A resource sample reports plausible process and system RAM/CPU figures."""
     sample = ResourceMonitor().sample()
     assert sample.process_ram_bytes > 0
     assert sample.total_system_ram_bytes > 0
@@ -27,7 +24,6 @@ def test_monitor_samples_process_and_system_resources() -> None:
 
 
 def test_telemetry_appends_jsonl(tmp_path: Path) -> None:
-    """Repeated writes append JSONL lines rather than overwriting the file."""
     sample = ResourceSample(
         timestamp="2026-08-13T00:00:00+0000",
         process_ram_bytes=1,
@@ -47,7 +43,6 @@ def test_telemetry_appends_jsonl(tmp_path: Path) -> None:
 
 
 def test_render_telemetry_is_deterministic_text() -> None:
-    """Rendering the same sample twice produces identical text."""
     sample = ResourceSample(
         timestamp="2026-08-13T00:00:00+0000",
         process_ram_bytes=1,
@@ -63,14 +58,12 @@ def test_render_telemetry_is_deterministic_text() -> None:
 
 
 def test_stream_bounds_sample_count() -> None:
-    """The stream stops after max_samples rather than running indefinitely."""
     monitor = ResourceMonitor()
     collected = list(monitor.stream(interval_seconds=0.001, max_samples=3))
     assert len(collected) == 3
 
 
 def test_stream_rejects_nonpositive_interval() -> None:
-    """A non-positive sampling interval is rejected rather than causing a busy loop."""
     monitor = ResourceMonitor()
     stream = monitor.stream(interval_seconds=0.0)
     with pytest.raises(ValueError):

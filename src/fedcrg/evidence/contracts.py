@@ -1,5 +1,3 @@
-"""Authoritative per-experiment artifact and completion contracts."""
-
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, model_validator
@@ -35,8 +33,6 @@ _SYNTHETIC_RUN_ARTIFACTS: tuple[ArtifactType, ...] = ()
 
 
 class RequiredResultFile(BaseModel):
-    """One required delivery artifact owned by an experiment."""
-
     model_config = Frozen
 
     format: ResultFormat
@@ -44,8 +40,6 @@ class RequiredResultFile(BaseModel):
 
 
 class DetectorCacheIdentity(BaseModel):
-    """Dataset and detector pair that keys a shared model/score cache family."""
-
     model_config = Frozen
 
     dataset_id: DatasetId
@@ -53,8 +47,6 @@ class DetectorCacheIdentity(BaseModel):
 
 
 class ExperimentArtifactContract(BaseModel):
-    """What must exist, validate, and be current before an experiment is fully passed."""
-
     model_config = Frozen
 
     experiment_id: ExperimentId
@@ -90,7 +82,6 @@ class ExperimentArtifactContract(BaseModel):
 
 
 def detector_cache_identity(kind: SharedCacheKind) -> DetectorCacheIdentity | None:
-    """Return the dataset/detector pair owned or consumed by `kind`."""
     match kind:
         case SharedCacheKind.NONE:
             return None
@@ -323,8 +314,6 @@ _DEFAULT_CONTRACTS: tuple[ExperimentArtifactContract, ...] = (
 
 
 class ExperimentContractCatalogue:
-    """The fixed set of per-experiment completion contracts."""
-
     def __init__(self, contracts: tuple[ExperimentArtifactContract, ...] | None = None) -> None:
         resolved = contracts if contracts is not None else _DEFAULT_CONTRACTS
         ids = tuple(item.experiment_id for item in resolved)
@@ -353,10 +342,8 @@ _CATALOGUE = ExperimentContractCatalogue()
 
 
 def experiment_contract(experiment_id: ExperimentId) -> ExperimentArtifactContract:
-    """Return the authoritative completion contract for `experiment_id`."""
     return _CATALOGUE.for_id(experiment_id)
 
 
 def all_experiment_contracts() -> tuple[ExperimentArtifactContract, ...]:
-    """Every registered experiment completion contract."""
     return _CATALOGUE.all()

@@ -1,5 +1,3 @@
-"""Tests for anomaly-score computation and the score cache."""
-
 from __future__ import annotations
 
 import hashlib

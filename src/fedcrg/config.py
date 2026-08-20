@@ -1,5 +1,3 @@
-"""Loading, validation, and resolution of study, dataset, and experiment configuration."""
-
 from __future__ import annotations
 
 import hashlib
@@ -93,24 +91,18 @@ _CALIBRATION_SEED_ADAPTER = TypeAdapter(CalibrationSeed)
 
 @dataclass(frozen=True, slots=True)
 class NbaiotDevice:
-    """Maps an N-BaIoT client id to the source-directory tokens identifying its raw files."""
-
     client_id: ClientId
     tokens: tuple[Identifier, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class DiadFeatureDerivation:
-    """Rules for deriving the DIAD training-numeric-safe feature set from the raw schema."""
-
     excluded_feature_exact: frozenset[Identifier]
     excluded_feature_name_markers: tuple[Identifier, ...]
     architecture_hidden_ratios: tuple[Rational, ...]
 
 
 class ProtocolConfig(BaseModel):
-    """Statistical protocol parameters: significance level, tolerance, and assurance targets."""
-
     model_config = FrozenModel
 
     id: Literal[ProtocolId.FEDCRG] = ProtocolId.FEDCRG
@@ -124,7 +116,6 @@ class ProtocolConfig(BaseModel):
 
     @property
     def band(self) -> OperatingBand:
-        """Derive the acceptable false-positive-rate band from alpha and rho, clamped to [0, 1]."""
         return OperatingBand(
             lower=max(0.0, self.alpha * (1.0 - self.rho)),
             upper=min(1.0, self.alpha * (1.0 + self.rho)),
@@ -132,8 +123,6 @@ class ProtocolConfig(BaseModel):
 
 
 class StatisticsConfig(BaseModel):
-    """Parameters for bootstrap resampling, significance testing, and reporting percentiles."""
-
     model_config = FrozenModel
 
     bootstrap_replicates: ReplicateCount
@@ -150,13 +139,10 @@ class StatisticsConfig(BaseModel):
 
     @property
     def utility_margin_allowance(self) -> MetricDifference:
-        """Negated margin, expressing the allowance as a signed difference bound rather than a magnitude."""
         return -self.utility_margin
 
 
 class SyntheticConfig(BaseModel):
-    """Parameters for the synthetic score distributions used in non-real-data experiments."""
-
     model_config = FrozenModel
 
     lognormal_mean: Metric
@@ -172,8 +158,6 @@ class SyntheticConfig(BaseModel):
 
 
 class RandomnessConfig(BaseModel):
-    """Random seeds controlling model initialization, attack splitting, and synthetic data."""
-
     model_config = FrozenModel
 
     model_seeds: tuple[ModelSeed, ...]
@@ -188,8 +172,6 @@ class RandomnessConfig(BaseModel):
 
 
 class TrainingConfig(BaseModel):
-    """Federated training hyperparameters for one detector."""
-
     model_config = FrozenModel
 
     rounds: RoundCount
@@ -220,8 +202,6 @@ class TrainingConfig(BaseModel):
 
 
 class AutoencoderConfig(BaseModel):
-    """Architecture parameters for the autoencoder detector."""
-
     model_config = FrozenModel
 
     id: Literal[DetectorId.AUTOENCODER] = DetectorId.AUTOENCODER
@@ -232,8 +212,6 @@ class AutoencoderConfig(BaseModel):
 
 
 class DeepSvddConfig(BaseModel):
-    """Architecture parameters for the Deep SVDD detector."""
-
     model_config = FrozenModel
 
     id: Literal[DetectorId.DEEP_SVDD] = DetectorId.DEEP_SVDD
@@ -250,8 +228,6 @@ DetectorConfig = Annotated[AutoencoderConfig | DeepSvddConfig, Field(discriminat
 
 
 class StudyConfig(BaseModel):
-    """The complete study-wide configuration: protocol, profiles, policies, and root paths."""
-
     model_config = FrozenModel
 
     protocol: ProtocolConfig
@@ -265,8 +241,6 @@ class StudyConfig(BaseModel):
 
     @model_validator(mode="after")
     def _validate(self) -> Self:
-        # Every registered PolicyId must be configured here, not merely a subset, so an
-        # experiment can never silently reference a policy the study never set up.
         if len(set(self.policies)) != len(self.policies):
             raise ValueError("Policy registry must be unique")
         if set(self.policies) != set(PolicyId):
@@ -279,14 +253,12 @@ class StudyConfig(BaseModel):
         return self
 
     def detector_profile(self, profile_id: ProfileId) -> DetectorConfig:
-        """Look up a registered detector profile, or raise if unregistered."""
         try:
             return self.detector_profiles[profile_id]
         except KeyError as exc:
             raise ConfigurationError(f"Unknown detector profile: {profile_id!r}") from exc
 
     def training_profile(self, profile_id: ProfileId) -> TrainingConfig:
-        """Look up a registered training profile, or raise if unregistered."""
         try:
             return self.training_profiles[profile_id]
         except KeyError as exc:
@@ -294,8 +266,6 @@ class StudyConfig(BaseModel):
 
 
 class ExpectedBenignCounts(RootModel[dict[ClientId, PositiveCount]]):
-    """Per-client expected benign row counts, used to detect source-data drift."""
-
     def count_for(self, client_id: ClientId) -> PositiveCount | None:
         return self.root.get(client_id)
 
@@ -304,8 +274,6 @@ class ExpectedBenignCounts(RootModel[dict[ClientId, PositiveCount]]):
 
 
 class SplitConfig(BaseModel):
-    """Row-count budgets for each data role in a dataset's train/calibration/test split."""
-
     model_config = FrozenModel
 
     train_benign: PositiveCount
@@ -333,8 +301,6 @@ class SplitConfig(BaseModel):
 
 
 class DatasetConfig(BaseModel):
-    """A dataset's source contract: feature schema, eligibility rules, and split budgets."""
-
     model_config = FrozenModel
 
     id: DatasetId
@@ -422,8 +388,6 @@ class DatasetConfig(BaseModel):
 
 
 class DatasetCatalogue(RootModel[dict[DatasetId, DatasetConfig]]):
-    """The registry of dataset contracts loaded from datasets.yaml."""
-
     def contract(self, dataset_id: DatasetId) -> DatasetConfig:
         try:
             return self.root[dataset_id]
@@ -449,8 +413,6 @@ _AXIS_VALUE_TYPES: dict[ExperimentAxisId, type[AxisValue] | None] = {
 
 
 class ParameterAxis(BaseModel):
-    """A named sweep of values for one independently varied experiment parameter."""
-
     model_config = ConfigDict(frozen=True)
 
     id: ExperimentAxisId
@@ -474,8 +436,6 @@ class ParameterAxis(BaseModel):
 
 
 class ParameterSetting(BaseModel):
-    """A single axis-value assignment."""
-
     model_config = ConfigDict(frozen=True)
 
     axis: ExperimentAxisId
@@ -483,8 +443,6 @@ class ParameterSetting(BaseModel):
 
 
 class ParameterCell(BaseModel):
-    """A fixed combination of axis values, used where axes must be varied jointly rather than independently."""
-
     model_config = ConfigDict(frozen=True)
 
     settings: tuple[ParameterSetting, ...]
@@ -518,8 +476,6 @@ class ParameterCell(BaseModel):
 
 
 class WorkloadExpectation(BaseModel):
-    """Expected trial/cell/training counts for an experiment, used to size and sanity-check runs."""
-
     model_config = ConfigDict(frozen=True)
 
     monte_carlo_trials: NonNegativeCount = 0
@@ -528,8 +484,6 @@ class WorkloadExpectation(BaseModel):
 
 
 class ExperimentSpec(BaseModel):
-    """One entry in the experiment catalogue: dataset, detector, seeds, policies, and axes to sweep."""
-
     model_config = FrozenModel
 
     id: ExperimentId
@@ -605,7 +559,6 @@ class ExperimentSpec(BaseModel):
         return self
 
     def axis(self, axis_id: ExperimentAxisId) -> ParameterAxis:
-        """Look up a declared independent axis, or raise if this experiment has none by that id."""
         for item in self.axes:
             if item.id is axis_id:
                 return item
@@ -617,12 +570,6 @@ class ExperimentSpec(BaseModel):
 
 
 class ExperimentCatalogue(RootModel[tuple[ExperimentSpec, ...]]):
-    """The fixed set of experiment specs loaded from experiments.yaml.
-
-    Validation requires the loaded ids to exactly match `ExperimentId`: no missing, no extra,
-    no duplicates.
-    """
-
     @field_validator("root", mode="before")
     @classmethod
     def _coerce_root(cls, value: object) -> object:
@@ -643,20 +590,16 @@ class ExperimentCatalogue(RootModel[tuple[ExperimentSpec, ...]]):
         return self
 
     def spec(self, experiment_id: ExperimentId) -> ExperimentSpec:
-        """Look up a spec by id, or raise `KeyError`."""
         for row in self.root:
             if row.id is experiment_id:
                 return row
         raise KeyError(experiment_id)
 
     def all(self) -> tuple[ExperimentSpec, ...]:
-        """All specs in the catalogue."""
         return self.root
 
 
 class DataSpecification(BaseModel):
-    """The subset of config that determines the prepared-dataset cache key."""
-
     model_config = FrozenModel
 
     dataset: DatasetConfig
@@ -664,8 +607,6 @@ class DataSpecification(BaseModel):
 
 
 class TrainingSpecification(BaseModel):
-    """The subset of config that determines the trained-model and score cache key."""
-
     model_config = FrozenModel
 
     data_spec_hash: Sha256
@@ -674,8 +615,6 @@ class TrainingSpecification(BaseModel):
 
 
 class ExperimentConfig(BaseModel):
-    """A fully resolved configuration for one experiment run."""
-
     model_config = FrozenModel
 
     id: ExperimentId
@@ -731,8 +670,6 @@ class ExperimentConfig(BaseModel):
             )
 
     def serialized_payload(self) -> str:
-        # outputs_root/preprocessed_root are filesystem locations, not logical config, so they
-        # are excluded to keep config_hash stable across machines and output directory moves.
         payload = self.model_dump(mode="json", exclude={"outputs_root", "preprocessed_root"})
         return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
@@ -742,7 +679,6 @@ class ExperimentConfig(BaseModel):
 
     @property
     def data_spec_hash(self) -> Sha256:
-        """Hash of everything that determines the prepared dataset cache, excluding calibration seeds so re-seeding calibration does not force re-preprocessing."""
         specification = DataSpecification(
             dataset=self.dataset,
             attack_split_seed=self.randomness.attack_split_seed,
@@ -754,7 +690,6 @@ class ExperimentConfig(BaseModel):
 
     @property
     def training_spec_hash(self) -> Sha256:
-        """Falls back to data_spec_hash when no detector/training is bound, since synthetic experiments have no model to key a training cache on."""
         if self.detector is None or self.training is None:
             return self.data_spec_hash
         specification = TrainingSpecification(
@@ -767,7 +702,6 @@ class ExperimentConfig(BaseModel):
 
 
 def load_yaml_mapping(path: Path) -> dict[str, JsonValue]:
-    """Load a YAML file and require its root to be a mapping."""
     try:
         raw: object = yaml.safe_load(path.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
@@ -783,12 +717,10 @@ _DEFAULT_CONFIG_LAYOUT = ConfigLayout()
 
 
 def load_study(path: Path = _DEFAULT_CONFIG_LAYOUT.study) -> StudyConfig:
-    """Load and validate the study configuration file."""
     return StudyConfig.model_validate(load_yaml_mapping(path))
 
 
 def load_dataset_registry(path: Path = _DEFAULT_CONFIG_LAYOUT.datasets) -> DatasetCatalogue:
-    """Load and validate the dataset registry file."""
     root = load_yaml_mapping(path)
     datasets = root.get("datasets")
     if not isinstance(datasets, dict):
@@ -799,7 +731,6 @@ def load_dataset_registry(path: Path = _DEFAULT_CONFIG_LAYOUT.datasets) -> Datas
 def load_experiment_catalogue(
     path: Path = _DEFAULT_CONFIG_LAYOUT.experiments,
 ) -> ExperimentCatalogue:
-    """Load and validate the experiment catalogue file."""
     root = load_yaml_mapping(path)
     experiments = root.get("experiments")
     if not isinstance(experiments, list):
@@ -814,7 +745,6 @@ def resolve_experiment_config(
     *,
     dataset_id: DatasetId | None = None,
 ) -> ExperimentConfig:
-    """Overlay an experiment spec's overrides (calibration seeds, model seeds) onto the study's defaults."""
     chosen = dataset_id or (spec.datasets[0] if spec.datasets else spec.dataset)
     if chosen is None:
         raise ConfigurationError(f"Experiment {spec.id} declares no dataset")
@@ -846,8 +776,6 @@ def resolve_experiment_config(
 
 
 class Study:
-    """Loaded study, dataset, and experiment configuration, with resolution to per-experiment configs."""
-
     def __init__(
         self,
         study_config: StudyConfig,
@@ -865,7 +793,6 @@ class Study:
         datasets_path: Path = _DEFAULT_CONFIG_LAYOUT.datasets,
         experiments_path: Path = _DEFAULT_CONFIG_LAYOUT.experiments,
     ) -> Study:
-        """Load study, dataset, and experiment configuration from their default file locations."""
         return cls(
             study_config=load_study(study_path),
             datasets=load_dataset_registry(datasets_path),
@@ -873,7 +800,6 @@ class Study:
         )
 
     def spec(self, experiment_id: ExperimentId) -> ExperimentSpec:
-        """Look up an experiment's catalogue spec."""
         return self.catalogue.spec(experiment_id)
 
     @property
@@ -886,7 +812,6 @@ class Study:
         *,
         dataset_id: DatasetId | None = None,
     ) -> ExperimentConfig:
-        """Resolve an experiment's full configuration, overlaying its spec onto study defaults."""
         return resolve_experiment_config(
             self.catalogue.spec(experiment_id),
             self.study_config,
@@ -896,7 +821,6 @@ class Study:
 
 
 def validate_experiment_config(config: ExperimentConfig) -> None:
-    """Cross-field invariants that need a resolved config and so cannot live in a pydantic validator."""
     if config.dataset.id is not DatasetId.SYNTHETIC and not config.randomness.model_seeds:
         raise ConfigurationError("Real-data experiments require at least one model seed")
     if config.detector is not None and config.training is not None:

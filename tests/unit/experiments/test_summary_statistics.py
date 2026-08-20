@@ -1,5 +1,3 @@
-"""Tests for descriptive, bootstrap, and split-sensitivity summary statistics."""
-
 from __future__ import annotations
 
 import numpy as np

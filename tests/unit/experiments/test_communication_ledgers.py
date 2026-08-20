@@ -1,5 +1,3 @@
-"""Tests for federated training and threshold-policy communication-cost ledgers."""
-
 from __future__ import annotations
 
 from fedcrg.config import Study

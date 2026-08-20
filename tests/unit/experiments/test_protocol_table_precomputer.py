@@ -1,5 +1,3 @@
-"""Tests for precomputing cached readiness plans and mismatch cutoff tables."""
-
 from __future__ import annotations
 
 import json
