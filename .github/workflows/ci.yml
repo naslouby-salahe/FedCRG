@@ -28,7 +28,5 @@ jobs:
         run: uv run --no-sync --no-build ruff check src tests
       - name: Type check
         run: uv run --no-sync --no-build pyright src/fedcrg
-      - name: Repository audit
-        run: uv run --no-sync --no-build python tools/audit_repository.py
       - name: Tests (parallel)
         run: uv run --no-sync --no-build pytest -n auto --cov=fedcrg --cov-report=term-missing

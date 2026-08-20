@@ -29,7 +29,6 @@ tests/                   contract, unit, and integration verification
 outputs/                 generated caches, runs, per-experiment evidence
 data/preprocessed/       deterministic prepared datasets (reused by identity)
 results/                 immutable results bundle per experiment
-tools/                   optional developer/release utilities only
 ```
 
 ## Evidence layout
@@ -59,14 +58,6 @@ Python 3.12 is supported.
 ```bash
 uv sync --extra dev
 ```
-
-After the first validated protocol environment, freeze the exact installed runtime versions:
-
-```bash
-python tools/freeze_environment.py
-```
-
-The generated `requirements.lock` is then versioned as part of the protocol freeze rather than silently regenerated mid-study.
 
 ## Research workflow
 

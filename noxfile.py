@@ -52,12 +52,6 @@ def contract(session: nox.Session) -> None:
 
 
 @nox.session
-def audit(session: nox.Session) -> None:
-    session.install("-e", ".")
-    session.run("python", "tools/audit_repository.py")
-
-
-@nox.session
 def quality(session: nox.Session) -> None:
     session.install("-e", _EDITABLE_DEV_INSTALL)
     session.install("pyright")
