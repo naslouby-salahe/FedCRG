@@ -30,9 +30,12 @@ outputs/*
 !outputs/cache/
 !outputs/cache/**/
 !outputs/cache/**/.gitkeep
-!outputs/reports/
-!outputs/reports/**/
-!outputs/reports/**/.gitkeep
+!outputs/tables/
+!outputs/tables/.gitkeep
+!outputs/json/
+!outputs/json/.gitkeep
 
 # Contract tests: kept local-only (not part of the shared repository)
 /tests/contract/
+
+docs/

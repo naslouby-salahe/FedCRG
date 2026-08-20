@@ -2,8 +2,8 @@
 # Directory scaffolding is preserved via .gitkeep so the layout contract test
 # can verify the reserved structure in a clean checkout.
 
-# Re-allow the scaffolding marker files
-!**/.gitkeep
-
 # Everything else under outputs/ is generated at runtime
 *
+
+# Re-allow the scaffolding marker files
+!**/.gitkeep
