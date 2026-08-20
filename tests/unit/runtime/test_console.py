@@ -4,21 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from fedcrg.runtime import render_cache_status, render_campaign_status
-
-
-def test_render_campaign_status_prints_progress_row(capsys: pytest.CaptureFixture[str]) -> None:
-    """Campaign status output includes the stage, progress, and current experiment."""
-    render_campaign_status(
-        status="running",
-        completed=1,
-        total=2,
-        current_experiment="external_diad",
-        elapsed_seconds=12.0,
-    )
-    output = capsys.readouterr().out
-    assert "running" in output
-    assert "external_diad" in output
+from fedcrg.runtime import render_cache_status
 
 
 def test_render_cache_status_prints_outcome_and_target(capsys: pytest.CaptureFixture[str]) -> None:

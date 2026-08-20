@@ -1,1 +1,1 @@
-"""Experiment planning, execution, and campaign orchestration."""
+"""Experiment planning and execution."""

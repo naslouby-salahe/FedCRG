@@ -7,10 +7,7 @@ from pathlib import Path
 import pytest
 
 from fedcrg.config import ExperimentConfig, ExperimentSpec, Study
-from fedcrg.evidence.completion import (
-    ExperimentArtifactPurger,
-    ExperimentEvidenceAssessor,
-)
+from fedcrg.evidence.completion import ExperimentEvidenceAssessor
 from fedcrg.evidence.contracts import (
     ExperimentApplicability,
     ExperimentArtifactContract,
@@ -20,22 +17,13 @@ from fedcrg.evidence.contracts import (
 )
 from fedcrg.experiments.analyses import MismatchPowerResult, SyntheticExperimentEnvelope
 from fedcrg.experiments.execution import ExperimentExecutor
-from fedcrg.experiments.runner import (
-    CampaignExecutor,
-    CampaignStatus,
-    CampaignStatusStore,
-    CampaignWorkItem,
-    CampaignOutcomeRow,
-)
 from fedcrg.paths import LayoutArtifact, OutputsLayout, StudyPaths
 from fedcrg.reporting import ExperimentPublisher, ResultsBuilder, ResultsVerifier
 from fedcrg.types import (
     CacheRole,
-    CampaignStage,
     CompletionState,
     ExecutionOutcome,
     ExperimentId,
-    ExperimentStatus,
     ExperimentType,
     JsonResultKind,
     ResultsGenerationStatus,
@@ -130,24 +118,6 @@ def test_missing_and_malformed_json_prevent_pass(tmp_path: Path) -> None:
     assert assessor.assess(ExperimentId.MISMATCH_POWER).state is CompletionState.INVALID
     _write_analysis(study.paths.outputs_root, '{"cells": []}')
     assert assessor.assess(ExperimentId.MISMATCH_POWER).state is CompletionState.INVALID
-
-
-def test_missing_required_report_prevents_pass(tmp_path: Path) -> None:
-    study = _study(tmp_path)
-    _write_analysis(study.paths.outputs_root, _envelope())
-    ExperimentPublisher().publish(
-        ExperimentId.MISMATCH_POWER,
-        study.paths.outputs_root,
-        study.resolve(ExperimentId.MISMATCH_POWER),
-    )
-    report = (
-        OutputsLayout(study.paths.outputs_root).experiment_reports(ExperimentId.MISMATCH_POWER)
-        / LayoutArtifact.EXPERIMENT_REPORT
-    )
-    report.unlink()
-    assessment = ExperimentEvidenceAssessor(study).assess(ExperimentId.MISMATCH_POWER)
-    assert assessment.state is CompletionState.EVIDENCE_INCOMPLETE
-    assert not assessment.passed
 
 
 def test_stale_bundle_is_detected(tmp_path: Path) -> None:
@@ -256,128 +226,6 @@ def test_results_generation_is_idempotent_and_overwritable(tmp_path: Path) -> No
     assert rebuilt.status is ResultsGenerationStatus.REBUILT
 
 
-def test_campaign_resume_uses_verified_evidence(tmp_path: Path) -> None:
-    study = _study(tmp_path)
-    _write_analysis(study.paths.outputs_root, _envelope())
-    ExperimentPublisher().publish(
-        ExperimentId.MISMATCH_POWER,
-        study.paths.outputs_root,
-        study.resolve(ExperimentId.MISMATCH_POWER),
-    )
-    ResultsBuilder().build(
-        outputs_root=study.paths.outputs_root,
-        results_root=study.paths.results_root,
-        experiment_id=ExperimentId.MISMATCH_POWER,
-        study=study,
-    )
-    store = CampaignStatusStore(outputs_root=study.paths.outputs_root)
-    store.save(
-        CampaignStatus(
-            created_at="2026-08-13T00:00:00+0000",
-            updated_at="2026-08-13T00:00:01+0000",
-            current_stage=CampaignStage.DONE,
-            experiments=(
-                CampaignOutcomeRow(
-                    experiment_id=ExperimentId.MISMATCH_POWER,
-                    status=ExperimentStatus.COMPLETE,
-                    finished_at="2026-08-13T00:00:01+0000",
-                ),
-            ),
-        )
-    )
-    calls = {"count": 0}
-
-    class _CountingExecutor:
-        def execute(self, experiment_id: ExperimentId, *, overwrite: bool = False):
-            calls["count"] += 1
-            raise AssertionError("already-passed experiment must not be executed")
-
-    status = CampaignExecutor(study=study, status_store=store, executor=_CountingExecutor()).run(
-        (
-            CampaignWorkItem(
-                experiment_id=ExperimentId.MISMATCH_POWER,
-                config_path=Path("config/study.yaml"),
-                prepared_root=study.paths.preprocessed_root,
-            ),
-        ),
-        outputs_root=study.paths.outputs_root,
-        results_root=study.paths.results_root,
-    )
-    assert calls["count"] == 0
-    assert status.completed_experiments == (ExperimentId.MISMATCH_POWER,)
-
-
-def test_campaign_refuses_stale_complete_row(tmp_path: Path) -> None:
-    study = _study(tmp_path)
-    store = CampaignStatusStore(outputs_root=study.paths.outputs_root)
-    store.save(
-        CampaignStatus(
-            created_at="2026-08-13T00:00:00+0000",
-            updated_at="2026-08-13T00:00:01+0000",
-            experiments=(
-                CampaignOutcomeRow(
-                    experiment_id=ExperimentId.MISMATCH_POWER,
-                    status=ExperimentStatus.COMPLETE,
-                    finished_at="2026-08-13T00:00:01+0000",
-                ),
-            ),
-        )
-    )
-    ran = {"value": False}
-
-    class _RerunExecutor:
-        def execute(self, experiment_id: ExperimentId, *, overwrite: bool = False):
-            ran["value"] = True
-            from fedcrg.experiments.execution import ExperimentRunResult
-
-            return ExperimentRunResult(
-                experiment_id=experiment_id,
-                outcome=ExecutionOutcome.COMPLETED,
-                state=CompletionState.FULLY_PASSED,
-                json_paths=(),
-                csv_paths=(),
-                figure_paths=(),
-                report_paths=(),
-                bundle_path="results/experiments/mismatch_power",
-                output_root=str(study.paths.outputs_root),
-                model_count=0,
-                run_directory_count=0,
-            )
-
-    CampaignExecutor(study=study, status_store=store, executor=_RerunExecutor()).run(
-        (
-            CampaignWorkItem(
-                experiment_id=ExperimentId.MISMATCH_POWER,
-                config_path=Path("config/study.yaml"),
-                prepared_root=study.paths.preprocessed_root,
-            ),
-        ),
-        outputs_root=study.paths.outputs_root,
-    )
-    assert ran["value"]
-
-
-def test_campaign_overwrite_clears_status(tmp_path: Path) -> None:
-    study = _study(tmp_path)
-    store = CampaignStatusStore(outputs_root=study.paths.outputs_root)
-    store.save(
-        CampaignStatus(
-            created_at="2026-08-13T00:00:00+0000",
-            updated_at="2026-08-13T00:00:01+0000",
-            experiments=(
-                CampaignOutcomeRow(
-                    experiment_id=ExperimentId.MISMATCH_POWER,
-                    status=ExperimentStatus.COMPLETE,
-                    finished_at="2026-08-13T00:00:01+0000",
-                ),
-            ),
-        )
-    )
-    ExperimentArtifactPurger(study).purge_campaign()
-    with pytest.raises(FileNotFoundError):
-        store.load()
-
-
 def test_optional_and_inapplicable_contracts() -> None:
     optional = ExperimentArtifactContract(
         experiment_id=ExperimentId.COMPUTATIONAL_BENCHMARK,
@@ -388,7 +236,6 @@ def test_optional_and_inapplicable_contracts() -> None:
         json_files=all_experiment_contracts()[0].json_files,
         csv_files=(),
         figure_files=(),
-        report_files=(),
         requires_run_grid=False,
         requires_analysis_json=True,
         cache_kind=SharedCacheKind.NONE,

@@ -46,8 +46,6 @@ def test_artifact_verifier_hashes_run_files(tmp_path: Path) -> None:
     ):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("{}\n", encoding="utf-8")
-    layout.reports.mkdir(parents=True, exist_ok=True)
-    (layout.reports / "summary.md").write_text("# run\n", encoding="utf-8")
     verifier = ArtifactVerifier()
     definition = Study.load().spec(ExperimentId.READINESS_SAMPLE_SIZE)
     recorded = verifier.record(layout, definition)

@@ -16,13 +16,13 @@ def test_cli_help_exposes_target_surface() -> None:
         "preprocess",
         "plan",
         "run",
-        "campaign",
         "status",
         "monitor",
-        "report",
         "results",
     ):
         assert command in result.output
+    for command in ("campaign", "report"):
+        assert command not in result.output
 
 
 def test_cli_validate_primary_experiment() -> None:

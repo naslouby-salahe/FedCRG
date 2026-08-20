@@ -30,7 +30,6 @@ from fedcrg.paths import (
     ExperimentResultsBundleLayout,
     LayoutArtifact,
     OutputsLayout,
-    ResultsBundleLayout,
     RunLayout,
     experiment_results_root,
 )
@@ -71,7 +70,6 @@ class CompletionAssessment(BaseModel):
     json_paths: tuple[PathString, ...]
     csv_paths: tuple[PathString, ...]
     figure_paths: tuple[PathString, ...]
-    report_paths: tuple[PathString, ...]
     bundle_path: PathString
     output_root: PathString
     complete_run_count: NonNegativeCount
@@ -114,11 +112,7 @@ def experiment_source_files(
             outputs.experiment_figures(experiment_id) / item.filename
             for item in contract.figure_files
         ),
-        *tuple(
-            outputs.experiment_reports(experiment_id) / item.filename
-            for item in contract.report_files
-        ),
-        outputs.experiment_reports(experiment_id) / LayoutArtifact.EXPERIMENT_RESULT_JSON,
+        outputs.experiment_json(experiment_id) / LayoutArtifact.EXPERIMENT_RESULT_JSON,
     )
     paths.extend(path for path in published if path.is_file())
     return tuple(paths)
@@ -229,8 +223,7 @@ class ExperimentEvidenceAssessor:
             config_hash=config.config_hash,
             json_paths=self._existing(
                 (
-                    outputs.experiment_reports(experiment_id)
-                    / LayoutArtifact.EXPERIMENT_RESULT_JSON,
+                    outputs.experiment_json(experiment_id) / LayoutArtifact.EXPERIMENT_RESULT_JSON,
                     *tuple(
                         ExperimentResultsBundleLayout(bundle_root).json_dir / item.filename
                         for item in contract.json_files
@@ -247,12 +240,6 @@ class ExperimentEvidenceAssessor:
                 tuple(
                     outputs.experiment_figures(experiment_id) / item.filename
                     for item in contract.figure_files
-                )
-            ),
-            report_paths=self._existing(
-                tuple(
-                    outputs.experiment_reports(experiment_id) / item.filename
-                    for item in contract.report_files
                 )
             ),
             bundle_path=bundle_root.as_posix(),
@@ -330,9 +317,7 @@ class ExperimentEvidenceAssessor:
         if contract.optional or contract.inapplicable:
             return ()
         problems: list[CompletionProblem] = []
-        result_json = (
-            outputs.experiment_reports(experiment_id) / LayoutArtifact.EXPERIMENT_RESULT_JSON
-        )
+        result_json = outputs.experiment_json(experiment_id) / LayoutArtifact.EXPERIMENT_RESULT_JSON
         problems.extend(self._validate_json_kind(contract, result_json))
         problems.extend(
             self._validate_required_files(
@@ -346,13 +331,6 @@ class ExperimentEvidenceAssessor:
                 contract.figure_files,
                 outputs.experiment_figures(experiment_id),
                 ResultFormat.FIGURE,
-            )
-        )
-        problems.extend(
-            self._validate_required_files(
-                contract.report_files,
-                outputs.experiment_reports(experiment_id),
-                ResultFormat.REPORT,
             )
         )
         return tuple(problems)
@@ -574,7 +552,7 @@ class ExperimentEvidenceAssessor:
     ) -> bool:
         candidates = (
             outputs.analysis_result(experiment_id),
-            outputs.experiment_reports(experiment_id) / LayoutArtifact.EXPERIMENT_RESULT_JSON,
+            outputs.experiment_json(experiment_id) / LayoutArtifact.EXPERIMENT_RESULT_JSON,
             *(
                 outputs.experiment_tables(experiment_id) / item.filename
                 for item in contract.csv_files
@@ -582,10 +560,6 @@ class ExperimentEvidenceAssessor:
             *(
                 outputs.experiment_figures(experiment_id) / item.filename
                 for item in contract.figure_files
-            ),
-            *(
-                outputs.experiment_reports(experiment_id) / item.filename
-                for item in contract.report_files
             ),
         )
         return any(path.exists() for path in candidates)
@@ -615,23 +589,12 @@ class ExperimentArtifactPurger:
         analysis = outputs.analysis_result(experiment_id)
         if analysis.is_file():
             analysis.unlink()
-        self._rmtree(outputs.experiment_reports(experiment_id))
+        self._rmtree(outputs.experiment_json(experiment_id))
         self._rmtree(outputs.experiment_tables(experiment_id))
         self._rmtree(outputs.experiment_figures(experiment_id))
         self._rmtree(experiment_results_root(self.study.paths.results_root, experiment_id))
         if contract.cache_role is CacheRole.OWNER:
             self._purge_owned_cache(contract, outputs)
-        self._drop_campaign_row(experiment_id, outputs)
-
-    def purge_campaign(self) -> None:
-        """Clear campaign-owned state and every experiment-owned regenerable artifact."""
-        outputs = OutputsLayout(self.study.paths.outputs_root)
-        status = outputs.campaign_status()
-        if status.is_file():
-            status.unlink()
-        self._purge_campaign_bundle(self.study.paths.results_root)
-        for contract in (experiment_contract(item.id) for item in self.study.catalogue.all()):
-            self.purge(contract.experiment_id)
 
     def _purge_runs(self, experiment_id: ExperimentId, outputs: OutputsLayout) -> None:
         if not outputs.runs.is_dir():
@@ -673,46 +636,6 @@ class ExperimentArtifactPurger:
             target = root / identity.dataset_id / identity.detector_id
             if target.is_dir():
                 shutil.rmtree(target)
-
-    def _drop_campaign_row(self, experiment_id: ExperimentId, outputs: OutputsLayout) -> None:
-        from fedcrg.experiments.runner import CampaignStatus, CampaignStatusStore
-
-        store = CampaignStatusStore(outputs_root=outputs.outputs_root)
-        try:
-            status = store.load()
-        except FileNotFoundError:
-            return
-        remaining = tuple(
-            row for row in status.experiments if row.experiment_id is not experiment_id
-        )
-        if remaining == status.experiments:
-            return
-        store.save(
-            CampaignStatus(
-                created_at=status.created_at,
-                updated_at=status.updated_at,
-                current_experiment=None
-                if status.current_experiment is experiment_id
-                else status.current_experiment,
-                current_stage=status.current_stage,
-                experiments=remaining,
-                results_path=status.results_path,
-                elapsed_seconds=status.elapsed_seconds,
-            )
-        )
-
-    @staticmethod
-    def _purge_campaign_bundle(results_root: Path) -> None:
-        layout = ResultsBundleLayout(results_root)
-        for path in (
-            layout.manifest,
-            layout.checksums,
-        ):
-            if path.is_file():
-                path.unlink()
-        for directory in layout.required_directories:
-            if directory.is_dir():
-                shutil.rmtree(directory)
 
     @staticmethod
     def _rmtree(path: Path) -> None:

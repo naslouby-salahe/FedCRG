@@ -16,7 +16,6 @@ from pathlib import Path
 import psutil
 import torch
 from rich.console import Console
-from rich.table import Table
 
 from fedcrg.types import (
     ByteCount,
@@ -26,21 +25,12 @@ from fedcrg.types import (
     LogLevel,
     NonNegativeCount,
     Percentage,
-    PositiveCount,
     SampleCount,
     Timestamp,
 )
 
 _FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 _LOG_FILENAME = "fedcrg.log"
-
-
-class CampaignStatusColumn(StrEnum):
-    STATUS = "status"
-    COMPLETED = "completed"
-    TOTAL = "total"
-    CURRENT = "current"
-    ELAPSED_SECONDS = "elapsed_s"
 
 
 class CacheOutcome(StrEnum):
@@ -248,31 +238,6 @@ def _telemetry_text(sample: ResourceSample) -> Identifier:
 def render_telemetry(sample: ResourceSample) -> Identifier:
     """Render a sample as a single human-readable line."""
     return _telemetry_text(sample)
-
-
-def render_campaign_status(
-    status: Identifier,
-    completed: NonNegativeCount,
-    total: PositiveCount,
-    current_experiment: Identifier | None,
-    elapsed_seconds: Duration,
-) -> None:
-    """Print a one-row status table for a campaign."""
-    console = Console()
-    table = Table(title="campaign status")
-    table.add_column(CampaignStatusColumn.STATUS)
-    table.add_column(CampaignStatusColumn.COMPLETED)
-    table.add_column(CampaignStatusColumn.TOTAL)
-    table.add_column(CampaignStatusColumn.CURRENT)
-    table.add_column(CampaignStatusColumn.ELAPSED_SECONDS)
-    table.add_row(
-        status,
-        str(completed),
-        str(total),
-        current_experiment or "-",
-        f"{elapsed_seconds:.1f}",
-    )
-    console.print(table)
 
 
 def render_cache_status(

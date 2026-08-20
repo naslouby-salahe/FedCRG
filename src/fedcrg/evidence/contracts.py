@@ -29,7 +29,6 @@ _EMPIRICAL_RUN_ARTIFACTS: tuple[ArtifactType, ...] = (
     ArtifactType.SCORE_MANIFEST,
     ArtifactType.THRESHOLD_RECORDS,
     ArtifactType.METRICS,
-    ArtifactType.REPORT,
 )
 
 _SYNTHETIC_RUN_ARTIFACTS: tuple[ArtifactType, ...] = ()
@@ -66,7 +65,6 @@ class ExperimentArtifactContract(BaseModel):
     json_files: tuple[RequiredResultFile, ...]
     csv_files: tuple[RequiredResultFile, ...]
     figure_files: tuple[RequiredResultFile, ...]
-    report_files: tuple[RequiredResultFile, ...]
     requires_run_grid: bool
     requires_analysis_json: bool
     cache_kind: SharedCacheKind
@@ -138,12 +136,6 @@ def _benchmark_csv() -> tuple[RequiredResultFile, ...]:
     )
 
 
-def _report() -> tuple[RequiredResultFile, ...]:
-    return (
-        RequiredResultFile(format=ResultFormat.REPORT, filename=LayoutArtifact.EXPERIMENT_REPORT),
-    )
-
-
 def _synthetic(
     experiment_id: ExperimentId,
     category: ExperimentType,
@@ -164,7 +156,6 @@ def _synthetic(
         json_files=_json_result(),
         csv_files=csv_files,
         figure_files=figures,
-        report_files=_report(),
         requires_run_grid=False,
         requires_analysis_json=True,
         cache_kind=SharedCacheKind.NONE,
@@ -189,7 +180,6 @@ def _empirical(
         json_files=_json_result(),
         csv_files=_policy_csv(),
         figure_files=figures,
-        report_files=_report(),
         requires_run_grid=True,
         requires_analysis_json=False,
         cache_kind=cache_kind,

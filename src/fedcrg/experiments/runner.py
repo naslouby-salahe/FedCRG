@@ -1,15 +1,12 @@
-"""Trains detectors, computes scores, evaluates threshold policies, and drives experiments and campaigns through their manifest lifecycle."""
+"""Trains detectors, computes scores, evaluates threshold policies, and drives experiments through their manifest lifecycle."""
 
 from __future__ import annotations
 
 import hashlib
 import os
 import shutil
-import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import UTC, datetime
-from typing import TYPE_CHECKING
 from graphlib import TopologicalSorter
 from pathlib import Path
 
@@ -44,12 +41,10 @@ from fedcrg.evidence.store import (
 )
 from fedcrg.hashing import sha256_file
 from fedcrg.paths import (
-    LayoutArtifact,
     OutputsLayout,
     PreparedDatasetLayout,
     RunLayout,
     ScoreCacheLayout,
-    campaign_status_path,
 )
 from fedcrg.learning.detectors import (
     DeepSvdd,
@@ -112,34 +107,23 @@ from fedcrg.thresholding.policies import (
     oracle_choice,
 )
 from fedcrg.types import (
-    CompletionState,
     CalibrationAssignmentMode,
     CalibrationSeed,
-    CampaignStage,
     ClientId,
     DataRole,
-    Description,
     ExperimentId,
     ExperimentStatus,
     FailureCode,
     FeatureName,
     Identifier,
     ModelSeed,
-    PathString,
     PolicyId,
     PositiveCount,
     PreparedColumn,
     RunId,
     Sha256,
     Threshold,
-    Timestamp,
-    Duration,
 )
-from fedcrg.reporting import build_run_report
-
-if TYPE_CHECKING:
-    from fedcrg.evidence.completion import ExperimentEvidenceAssessor
-    from fedcrg.experiments.execution import ExperimentExecutor
 
 Frozen = ConfigDict(frozen=True)
 _LOGGER = get_logger(__name__)
@@ -388,7 +372,6 @@ class RunExperiment:
         try:
             result = runner(plan, layout)
             self._transition(layout, plan, policy, ExperimentStatus.VERIFYING)
-            build_run_report(layout.root)
             verification = self.verifier.record(layout, plan.definition)
             if not verification.valid:
                 raise RuntimeError(
@@ -1464,7 +1447,7 @@ class FederationCellMaterializer:
             and manifest.status is ExperimentStatus.COMPLETE
             and manifest.config_hash == config.config_hash
             and layout.federation_metrics.is_file()
-            and layout.reports.joinpath(LayoutArtifact.RUN_SUMMARY).is_file()
+            and layout.hashes.is_file()
         )
 
 
@@ -1573,288 +1556,3 @@ class RunAllExperiments:
             models=tuple(model_evidence),
             run_directories=tuple(run_directories),
         )
-
-
-class CampaignOutcomeRow(BaseModel):
-    """Terminal status of one experiment within a campaign."""
-
-    model_config = Frozen
-
-    experiment_id: ExperimentId
-    status: ExperimentStatus
-    problem: Description | None = None
-    finished_at: Timestamp | None = None
-
-    @property
-    def failed(self) -> bool:
-        """Whether this row recorded a FAILED experiment."""
-        return self.status is ExperimentStatus.FAILED
-
-
-class CampaignWorkItem(BaseModel):
-    """One experiment queued for a campaign run, with its config and prepared-data paths."""
-
-    model_config = Frozen
-
-    experiment_id: ExperimentId
-    config_path: Path
-    prepared_root: Path
-
-
-class CampaignStatus(BaseModel):
-    """Resumable progress record for a campaign: per-experiment outcomes and the overall stage."""
-
-    model_config = ConfigDict(frozen=True)
-
-    created_at: Timestamp
-    updated_at: Timestamp
-    current_experiment: ExperimentId | None = None
-    current_stage: CampaignStage | None = None
-    experiments: tuple[CampaignOutcomeRow, ...] = ()
-    results_path: PathString | None = None
-    elapsed_seconds: Duration = 0.0
-
-    @property
-    def completed_experiments(self) -> tuple[ExperimentId, ...]:
-        """Experiment ids that reached COMPLETE."""
-        return tuple(
-            item.experiment_id
-            for item in self.experiments
-            if item.status is ExperimentStatus.COMPLETE
-        )
-
-    @property
-    def pending_experiments(self) -> tuple[ExperimentId, ...]:
-        """Experiment ids still PENDING."""
-        return tuple(
-            item.experiment_id
-            for item in self.experiments
-            if item.status is ExperimentStatus.PENDING
-        )
-
-    @property
-    def failed_experiments(self) -> tuple[ExperimentId, ...]:
-        """Experiment ids that reached FAILED."""
-        return tuple(
-            item.experiment_id
-            for item in self.experiments
-            if item.status is ExperimentStatus.FAILED
-        )
-
-
-class CampaignStatusStore:
-    """Reads and writes CampaignStatus records to disk."""
-
-    def __init__(
-        self, campaigns_root: Path | None = None, outputs_root: Path = Path("outputs")
-    ) -> None:
-        self.campaigns_root = campaigns_root or OutputsLayout(outputs_root).campaigns
-
-    def path_for(self) -> Path:
-        """Path where the single campaign's status file is stored."""
-        return campaign_status_path(self.campaigns_root)
-
-    def save(self, status: CampaignStatus) -> Path:
-        """Persist `status` to the campaign status file."""
-        path = self.path_for()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write_json(path, status.model_dump(mode="json"))
-        return path
-
-    def load(self) -> CampaignStatus:
-        """Load the campaign status file."""
-        path = self.path_for()
-        if not path.is_file():
-            raise FileNotFoundError(f"Campaign has no recorded status: {path}")
-        return CampaignStatus.model_validate_json(path.read_text(encoding="utf-8"))
-
-
-class CampaignExecutor:
-    """Runs a campaign's queued experiments in order, recording each outcome and resuming from any previously saved status."""
-
-    def __init__(
-        self,
-        study: Study | None = None,
-        status_store: CampaignStatusStore | None = None,
-        runner: RunAllExperiments | None = None,
-        executor: ExperimentExecutor | None = None,
-    ) -> None:
-        self.study = study or Study.load()
-        self.status_store = status_store or CampaignStatusStore(
-            outputs_root=self.study.paths.outputs_root
-        )
-        self.runner = runner or RunAllExperiments()
-        self.executor = executor
-
-    def run(
-        self,
-        work_items: tuple[CampaignWorkItem, ...],
-        *,
-        outputs_root: Path,
-        results_root: Path | None = None,
-    ) -> CampaignStatus:
-        """Resume by verifying current evidence; a failing experiment is recorded and the campaign continues."""
-        now = datetime.now(UTC).isoformat()
-        rows: list[CampaignOutcomeRow] = []
-        started = time.monotonic()
-        from fedcrg.evidence.completion import ExperimentEvidenceAssessor
-        from fedcrg.experiments.execution import ExperimentExecutor
-
-        assessor = ExperimentEvidenceAssessor(self.study)
-        executor = self.executor or ExperimentExecutor(study=self.study, empirical=self.runner)
-
-        for item in work_items:
-            self._run_item(item, rows, assessor, executor, now, started)
-
-        results_path = (
-            self._build_results(outputs_root, results_root) if results_root is not None else None
-        )
-        done = self._campaign_done(work_items, rows, assessor, results_root)
-
-        final_status = CampaignStatus(
-            created_at=now,
-            updated_at=datetime.now(UTC).isoformat(),
-            current_experiment=None,
-            current_stage=CampaignStage.DONE if done else CampaignStage.FAILED,
-            experiments=tuple(rows),
-            results_path=results_path,
-            elapsed_seconds=time.monotonic() - started,
-        )
-        self.status_store.save(final_status)
-        return final_status
-
-    def _run_item(
-        self,
-        item: CampaignWorkItem,
-        rows: list[CampaignOutcomeRow],
-        assessor: ExperimentEvidenceAssessor,
-        executor: ExperimentExecutor,
-        now: Timestamp,
-        started: Duration,
-    ) -> None:
-        from fedcrg.evidence.contracts import experiment_contract
-        from fedcrg.types import ExecutionOutcome
-
-        contract = experiment_contract(item.experiment_id)
-        if contract.inapplicable:
-            rows.append(_completed_row(item.experiment_id, now))
-            return
-        assessment = assessor.assess(item.experiment_id)
-        if assessment.passed:
-            rows.append(_completed_row(item.experiment_id, now))
-            return
-        if contract.optional and assessment.state is CompletionState.NOT_STARTED:
-            return
-        blockers = DependencyResolver(self.study).blockers(
-            item.experiment_id,
-            {row.experiment_id: row.status for row in rows},
-        )
-        if blockers:
-            rows.append(
-                _blocked_row(
-                    item.experiment_id,
-                    "blocked_by_" + "_".join(item.value for item in blockers),
-                    now,
-                )
-            )
-            return
-        self._record_progress(item.experiment_id, rows, now, started)
-        try:
-            result = executor.execute(item.experiment_id)
-            if result.outcome is ExecutionOutcome.FAILED:
-                rows.append(_failed_row(item.experiment_id, "execution failed", now))
-            else:
-                rows.append(_completed_row(item.experiment_id, now))
-        except Exception as exc:
-            rows.append(_failed_row(item.experiment_id, str(exc), now))
-
-    def _campaign_done(
-        self,
-        work_items: tuple[CampaignWorkItem, ...],
-        rows: list[CampaignOutcomeRow],
-        assessor: ExperimentEvidenceAssessor,
-        results_root: Path | None,
-    ) -> bool:
-        from fedcrg.evidence.contracts import experiment_contract
-
-        required_failed = any(
-            row.failed and not experiment_contract(row.experiment_id).optional for row in rows
-        )
-        required_missing = any(
-            not experiment_contract(item.experiment_id).optional
-            and not experiment_contract(item.experiment_id).inapplicable
-            and item.experiment_id not in {row.experiment_id for row in rows if not row.failed}
-            for item in work_items
-        )
-        done = (
-            not required_failed
-            and not required_missing
-            and all(
-                assessor.assess(item.experiment_id).passed
-                or experiment_contract(item.experiment_id).optional
-                or experiment_contract(item.experiment_id).inapplicable
-                for item in work_items
-            )
-        )
-        if done and results_root is not None:
-            from fedcrg.reporting import ResultsVerifier
-
-            verification = ResultsVerifier().verify(results_root)
-            if not verification.valid:
-                done = False
-        return done
-
-    def _record_progress(
-        self,
-        experiment_id: ExperimentId,
-        rows: list[CampaignOutcomeRow],
-        created_at: Timestamp,
-        started: Duration,
-    ) -> None:
-        """Persist the campaign as RUNNING with `experiment_id` as the current experiment."""
-        status = CampaignStatus(
-            created_at=created_at,
-            updated_at=datetime.now(UTC).isoformat(),
-            current_experiment=experiment_id,
-            current_stage=CampaignStage.RUNNING,
-            experiments=tuple(rows),
-            elapsed_seconds=time.monotonic() - started,
-        )
-        self.status_store.save(status)
-
-    def _build_results(self, outputs_root: Path, results_root: Path) -> Identifier:
-        from fedcrg.reporting import ResultsBuilder
-
-        return (
-            ResultsBuilder()
-            .build(outputs_root=outputs_root, results_root=results_root, study=self.study)
-            .as_posix()
-        )
-
-
-def _completed_row(experiment_id: ExperimentId, finished_at: Timestamp) -> CampaignOutcomeRow:
-    return CampaignOutcomeRow(
-        experiment_id=experiment_id, status=ExperimentStatus.COMPLETE, finished_at=finished_at
-    )
-
-
-def _failed_row(
-    experiment_id: ExperimentId, problem: Description, finished_at: Timestamp
-) -> CampaignOutcomeRow:
-    return CampaignOutcomeRow(
-        experiment_id=experiment_id,
-        status=ExperimentStatus.FAILED,
-        problem=problem[:512],
-        finished_at=finished_at,
-    )
-
-
-def _blocked_row(
-    experiment_id: ExperimentId, problem: Description, finished_at: Timestamp
-) -> CampaignOutcomeRow:
-    return CampaignOutcomeRow(
-        experiment_id=experiment_id,
-        status=ExperimentStatus.BLOCKED,
-        problem=problem[:512],
-        finished_at=finished_at,
-    )

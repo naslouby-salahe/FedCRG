@@ -291,10 +291,6 @@ class ArtifactVerifier:
         for artifact in artifacts:
             if path := self._path_for(layout, artifact):
                 required.append(path)
-        if ArtifactType.REPORT in artifacts:
-            from fedcrg.paths import LayoutArtifact
-
-            required.append(layout.reports / LayoutArtifact.RUN_SUMMARY)
         return tuple(required)
 
     def record(self, layout: RunLayout, definition: ExperimentSpec) -> VerificationResult:

@@ -15,23 +15,15 @@ from pydantic import BaseModel, ConfigDict
 from fedcrg.config import Study, validate_experiment_config
 from fedcrg.data.preparation import PrepareData
 from fedcrg.hashing import sha256_file
-from fedcrg.evidence.completion import ExperimentEvidenceAssessor, ExperimentArtifactPurger
+from fedcrg.evidence.completion import ExperimentEvidenceAssessor
 from fedcrg.experiments.execution import ExperimentExecutor
-from fedcrg.experiments.runner import (
-    CampaignExecutor,
-    CampaignStatusStore,
-    CampaignWorkItem,
-)
 from fedcrg.paths import (
-    ConfigLayout,
     OutputsLayout,
     PreparedDatasetLayout,
     prepared_dataset_family_root,
 )
 from fedcrg.reporting import (
     ResultsBuilder,
-    build_publication,
-    build_repository_report,
     verify_results_bundle,
 )
 from fedcrg.runtime import (
@@ -42,11 +34,9 @@ from fedcrg.runtime import (
 )
 from fedcrg.types import (
     CalibrationSeed,
-    CampaignStage,
     CompletionState,
     DatasetId,
     Description,
-    Duration,
     ExecutionOutcome,
     ExperimentId,
     ExperimentType,
@@ -56,7 +46,6 @@ from fedcrg.types import (
     PathString,
     DeviceName,
     PolicyId,
-    PositiveCount,
     ResultsGenerationStatus,
     Sha256,
     Version,
@@ -130,24 +119,10 @@ class RunPayload(BaseModel):
     json_results: tuple[PathString, ...]
     csv_results: tuple[PathString, ...]
     figures: tuple[PathString, ...]
-    reports: tuple[PathString, ...]
     result_bundle: PathString
     model_count: NonNegativeCount
     run_directory_count: NonNegativeCount
     output: PathString
-
-
-class CampaignPayload(BaseModel):
-    """Output of `fedcrg campaign`."""
-
-    model_config = ConfigDict(frozen=True)
-
-    status: CampaignStage
-    completed: NonNegativeCount
-    total: PositiveCount
-    current_experiment: ExperimentId | None
-    elapsed_seconds: Duration
-    results_path: PathString | None
 
 
 class ExperimentStatusRow(BaseModel):
@@ -167,17 +142,7 @@ class StatusPayload(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    campaign_stage: CampaignStage | None
     experiments: tuple[ExperimentStatusRow, ...]
-
-
-class ReportPayload(BaseModel):
-    """Output of `fedcrg report`."""
-
-    model_config = ConfigDict(frozen=True)
-
-    repository_report: PathString
-    publication_manifest: PathString
 
 
 class ResultsBuildPayload(BaseModel):
@@ -341,45 +306,10 @@ def run(ctx: click.Context, experiment_id: str, overwrite: bool) -> None:
             json_results=result.json_paths,
             csv_results=result.csv_paths,
             figures=result.figure_paths,
-            reports=result.report_paths,
             result_bundle=result.bundle_path,
             model_count=result.model_count,
             run_directory_count=result.run_directory_count,
             output=result.output_root,
-        )
-    )
-
-
-@cli.command(name="campaign")
-@click.option("--overwrite", is_flag=True, help="Restart the campaign from scratch.")
-@click.pass_context
-def campaign(ctx: click.Context, overwrite: bool) -> None:
-    """Run every experiment in the catalogue in dependency order."""
-    study = _study(ctx)
-    outputs_root = study.paths.outputs_root
-    if overwrite:
-        ExperimentArtifactPurger(study).purge_campaign()
-    work_items = tuple(
-        CampaignWorkItem(
-            experiment_id=spec.id,
-            config_path=ConfigLayout().study,
-            prepared_root=study.paths.preprocessed_root,
-        )
-        for spec in study.catalogue.all()
-    )
-    status = CampaignExecutor(study=study).run(
-        work_items,
-        outputs_root=outputs_root,
-        results_root=study.paths.results_root,
-    )
-    _print(
-        CampaignPayload(
-            status=status.current_stage if status.current_stage else CampaignStage.PENDING,
-            completed=len(status.completed_experiments),
-            total=max(1, len(work_items)),
-            current_experiment=status.current_experiment,
-            elapsed_seconds=status.elapsed_seconds,
-            results_path=status.results_path,
         )
     )
 
@@ -411,18 +341,7 @@ def status(ctx: click.Context, experiment_id: str | None) -> None:
         for item in selected
         for assessment in (assessor.assess(item),)
     )
-    campaign_stage: Identifier | None = None
-    try:
-        campaign_status = CampaignStatusStore(outputs_root=study.paths.outputs_root).load()
-        campaign_stage = campaign_status.current_stage if campaign_status.current_stage else None
-    except FileNotFoundError:
-        pass
-    _print(
-        StatusPayload(
-            campaign_stage=campaign_stage,
-            experiments=rows,
-        )
-    )
+    _print(StatusPayload(experiments=rows))
 
 
 @cli.command(name="monitor")
@@ -451,43 +370,21 @@ def monitor(ctx: click.Context, interval: float, samples: int | None) -> None:
         raise SystemExit(0) from None
 
 
-@cli.command(name="report")
-@click.pass_context
-def report(ctx: click.Context) -> None:
-    """Build the repository hygiene report and publication manifest."""
-    study = _study(ctx)
-    config = study.resolve(ExperimentId.PRIMARY_NBAIOT)
-    outputs_root = study.paths.outputs_root
-    repository_report = build_repository_report(outputs_root, config)
-    publication_manifest = build_publication(config, outputs_root)
-    _print(
-        ReportPayload(
-            repository_report=repository_report.as_posix(),
-            publication_manifest=publication_manifest.as_posix(),
-        )
-    )
-
-
 @cli.group(name="results", invoke_without_command=True)
 @click.option(
     "--overwrite", is_flag=True, help="Rebuild the delivery bundle from verified sources."
 )
-@click.argument(
-    "experiment_id",
-    required=False,
-    type=click.Choice([member.value for member in ExperimentId]),
-)
+@click.argument("experiment_id", type=click.Choice([member.value for member in ExperimentId]))
 @click.pass_context
-def results_group(ctx: click.Context, overwrite: bool, experiment_id: str | None) -> None:
-    """Build the campaign results bundle, or one experiment bundle. Reuses a current valid bundle."""
+def results_group(ctx: click.Context, overwrite: bool, experiment_id: str) -> None:
+    """Build one experiment's results bundle. Reuses a current valid bundle."""
     if ctx.invoked_subcommand is not None:
         return
     study = _study(ctx)
-    resolved = ExperimentId(experiment_id) if experiment_id is not None else None
     built = ResultsBuilder().build_with_status(
         outputs_root=study.paths.outputs_root,
         results_root=study.paths.results_root,
-        experiment_id=resolved,
+        experiment_id=ExperimentId(experiment_id),
         overwrite=overwrite,
         study=study,
     )
@@ -495,18 +392,14 @@ def results_group(ctx: click.Context, overwrite: bool, experiment_id: str | None
 
 
 @results_group.command(name="verify")
-@click.argument(
-    "experiment_id",
-    required=False,
-    type=click.Choice([member.value for member in ExperimentId]),
-)
+@click.argument("experiment_id", type=click.Choice([member.value for member in ExperimentId]))
 @click.pass_context
-def results_verify(ctx: click.Context, experiment_id: str | None) -> None:
-    """Verify the campaign bundle and every experiment bundle, or one experiment bundle."""
+def results_verify(ctx: click.Context, experiment_id: str) -> None:
+    """Verify one experiment's results bundle."""
     study = _study(ctx)
     verification = verify_results_bundle(
         study.paths.results_root,
-        experiment_id=ExperimentId(experiment_id) if experiment_id is not None else None,
+        experiment_id=ExperimentId(experiment_id),
     )
     _print(ResultsVerifyPayload(valid=verification.valid, problems=tuple(verification.problems)))
     if not verification.valid:

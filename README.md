@@ -15,7 +15,7 @@ src/fedcrg/
   config.py              typed configuration models and study resolution
   types.py               constrained aliases and closed enums
   runtime.py             structured logging, resource monitoring, CUDA guards
-  reporting.py           publication tables/figures, reports, results bundles
+  reporting.py           publication tables/figures and results bundles
   cli.py                 thin research command surface
   data/                  natural-client adapters, splitting, eligibility, preprocessing
   learning/              detectors (AE/Deep-SVDD), federated training, score caches
@@ -23,12 +23,12 @@ src/fedcrg/
                          policy selection, and per-policy comparators, metrics
   evidence/              immutable layouts, manifests, hashes, environment evidence
   experiments/           one execution spine: runner, preflight, verification,
-                         campaign, table precompute, and the pre-registered
-                         experiment catalogue
+                         table precompute, and the pre-registered experiment
+                         catalogue
 tests/                   contract, unit, and integration verification
-outputs/                 generated caches, runs, campaign status, evidence, reports
+outputs/                 generated caches, runs, per-experiment evidence
 data/preprocessed/       deterministic prepared datasets (reused by identity)
-results/                 publication bundles per campaign
+results/                 immutable results bundle per experiment
 tools/                   optional developer/release utilities only
 ```
 
@@ -43,9 +43,11 @@ outputs/
 │   ├── scores/
 │   └── analysis/        readiness-plan and mismatch-cutoff tables
 ├── runs/<immutable-run-id>/
-├── campaigns/
-├── monitoring/
-└── reports/{publication,benchmark.json}/
+├── json/<experiment_id>/
+├── tables/<experiment_id>/
+├── figures/<experiment_id>/
+├── logs/
+└── monitoring/
 ```
 
 Physical detector scores are cached **once per dataset/model seed**. Calibration seeds only create deterministic R/G/C/guard views over the same frozen reservoir scores; they do not retrain or rescore the detector. Completed run directories are immutable and reference upstream caches by relative path plus SHA-256.
@@ -76,19 +78,15 @@ fedcrg validate primary_nbaiot
 fedcrg preprocess nbaiot
 fedcrg plan primary_nbaiot
 fedcrg run primary_nbaiot
-fedcrg campaign
 fedcrg status
 fedcrg monitor
-fedcrg report
-fedcrg results build
-fedcrg results verify
+fedcrg results primary_nbaiot
+fedcrg results verify primary_nbaiot
 ```
 
-`fedcrg preprocess` without a dataset argument prepares every raw dataset. The CLI takes no path or configuration options: repository layout and the campaign identity are owned by `config/study.yaml`. `fedcrg campaign` executes every registered experiment under the configured campaign identity; pass `--overwrite` to restart it from scratch.
+`fedcrg preprocess` without a dataset argument prepares every raw dataset. The CLI takes no path or configuration options: repository layout is owned by `config/study.yaml`. `fedcrg run <experiment_id>` is the authoritative workflow for one experiment: it validates the experiment, executes or reuses valid scientific evidence, generates the required JSON/CSV results and figures, and builds and verifies `results/experiments/<experiment_id>/`; pass `--overwrite` to re-run and replace regenerable evidence.
 
-Every completed experiment run writes its own Markdown summary into the run directory (`outputs/runs/<run>/reports/summary.md`), and `fedcrg run` additionally refreshes the aggregate repository report. `fedcrg report` regenerates the same deliverables on demand — use it standalone whenever report code changes.
-
-`results/` holds one campaign artifact and one bundle per experiment: the campaign bundle lives at the results root (tables, figures, statistics, repository report, provenance, merged metrics) and each experiment's bundle under `results/experiments/<experiment>/` (resolved config, its runs' metrics, manifests, verification hashes, and per-run reports). `fedcrg run` and `fedcrg campaign` build the experiment bundles automatically; `fedcrg results build [experiment]` and `fedcrg results verify [experiment]` build or verify the campaign bundle (no argument) or one experiment's bundle.
+`results/experiments/<experiment_id>/` holds one experiment's immutable results bundle: `manifest.json`, `checksums.json`, its JSON result, CSV tables, figures, provenance (resolved config and source digests), and copies of its completed run manifests. `fedcrg run` builds and verifies this bundle automatically; `fedcrg results <experiment_id>` and `fedcrg results verify <experiment_id>` rebuild or verify it standalone.
 
 The high-level research application path performs a prepared-data audit and freezes statistical lookup tables before model training. Lower-level services remain available for reproducible component work, but confirmatory execution should use the audited path.
 

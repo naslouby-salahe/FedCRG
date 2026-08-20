@@ -44,7 +44,6 @@ class ExperimentRunResult(BaseModel):
     json_paths: tuple[PathString, ...]
     csv_paths: tuple[PathString, ...]
     figure_paths: tuple[PathString, ...]
-    report_paths: tuple[PathString, ...]
     bundle_path: PathString
     output_root: PathString
     model_count: NonNegativeCount
@@ -153,7 +152,6 @@ class ExperimentExecutor:
             json_paths=assessment.json_paths,
             csv_paths=assessment.csv_paths,
             figure_paths=assessment.figure_paths,
-            report_paths=assessment.report_paths,
             bundle_path=assessment.bundle_path,
             output_root=assessment.output_root,
             model_count=model_count,

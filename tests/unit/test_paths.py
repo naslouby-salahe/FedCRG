@@ -6,13 +6,11 @@ from pathlib import Path
 
 from fedcrg.paths import (
     ConfigLayout,
+    ExperimentResultsBundleLayout,
     ModelCacheLayout,
     OutputsLayout,
     PreparedDatasetLayout,
-    PublicationLayout,
-    ResultsBundleLayout,
     ScoreCacheLayout,
-    campaign_status_path,
     experiment_results_root,
     prepared_dataset_family_root,
     prepared_dataset_root,
@@ -82,8 +80,8 @@ def test_outputs_layout_returns_model_and_score_cache_layouts(tmp_path: Path) ->
     assert score_cache.score == score_cache.root / "score_cache.parquet"
 
 
-def test_outputs_layout_run_analysis_and_campaign_status(tmp_path: Path) -> None:
-    """Run, analysis-result, and campaign-status paths resolve under the outputs root."""
+def test_outputs_layout_run_and_analysis(tmp_path: Path) -> None:
+    """Run and analysis-result paths resolve under the outputs root."""
     from fedcrg.types import ExperimentId
 
     layout = OutputsLayout(tmp_path)
@@ -91,40 +89,37 @@ def test_outputs_layout_run_analysis_and_campaign_status(tmp_path: Path) -> None
     assert layout.analysis_result(ExperimentId.PRIMARY_NBAIOT) == (
         layout.cache_analysis / "primary_nbaiot.json"
     )
-    assert layout.campaign_status() == layout.campaigns / "status.json"
 
 
-def test_outputs_layout_publication_is_a_publication_layout(tmp_path: Path) -> None:
-    """The publication layout exposes tables, figures, and manifest paths under reports."""
+def test_outputs_layout_experiment_json_tables_and_figures(tmp_path: Path) -> None:
+    """Per-experiment json/table/figure paths nest under the experiment id."""
+    from fedcrg.types import ExperimentId
+
     layout = OutputsLayout(tmp_path)
-    publication = layout.publication
-    assert isinstance(publication, PublicationLayout)
-    assert publication.root == layout.reports / "publication"
-    assert publication.tables == publication.root / "tables"
-    assert publication.figures == publication.root / "figures"
-    assert publication.manifest == publication.root / "manifest.json"
+    assert layout.experiment_json(ExperimentId.PRIMARY_NBAIOT) == (layout.json / "primary_nbaiot")
+    assert layout.experiment_tables(ExperimentId.PRIMARY_NBAIOT) == (
+        layout.tables / "primary_nbaiot"
+    )
+    assert layout.experiment_figures(ExperimentId.PRIMARY_NBAIOT) == (
+        layout.figures / "primary_nbaiot"
+    )
 
 
-def test_results_bundle_layout_required_directories_are_paths(tmp_path: Path) -> None:
-    """Every required results-bundle directory is a concrete Path."""
-    layout = ResultsBundleLayout(tmp_path)
+def test_experiment_results_bundle_layout_required_directories_are_paths(tmp_path: Path) -> None:
+    """Every required experiment-bundle directory is a concrete Path."""
+    layout = ExperimentResultsBundleLayout(tmp_path)
     assert layout.required_directories == (
         layout.json_dir,
-        layout.metrics,
-        layout.statistics,
-        layout.tables,
+        layout.csv_dir,
         layout.figures,
-        layout.reports,
         layout.provenance,
-        layout.resolved_configs,
     )
     assert all(isinstance(path, Path) for path in layout.required_directories)
 
 
-def test_experiment_results_root_and_status_path(tmp_path: Path) -> None:
-    """Experiment results bundles live under results/experiments/; the campaign status file is fixed."""
+def test_experiment_results_root(tmp_path: Path) -> None:
+    """Experiment results bundles live under results/experiments/<experiment_id>/."""
     assert (
         experiment_results_root(tmp_path, ExperimentId.PRIMARY_NBAIOT)
         == tmp_path / "experiments" / "primary_nbaiot"
     )
-    assert campaign_status_path(tmp_path) == tmp_path / "status.json"

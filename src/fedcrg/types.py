@@ -153,13 +153,6 @@ FeatureName = Annotated[
 ]
 
 
-class CampaignStage(StrEnum):
-    PENDING = "pending"
-    RUNNING = "running"
-    DONE = "done"
-    FAILED = "failed"
-
-
 class InformationRegime(StrEnum):
     BENIGN_ONLY = "benign_only"
     SUPERVISED_DEVELOPMENT = "supervised_development"
@@ -429,15 +422,6 @@ class PolicyId(StrEnum):
     FEDCRG = "fedcrg"
 
 
-class CampaignStatusValue(StrEnum):
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETE = "complete"
-    FAILED = "failed"
-    BLOCKED = "blocked"
-    SKIPPED = "skipped"
-
-
 class PolicyEvaluationStatus(StrEnum):
     EVALUATED = "evaluated"
     UNDEFINED = "undefined"
@@ -578,7 +562,6 @@ class ResultFormat(StrEnum):
     JSON = "json"
     CSV = "csv"
     FIGURE = "figure"
-    REPORT = "report"
 
 
 class ArtifactType(StrEnum):
@@ -594,7 +577,6 @@ class ArtifactType(StrEnum):
     METRICS = "metrics"
     TABLE = "table"
     FIGURE = "figure"
-    REPORT = "report"
     VERIFICATION = "verification"
     ANALYSIS_RESULT = "analysis_result"
     JSON_RESULT = "json_result"

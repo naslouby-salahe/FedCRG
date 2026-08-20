@@ -119,26 +119,3 @@ def write_completed_run(
             ),
         )
     return layout.root
-
-
-def write_primary_policy_grid(
-    outputs_root: Path,
-    config: ExperimentConfig,
-    *,
-    policies: tuple[PolicyId, ...],
-) -> None:
-    for policy in policies:
-        for model_seed in config.randomness.model_seeds:
-            run_id = f"{policy}-{model_seed}"
-            write_completed_run(
-                outputs_root,
-                run_id=run_id,
-                experiment_id=ExperimentId.PRIMARY_NBAIOT,
-                policy_id=policy,
-                config=config,
-                model_seed=model_seed,
-                calibration_seed=config.dataset.primary_calibration_seed,
-                mebe=0.02 + 0.001 * int(model_seed),
-                high_excess=0.01 + 0.001 * int(model_seed),
-                attack_balanced_macro_tpr=0.9 - 0.001 * int(model_seed),
-            )

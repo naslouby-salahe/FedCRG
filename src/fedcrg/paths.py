@@ -26,16 +26,12 @@ class LayoutDirectory(StrEnum):
     METRICS = "metrics"
     TABLES = "tables"
     FIGURES = "figures"
-    REPORTS = "reports"
     LOGS = "logs"
     VERIFICATION = "verification"
     CACHE = "cache"
     MODELS = "models"
     ANALYSIS = "analysis"
-    CAMPAIGNS = "campaigns"
     MONITORING = "monitoring"
-    PUBLICATION = "publication"
-    LATEST = "latest"
     STATISTICS = "statistics"
     PROVENANCE = "provenance"
     RESOLVED_CONFIGS = "resolved_configs"
@@ -70,21 +66,16 @@ class LayoutArtifact(StrEnum):
     MODEL = "model.pt"
     HASHES = "hashes.json"
     CHECKSUMS = "checksums.json"
-    PRIMARY_NBAIOT_CONFIG = "primary_nbaiot.json"
     METRIC_RECORDS_BUNDLE = "metric_records.json"
     READINESS_PLANS = "readiness_plans.json"
     MISMATCH_CUTOFFS = "mismatch_cutoffs.json"
     PROVENANCE = "provenance.json"
     TELEMETRY = "telemetry.jsonl"
-    BENCHMARK = "benchmark.json"
     SCORE_CACHE = "score_cache.parquet"
-    CAMPAIGN_STATUS = "status.json"
-    RUN_SUMMARY = "summary.md"
     EXPERIMENT_RESULT_JSON = "results.json"
     EXPERIMENT_CELLS_CSV = "cells.csv"
     EXPERIMENT_POLICY_CSV = "policy_metrics.csv"
     EXPERIMENT_BENCHMARK_CSV = "benchmark.csv"
-    EXPERIMENT_REPORT = "report.md"
     EXPERIMENT_COVERAGE_FIGURE = "coverage.png"
     EXPERIMENT_POWER_FIGURE = "power.png"
     EXPERIMENT_OPERATING_POINTS_FIGURE = "operating_points.png"
@@ -286,16 +277,12 @@ class RunLayout:
         return self.root / LayoutDirectory.FIGURES
 
     @property
-    def reports(self) -> Path:
-        return self.root / LayoutDirectory.REPORTS
-
-    @property
     def admission(self) -> Path:
         return self.metrics / LayoutArtifact.ADMISSION
 
     @property
     def evaluation_summary(self) -> Path:
-        return self.reports / LayoutArtifact.EVALUATION_SUMMARY
+        return self.metrics / LayoutArtifact.EVALUATION_SUMMARY
 
     @property
     def dataset_manifest(self) -> Path:
@@ -344,110 +331,10 @@ class RunLayout:
             self.metrics,
             self.tables,
             self.figures,
-            self.reports,
             self.logs,
             self.verification,
         ):
             directory.mkdir()
-
-
-class PublicationLayout:
-    """Paths for publication-ready tables and figures."""
-
-    def __init__(self, root: Path) -> None:
-        self.root = root
-
-    @property
-    def tables(self) -> Path:
-        return self.root / LayoutDirectory.TABLES
-
-    @property
-    def figures(self) -> Path:
-        return self.root / LayoutDirectory.FIGURES
-
-    @property
-    def manifest(self) -> Path:
-        return self.root / LayoutArtifact.MANIFEST
-
-
-class ResultsBundleLayout:
-    """Paths inside a packaged, checksummed results bundle for one campaign."""
-
-    def __init__(self, root: Path) -> None:
-        self.root = root
-
-    @property
-    def manifest(self) -> Path:
-        return self.root / LayoutArtifact.MANIFEST
-
-    @property
-    def checksums(self) -> Path:
-        return self.root / LayoutArtifact.CHECKSUMS
-
-    @property
-    def resolved_configs(self) -> Path:
-        return self.root / LayoutDirectory.RESOLVED_CONFIGS
-
-    @property
-    def metrics(self) -> Path:
-        return self.root / LayoutDirectory.METRICS
-
-    @property
-    def statistics(self) -> Path:
-        return self.root / LayoutDirectory.STATISTICS
-
-    @property
-    def tables(self) -> Path:
-        return self.root / LayoutDirectory.TABLES
-
-    @property
-    def figures(self) -> Path:
-        return self.root / LayoutDirectory.FIGURES
-
-    @property
-    def reports(self) -> Path:
-        return self.root / LayoutDirectory.REPORTS
-
-    @property
-    def provenance(self) -> Path:
-        return self.root / LayoutDirectory.PROVENANCE
-
-    @property
-    def primary_nbaiot_config(self) -> Path:
-        return self.resolved_configs / LayoutArtifact.PRIMARY_NBAIOT_CONFIG
-
-    @property
-    def metric_records(self) -> Path:
-        return self.metrics / LayoutArtifact.METRIC_RECORDS_BUNDLE
-
-    @property
-    def readiness_plans(self) -> Path:
-        return self.statistics / LayoutArtifact.READINESS_PLANS
-
-    @property
-    def mismatch_cutoffs(self) -> Path:
-        return self.statistics / LayoutArtifact.MISMATCH_CUTOFFS
-
-    @property
-    def provenance_json(self) -> Path:
-        return self.provenance / LayoutArtifact.PROVENANCE
-
-    @property
-    def json_dir(self) -> Path:
-        return self.root / LayoutDirectory.JSON
-
-    @property
-    def required_directories(self) -> tuple[Path, ...]:
-        return (
-            self.json_dir,
-            self.metrics,
-            self.statistics,
-            self.tables,
-            self.figures,
-            self.reports,
-            self.provenance,
-            self.resolved_configs,
-        )
 
 
 class ExperimentResultsBundleLayout:
@@ -475,10 +362,6 @@ class ExperimentResultsBundleLayout:
     @property
     def figures(self) -> Path:
         return self.root / LayoutDirectory.FIGURES
-
-    @property
-    def reports(self) -> Path:
-        return self.root / LayoutDirectory.REPORTS
 
     @property
     def provenance(self) -> Path:
@@ -518,7 +401,6 @@ class ExperimentResultsBundleLayout:
             self.json_dir,
             self.csv_dir,
             self.figures,
-            self.reports,
             self.provenance,
         )
 
@@ -527,13 +409,8 @@ def experiment_results_root(results_root: Path, experiment_id: ExperimentId) -> 
     return results_root / LayoutDirectory.EXPERIMENTS / str(experiment_id)
 
 
-def campaign_status_path(campaigns_root: Path) -> Path:
-    """Path where the single campaign's status file is stored."""
-    return campaigns_root / LayoutArtifact.CAMPAIGN_STATUS
-
-
 class OutputsLayout:
-    """Top-level output directory layout: runs, caches, campaigns, logs, and reports."""
+    """Top-level output directory layout: runs, caches, logs, tables, and figures."""
 
     def __init__(self, outputs_root: Path = Path(LayoutDirectory.OUTPUTS)) -> None:
         self.outputs_root = outputs_root
@@ -559,10 +436,6 @@ class OutputsLayout:
         return self.cache / LayoutDirectory.ANALYSIS
 
     @property
-    def campaigns(self) -> Path:
-        return self.outputs_root / LayoutDirectory.CAMPAIGNS
-
-    @property
     def logs(self) -> Path:
         return self.outputs_root / LayoutDirectory.LOGS
 
@@ -571,8 +444,8 @@ class OutputsLayout:
         return self.outputs_root / LayoutDirectory.MONITORING
 
     @property
-    def reports(self) -> Path:
-        return self.outputs_root / LayoutDirectory.REPORTS
+    def json(self) -> Path:
+        return self.outputs_root / LayoutDirectory.JSON
 
     @property
     def figures(self) -> Path:
@@ -582,8 +455,8 @@ class OutputsLayout:
     def tables(self) -> Path:
         return self.outputs_root / LayoutDirectory.TABLES
 
-    def experiment_reports(self, experiment_id: ExperimentId) -> Path:
-        return self.reports / str(experiment_id)
+    def experiment_json(self, experiment_id: ExperimentId) -> Path:
+        return self.json / str(experiment_id)
 
     def experiment_figures(self, experiment_id: ExperimentId) -> Path:
         return self.figures / str(experiment_id)
@@ -592,20 +465,12 @@ class OutputsLayout:
         return self.tables / str(experiment_id)
 
     @property
-    def publication(self) -> PublicationLayout:
-        return PublicationLayout(self.reports / LayoutDirectory.PUBLICATION)
-
-    @property
     def environment_file(self) -> Path:
         return self.outputs_root / LayoutArtifact.ENVIRONMENT
 
     @property
     def telemetry_file(self) -> Path:
         return self.monitoring / LayoutArtifact.TELEMETRY
-
-    @property
-    def benchmark_report(self) -> Path:
-        return self.reports / LayoutArtifact.BENCHMARK
 
     @property
     def readiness_plans_file(self) -> Path:
@@ -620,9 +485,6 @@ class OutputsLayout:
 
     def analysis_result(self, experiment_id: ExperimentId) -> Path:
         return self.cache_analysis / f"{experiment_id}.json"
-
-    def campaign_status(self) -> Path:
-        return campaign_status_path(self.campaigns)
 
     def model_cache(self, config: ExperimentConfig, model_seed: ModelSeed) -> ModelCacheLayout:
         if config.detector is None:
